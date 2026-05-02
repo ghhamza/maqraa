@@ -60,7 +60,7 @@ import { StudentAnnotationPopover } from "../../components/session/StudentAnnota
 import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudioButton";
 import { cn } from "@/lib/utils";
 import { useLivekitConnection } from "@/hooks/useLivekitConnection";
-import { MEET_ICON_BTN_BASE, MENU_ICON_BUTTON_CLASS } from "../../components/session/sessionMeetButtonStyles";
+import { MEET_ICON_BTN_BASE } from "../../components/session/sessionMeetButtonStyles";
 import { Info, LogOut, Menu, MessageSquare, PhoneOff, Users, Volume2 } from "lucide-react";
 function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -1070,52 +1070,6 @@ export function LiveSessionPage() {
               hideNavigation
               omitMenuStrip
               className="h-full min-h-0"
-              immersiveHeader={
-                <nav
-                  className="hidden min-h-9 w-full flex-row flex-wrap items-start justify-start gap-2 md:flex"
-                  aria-label={t("mushaf.menuNavigationZone")}
-                  data-testid="quran-menu-navigation-zone"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setNavigatorOpen(true)}
-                    title={t("liveSession.tooltip.openMenu")}
-                    aria-label={t("common.openMenu")}
-                    className={MENU_ICON_BUTTON_CLASS}
-                  >
-                    <Menu className="h-5 w-5" strokeWidth={2.25} />
-                  </button>
-                  <div className="min-w-0 flex-1 text-start leading-snug">
-                    <p
-                      className="truncate text-sm font-semibold text-[#2c5f7c]"
-                      style={{ fontFamily: "var(--font-ui)" }}
-                    >
-                      {navCornerLabels.surahLabel}
-                    </p>
-                    <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-xs">
-                      <span className="font-medium text-[#374151]">{t("mushaf.pageOf", { n: page })}</span>
-                      {navCornerLabels.juzN > 0 ? (
-                        <>
-                          <span className="text-muted-foreground/60" aria-hidden>
-                            ·
-                          </span>
-                          <span className="text-muted-foreground">{t("mushaf.juzN", { n: navCornerLabels.juzN })}</span>
-                        </>
-                      ) : null}
-                      {navCornerLabels.hizbN > 0 ? (
-                        <>
-                          <span className="text-muted-foreground/60" aria-hidden>
-                            /
-                          </span>
-                          <span className="text-muted-foreground">
-                            {t("mushaf.hizb")} {navCornerLabels.hizbN}
-                          </span>
-                        </>
-                      ) : null}
-                    </p>
-                  </div>
-                </nav>
-              }
             >
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 <MushafCanvas
@@ -1159,12 +1113,14 @@ export function LiveSessionPage() {
             onEndSession={() => setEndSessionOpen(true)}
           />
 
-          <SessionLayoutZone
-            zoneId="bl"
-            ariaLabel={t("liveSession.layoutZoneBottomLeft")}
-            className="hidden min-h-[3rem] md:col-start-1 md:row-start-2 md:flex"
+          {/* Bottom row — leave anchored to the left screen corner; everything else
+              centered. Locked to LTR so icon positions are stable across languages. */}
+          <div
+            dir="ltr"
+            className="hidden md:col-span-3 md:row-start-2 md:flex md:items-center md:justify-between md:gap-2 md:px-2 md:py-2"
           >
-            <div className="flex min-h-10 flex-wrap items-center justify-start gap-2">
+            {/* Left corner — leave + end session (teacher) */}
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleLeave}
@@ -1192,14 +1148,53 @@ export function LiveSessionPage() {
                 </button>
               ) : null}
             </div>
-          </SessionLayoutZone>
 
-          <SessionLayoutZone
-            zoneId="bm"
-            ariaLabel={t("liveSession.layoutZoneBottomMiddle")}
-            className="hidden md:col-start-2 md:row-start-2 md:flex"
-          >
-            <div className="flex min-h-10 flex-wrap items-center justify-center gap-2">
+            {/* Center cluster — controls. Order is fixed left→right (LTR), most-used
+                pair (mic + pen) sits visually centered. */}
+            <div className="flex items-center justify-center gap-2">
+              {/* Info */}
+              <button
+                type="button"
+                onClick={() => window.alert(t("common.comingSoon"))}
+                title={t("liveSession.tooltip.sessionInfo")}
+                aria-label={t("liveSession.sessionInfo")}
+                className={cn(
+                  MEET_ICON_BTN_BASE,
+                  "bg-gradient-to-b from-sky-50 to-sky-100/90 text-sky-700 hover:from-sky-100 hover:to-sky-200/90",
+                )}
+              >
+                <Info className="h-5 w-5" strokeWidth={2.25} />
+              </button>
+
+              {/* Chat */}
+              <button
+                type="button"
+                onClick={() => window.alert(t("common.comingSoon"))}
+                title={t("liveSession.tooltip.chat")}
+                aria-label={t("liveSession.chat")}
+                className={cn(
+                  MEET_ICON_BTN_BASE,
+                  "bg-gradient-to-b from-violet-50 to-violet-100/90 text-violet-700 hover:from-violet-100 hover:to-violet-200/90",
+                )}
+              >
+                <MessageSquare className="h-5 w-5" strokeWidth={2.25} />
+              </button>
+
+              {/* Participants */}
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                title={t("liveSession.tooltip.participants")}
+                aria-label={t("liveSession.participants")}
+                className={cn(
+                  MEET_ICON_BTN_BASE,
+                  "bg-gradient-to-b from-emerald-50 to-emerald-100/90 text-emerald-800 hover:from-emerald-100 hover:to-emerald-200/90",
+                )}
+              >
+                <Users className="h-5 w-5" strokeWidth={2.25} />
+              </button>
+
+              {/* Mic + Pen (or AutoFollow for student) — the visual center */}
               <SessionControlsCorner
                 isTeacher={isTeacher}
                 isActiveReciter={isActiveReciter}
@@ -1214,53 +1209,52 @@ export function LiveSessionPage() {
               {!isTeacher ? (
                 <AutoFollowBadge enabled={autoFollow} onToggle={handleAutoFollowToggle} inline />
               ) : null}
-            </div>
-          </SessionLayoutZone>
 
-          <SessionLayoutZone
-            zoneId="br"
-            ariaLabel={t("liveSession.layoutZoneBottomRight")}
-            className="hidden md:col-start-3 md:row-start-2 md:flex"
-          >
-            <div className="flex min-h-10 flex-wrap items-center justify-end gap-2">
+              {/* Menu — surah label renders RTL inside an LTR parent. dir="rtl"
+                  on the inner span is required so "البقرة" reads correctly. */}
               <button
                 type="button"
-                onClick={() => window.alert(t("common.comingSoon"))}
-                title={t("liveSession.tooltip.sessionInfo")}
-                aria-label={t("liveSession.sessionInfo")}
+                onClick={() => setNavigatorOpen(true)}
+                title={t("liveSession.tooltip.openMenu")}
+                aria-label={t("common.openMenu")}
                 className={cn(
                   MEET_ICON_BTN_BASE,
-                  "bg-gradient-to-b from-sky-50 to-sky-100/90 text-sky-700 hover:from-sky-100 hover:to-sky-200/90",
+                  "w-auto gap-2 px-3 bg-gradient-to-b from-slate-50 to-slate-100/90 text-[#2c5f7c] hover:from-slate-100 hover:to-slate-200/90",
                 )}
               >
-                <Info className="h-5 w-5" strokeWidth={2.25} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(true)}
-                title={t("liveSession.tooltip.participants")}
-                aria-label={t("liveSession.participants")}
-                className={cn(
-                  MEET_ICON_BTN_BASE,
-                  "bg-gradient-to-b from-emerald-50 to-emerald-100/90 text-emerald-800 hover:from-emerald-100 hover:to-emerald-200/90",
-                )}
-              >
-                <Users className="h-5 w-5" strokeWidth={2.25} />
-              </button>
-              <button
-                type="button"
-                onClick={() => window.alert(t("common.comingSoon"))}
-                title={t("liveSession.tooltip.chat")}
-                aria-label={t("liveSession.chat")}
-                className={cn(
-                  MEET_ICON_BTN_BASE,
-                  "bg-gradient-to-b from-violet-50 to-violet-100/90 text-violet-700 hover:from-violet-100 hover:to-violet-200/90",
-                )}
-              >
-                <MessageSquare className="h-5 w-5" strokeWidth={2.25} />
+                <Menu className="h-5 w-5" strokeWidth={2.25} />
+                <span
+                  dir="rtl"
+                  className="hidden min-w-0 max-w-[14rem] truncate text-sm font-semibold lg:inline"
+                  style={{ fontFamily: "var(--font-ui)" }}
+                >
+                  {navCornerLabels.surahLabel}
+                </span>
+                <span
+                  className="hidden whitespace-nowrap text-xs font-medium text-[#374151] lg:inline"
+                  style={{ fontFamily: "var(--font-ui)" }}
+                >
+                  {t("mushaf.pageOf", { n: page })}
+                  {navCornerLabels.juzN > 0 ? (
+                    <>
+                      <span className="mx-1 text-muted-foreground/60" aria-hidden>
+                        ·
+                      </span>
+                      {t("mushaf.juzN", { n: navCornerLabels.juzN })}
+                    </>
+                  ) : null}
+                </span>
               </button>
             </div>
-          </SessionLayoutZone>
+
+            {/* Right corner — placeholder spacer to balance the leave cluster so the
+                center group stays visually centered. Width matches the leave cluster
+                (1 button for student, 2 for teacher). */}
+            <div className="flex items-center gap-2" aria-hidden>
+              <div className="h-10 w-10 opacity-0" />
+              {isTeacher ? <div className="h-10 w-10 opacity-0" /> : null}
+            </div>
+          </div>
         </div>
       </main>
 
