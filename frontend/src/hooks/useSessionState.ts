@@ -121,6 +121,19 @@ export interface UseSessionStateReturn {
   disconnect: () => void;
 }
 
+/**
+ * Orchestrates `useLivekitConnection` (audio/video transport) and
+ * `useSessionWebSocket` (session signaling) for a single live session.
+ *
+ * Treat the two hooks as independent: each manages its own retry/reconnect
+ * lifecycle. This hook combines their *outputs* into one cohesive state for
+ * the page (participants, reciter, current ayah/page, grading callbacks)
+ * and sends user actions to whichever channel handles them.
+ *
+ * If you find yourself adding logic that conditionally reads from one hook
+ * based on the other's status, prefer pushing that into the lower-level
+ * hook (or accept it here, but document the coupling).
+ */
 export function useSessionState(options: UseSessionStateOptions): UseSessionStateReturn {
   const {
     sessionId,

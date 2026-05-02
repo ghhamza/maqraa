@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useCancellableEffect } from "../hooks/useCancellableEffect";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Flame } from "lucide-react";
@@ -87,23 +88,21 @@ function AdminDashboard({ user }: { user: User }) {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      setLoading(true);
       try {
-        const { data } = await api.get<UserStats>("users/stats");
-        if (!cancelled) setStats(data);
-      } catch {
-        if (!cancelled) setStats(null);
+        const { data } = await api.get<UserStats>("users/stats", { signal });
+        setStats(data);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setStats(null);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    },
+    [],
+  );
 
   return (
     <PageShell
@@ -162,45 +161,39 @@ function TeacherDashboard({ user }: { user: User }) {
   const [upcoming, setUpcoming] = useState<SessionPublic[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      setLoading(true);
       try {
         const [roomsRes, roomStatsRes, recStatsRes, recentRecsRes, upcomingRes, sessionStatsRes] =
           await Promise.all([
-            api.get<Paginated<Room>>("rooms"),
-            api.get<RoomStats>("rooms/stats"),
-            api.get<RecitationStats>("recitations/stats"),
-            api.get<Paginated<RecitationPublic>>("recitations", { params: { limit: 5 } }),
-            api.get<SessionPublic[]>("sessions/upcoming"),
-            api.get<SessionStats>("sessions/stats"),
+            api.get<Paginated<Room>>("rooms", { signal }),
+            api.get<RoomStats>("rooms/stats", { signal }),
+            api.get<RecitationStats>("recitations/stats", { signal }),
+            api.get<Paginated<RecitationPublic>>("recitations", { params: { limit: 5 }, signal }),
+            api.get<SessionPublic[]>("sessions/upcoming", { signal }),
+            api.get<SessionStats>("sessions/stats", { signal }),
           ]);
-        if (!cancelled) {
-          setRooms(roomsRes.data.items.filter((r) => r.teacher_id === user.id));
-          setRoomStats(roomStatsRes.data);
-          setRecStats(recStatsRes.data);
-          setSessionStats(sessionStatsRes.data);
-          setRecentRecs(recentRecsRes.data.items);
-          setUpcoming(upcomingRes.data);
-        }
-      } catch {
-        if (!cancelled) {
-          setRooms([]);
-          setRoomStats(null);
-          setRecStats(null);
-          setSessionStats(null);
-          setRecentRecs([]);
-          setUpcoming([]);
-        }
+        setRooms(roomsRes.data.items.filter((r) => r.teacher_id === user.id));
+        setRoomStats(roomStatsRes.data);
+        setRecStats(recStatsRes.data);
+        setSessionStats(sessionStatsRes.data);
+        setRecentRecs(recentRecsRes.data.items);
+        setUpcoming(upcomingRes.data);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setRooms([]);
+        setRoomStats(null);
+        setRecStats(null);
+        setSessionStats(null);
+        setRecentRecs([]);
+        setUpcoming([]);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user.id]);
+    },
+    [user.id],
+  );
 
   const myStudents = useMemo(() => rooms.reduce((a, r) => a + r.enrolled_count, 0), [rooms]);
   const todaySession = useMemo(() => findFirstSessionToday(upcoming), [upcoming]);
@@ -344,46 +337,40 @@ function StudentDashboard({ user }: { user: User }) {
   const [upcoming, setUpcoming] = useState<SessionPublic[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user?.id) {
-      setProgress(null);
-      setRooms([]);
-      setRecentRecs([]);
-      setUpcoming([]);
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (!user?.id) {
+        setProgress(null);
+        setRooms([]);
+        setRecentRecs([]);
+        setUpcoming([]);
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
       try {
         const [progressRes, roomsRes, recentRecsRes, upcomingRes] = await Promise.all([
-          api.get<StudentProgress>(`students/${user.id}/progress`),
-          api.get<Paginated<Room>>("rooms"),
-          api.get<Paginated<RecitationPublic>>("recitations", { params: { limit: 3 } }),
-          api.get<SessionPublic[]>("sessions/upcoming"),
+          api.get<StudentProgress>(`students/${user.id}/progress`, { signal }),
+          api.get<Paginated<Room>>("rooms", { signal }),
+          api.get<Paginated<RecitationPublic>>("recitations", { params: { limit: 3 }, signal }),
+          api.get<SessionPublic[]>("sessions/upcoming", { signal }),
         ]);
-        if (!cancelled) {
-          setProgress(progressRes.data);
-          setRooms(roomsRes.data.items);
-          setRecentRecs(recentRecsRes.data.items);
-          setUpcoming(upcomingRes.data);
-        }
-      } catch {
-        if (!cancelled) {
-          setProgress(null);
-          setRooms([]);
-          setRecentRecs([]);
-          setUpcoming([]);
-        }
+        setProgress(progressRes.data);
+        setRooms(roomsRes.data.items);
+        setRecentRecs(recentRecsRes.data.items);
+        setUpcoming(upcomingRes.data);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setProgress(null);
+        setRooms([]);
+        setRecentRecs([]);
+        setUpcoming([]);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user.id]);
+    },
+    [user.id],
+  );
 
   const nextSession = upcoming[0] ?? null;
   const gd = progress?.grade_distribution;

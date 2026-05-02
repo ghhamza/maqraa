@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus, Trash2, Users } from "lucide-react";
 import { api } from "../../lib/api";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import type { Paginated, UserPublic, UserStats } from "../../types";
 import { Badge } from "../../components/ui/Badge";
@@ -64,23 +65,28 @@ export function UsersPage() {
     setUsers(usersRes.data.items);
   }, [fetchUsersPage]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      setLoading(true);
       try {
-        const [statsRes, usersRes] = await fetchUsersPage();
-        if (cancelled) return;
+        const [statsRes, usersRes] = await Promise.all([
+          api.get<UserStats>("users/stats", { signal }),
+          api.get<Paginated<UserPublic>>("users", {
+            signal,
+            params: {
+              ...(roleFilter ? { role: roleFilter } : {}),
+              ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
+            },
+          }),
+        ]);
         setStats(statsRes.data);
         setUsers(usersRes.data.items);
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchUsersPage]);
+    },
+    [roleFilter, debouncedSearch],
+  );
 
   const openCreate = useCallback(() => {
     setFormMode("create");

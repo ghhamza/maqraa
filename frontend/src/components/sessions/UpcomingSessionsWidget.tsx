@@ -3,7 +3,8 @@
 
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { api } from "../../lib/api";
 import type { SessionPublic } from "../../types";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
@@ -53,23 +54,21 @@ export function UpcomingSessionsWidget({ maxItems, showViewCalendarLink }: Upcom
 
   const displaySessions = maxItems != null ? sessions.slice(0, maxItems) : sessions;
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
       setLoading(true);
       try {
-        const { data } = await api.get<SessionPublic[]>("sessions/upcoming");
-        if (!cancelled) setSessions(data);
-      } catch {
-        if (!cancelled) setSessions([]);
+        const { data } = await api.get<SessionPublic[]>("sessions/upcoming", { signal });
+        setSessions(data);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setSessions([]);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [i18n.language]);
+    },
+    [i18n.language],
+  );
 
   if (loading) {
     return (

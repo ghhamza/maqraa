@@ -132,6 +132,37 @@ function jsonKeysToCamelCase(value: unknown): unknown {
   return value;
 }
 
+/**
+ * Long-lived WebSocket connection to the session signaling server.
+ *
+ * # Reconnect lifecycle
+ *
+ * - `wsRef` holds the current socket (if any).
+ * - `reconnectAttempt.current` indexes into a fixed backoff array
+ *   `[1s, 2s, 4s, 8s, 16s, 30s]` — capped, never grows.
+ * - `intentionalClose.current` distinguishes a user-initiated `disconnect()`
+ *   from a network drop. Only the latter triggers a reconnect.
+ * - `mounted.current` is flipped to `false` in the cleanup function and
+ *   guards every `setState` from firing after unmount. This is the
+ *   counterpart to `useLivekitConnection.ts`'s generation guard — same
+ *   problem (stale async resolution), simpler shape (one boolean instead
+ *   of a counter, because we only have one socket at a time).
+ *
+ * # `optsRef` indirection
+ *
+ * `optsRef.current = options` runs every render so the connect effect can
+ * read the *latest* callbacks without including them in its dep array.
+ * Including them would re-create the socket on every parent re-render.
+ *
+ * # Server-driven session-end
+ *
+ * If the server closes the socket because the same user joined elsewhere
+ * (`SAME_USER_JOINED_ELSEWHERE`) or because of a hard rejection (room full,
+ * etc.), we set the matching state and *do not* reconnect.
+ *
+ * If you change the close-code handling, update the matching state
+ * transitions in `useSessionState.ts`.
+ */
 export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSessionWebSocketReturn {
   const { sessionId, token, enabled = true } = options;
 
@@ -337,6 +368,7 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
   }, []);
 
   const disconnect = useCallback(() => {
+    // Mark this close as intentional so the close handler does not reconnect.
     intentionalClose.current = true;
     clearReconnect();
     clearPing();
@@ -350,6 +382,7 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
   useEffect(() => {
     mounted.current = true;
     return () => {
+      // Block any pending setState from firing after unmount. See header doc.
       mounted.current = false;
     };
   }, []);

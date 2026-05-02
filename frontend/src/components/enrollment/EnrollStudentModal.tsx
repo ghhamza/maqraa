@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
 import type { StudentOption } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 
 interface EnrollStudentModalProps {
   open: boolean;
@@ -35,28 +36,27 @@ export function EnrollStudentModal({
 
   const full = currentCount >= maxStudents;
 
-  useEffect(() => {
-    if (!open) return;
-    setSearch("");
-    setError(null);
-    let cancelled = false;
-    setLoading(true);
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (!open) return;
+      setSearch("");
+      setError(null);
+      setLoading(true);
       try {
         const { data } = await api.get<StudentOption[]>("students", {
           params: { exclude_room_id: roomId },
+          signal,
         });
-        if (!cancelled) setStudents(data);
-      } catch {
-        if (!cancelled) setStudents([]);
+        setStudents(data);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setStudents([]);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, roomId]);
+    },
+    [open, roomId],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

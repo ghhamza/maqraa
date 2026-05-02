@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import axios from "axios";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Pencil, Repeat, Trash2 } from "lucide-react";
@@ -76,11 +77,15 @@ export function SessionDetailPage() {
   const [liveSessionFlash, setLiveSessionFlash] = useState<string | null>(null);
   const [activeSessionConflictId, setActiveSessionConflictId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     if (!id) return;
+    const sig = signal ? { signal } : {};
     const [{ data }, recRes] = await Promise.all([
-      api.get<SessionDetail>(`sessions/${id}`),
-      api.get<Paginated<RecitationPublic>>("recitations", { params: { session_id: id } }),
+      api.get<SessionDetail>(`sessions/${id}`, sig),
+      api.get<Paginated<RecitationPublic>>("recitations", {
+        params: { session_id: id },
+        ...sig,
+      }),
     ]);
     setDetail(data);
     setSessionRecitations(recRes.data.items);
@@ -98,6 +103,7 @@ export function SessionDetailPage() {
       for (const att of data.attendance) {
         const res = await api.get<Paginated<RecitationPublic>>("recitations", {
           params: { student_id: att.student_id, room_id: data.room_id, limit: 1 },
+          ...sig,
         });
         if (res.data.items.length > 0 && res.data.items[0].grade) {
           gradesMap[att.student_id] = res.data.items[0].grade as GradeColor;
@@ -122,30 +128,28 @@ export function SessionDetailPage() {
     }
   }, [routerLocation.state, navigate]);
 
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
-    setLoading(true);
-    setForbidden(false);
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (!id) return;
+      setLoading(true);
+      setForbidden(false);
       try {
-        await load();
+        await load(signal);
       } catch (err: unknown) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
         const status = (err as { response?: { status?: number } })?.response?.status;
         if (status === 403) {
-          if (!cancelled) setForbidden(true);
-          if (!cancelled) setDetail(null);
+          setForbidden(true);
+          setDetail(null);
         } else {
-          if (!cancelled) setDetail(null);
+          setDetail(null);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, load]);
+    },
+    [id, load],
+  );
 
   const manage = detail && user ? canManage(user, detail) : false;
 

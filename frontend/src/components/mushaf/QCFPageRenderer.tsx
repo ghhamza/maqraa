@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { useTranslation } from "react-i18next";
 import { useQuranPage } from "../../hooks/useQuranPage";
 import { getPageFontFamily, loadPageFont, preloadAdjacentPages } from "../../lib/mushafFontLoader";
-import { isMushafOpeningCenterPage } from "../../lib/quranService";
+import { getSurahName, isMushafOpeningCenterPage } from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
 import type { LineData, WordData } from "../../hooks/useQuranPage";
 import { Button } from "../ui/Button";
@@ -53,6 +61,26 @@ function isVerseEndMarker(word: WordData): boolean {
   return word.charTypeName.toLowerCase() === "end";
 }
 
+function ariaLabelForWord(
+  word: WordData,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  const surahName = getSurahName(word.surah, "ar");
+  if (isVerseEndMarker(word)) {
+    return t("mushaf.aria.ayahMarker", {
+      surah: surahName,
+      surahN: word.surah,
+      ayah: word.ayah,
+    });
+  }
+  return t("mushaf.aria.word", {
+    surah: surahName,
+    surahN: word.surah,
+    ayah: word.ayah,
+    word: word.wordPosition,
+  });
+}
+
 /** Surah frame + basmalah stay at top; remaining lines are ayah rows (incl. empty grid slots). */
 function partitionOpeningHeadBody(lines: LineData[]): { head: LineData[]; body: LineData[] } {
   let i = 0;
@@ -90,10 +118,9 @@ export function QCFPageRenderer({
   const containerRef = useRef<HTMLDivElement>(null);
   const [fontSizePx, setFontSizePx] = useState(28);
 
-  useEffect(() => {
-    let cancelled = false;
-    setFontReady(false);
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      setFontReady(false);
       try {
         const pages = new Set<number>([pageNumber]);
         if (data?.lines && data.pageNumber === pageNumber) {
@@ -107,15 +134,15 @@ export function QCFPageRenderer({
         await Promise.all([...pages].map((p) => loadPageFont(p)));
         /* One frame after fonts are ready so the first paint uses QCF, not fallback metrics. */
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-        if (!cancelled) setFontReady(true);
+        if (signal.aborted) return;
+        setFontReady(true);
       } catch {
-        if (!cancelled) setFontReady(false);
+        if (signal.aborted) return;
+        setFontReady(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [pageNumber, data]);
+    },
+    [pageNumber, data],
+  );
 
   useEffect(() => {
     if (!fontReady || !containerRef.current) return;
@@ -157,7 +184,7 @@ export function QCFPageRenderer({
   }, [highlightRange, fontReady, pageNumber]);
 
   const handleWordClick = useCallback(
-    (word: WordData, e: MouseEvent<HTMLSpanElement>) => {
+    (word: WordData, e: MouseEvent<HTMLSpanElement> | KeyboardEvent<HTMLSpanElement>) => {
       const rect = e.currentTarget.getBoundingClientRect();
       onWordClick?.({ surah: word.surah, ayah: word.ayah, wordIndex: word.wordPosition, rect });
       onAyahClick?.({ surah: word.surah, ayah: word.ayah });
@@ -224,6 +251,7 @@ export function QCFPageRenderer({
     onWordMouseLeave: onWordMouseLeave ? handleWordMouseLeave : undefined,
     onAyahMarkerMouseEnter,
     onAyahMarkerMouseLeave,
+    t,
   };
 
   const safeFontPx = Math.min(34, Math.max(16, Number.isFinite(fontSizePx) ? fontSizePx : 28));
@@ -269,17 +297,19 @@ function LineView({
   onWordMouseLeave,
   onAyahMarkerMouseEnter,
   onAyahMarkerMouseLeave,
+  t,
 }: {
   line: LineData;
   mushafPageNumber: number;
   highlightRange?: { surah: number; ayahStart: number; ayahEnd: number } | null;
   activeWord?: { surah: number; ayah: number; wordIndex: number } | null;
   getWordAnnotationClass?: (surah: number, ayah: number, wordPosition: number) => string;
-  onWordClick: (w: WordData, e: MouseEvent<HTMLSpanElement>) => void;
+  onWordClick: (w: WordData, e: MouseEvent<HTMLSpanElement> | KeyboardEvent<HTMLSpanElement>) => void;
   onWordMouseEnter?: (w: WordData, e: MouseEvent<HTMLSpanElement>) => void;
   onWordMouseLeave?: (w: WordData) => void;
   onAyahMarkerMouseEnter?: (data: { surah: number; ayah: number; rect?: DOMRect }) => void;
   onAyahMarkerMouseLeave?: (data: { surah: number; ayah: number }) => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
   if (line.lineType === "surah_name" && line.surahNumber != null) {
     const sn = line.surahNumber;
@@ -318,10 +348,19 @@ function LineView({
               isHighlighted(word, highlightRange) ? "mushaf-word--highlighted" : ""
             } ${isActiveWord(word, activeWord) ? "mushaf-word--active" : ""} ${annotationClass}`}
             style={{ fontFamily: getPageFontFamily(word.glyphPageFont ?? mushafPageNumber) }}
+            role="button"
+            tabIndex={0}
+            lang="ar"
+            aria-label={ariaLabelForWord(word, t)}
             data-surah={word.surah}
             data-ayah={word.ayah}
             data-word={word.wordPosition}
             onClick={(e) => onWordClick(word, e)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" && e.key !== " ") return;
+              e.preventDefault();
+              onWordClick(word, e);
+            }}
             onMouseEnter={(e) => {
               onWordMouseEnter?.(word, e);
               if (isVerseEndMarker(word)) {

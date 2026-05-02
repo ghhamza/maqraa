@@ -6,6 +6,16 @@ const loadedFonts = new Set<number>();
 /** Matches Quran Foundation CDN paths and `FontFace` names (e.g. `p510-v2`). */
 const HAFS_QCF_VERSION = "v2";
 
+const failedFonts = new Set<number>();
+let onLoadFailure: ((pageNumber: number, err: unknown) => void) | null = null;
+
+/** Register a callback for the FIRST font load failure (e.g. show a toast). */
+export function setFontLoadFailureHandler(
+  handler: ((pageNumber: number, err: unknown) => void) | null,
+): void {
+  onLoadFailure = handler;
+}
+
 /**
  * Load the QCF V2 font for a page and wait until the browser can actually use it for layout.
  * Without `document.fonts.load` + `ready`, a full refresh often paints PUA glyphs with a fallback
@@ -15,12 +25,24 @@ export async function loadPageFont(pageNumber: number): Promise<void> {
   const fontName = `p${pageNumber}-${HAFS_QCF_VERSION}`;
   const fontUrl = `https://verses.quran.foundation/fonts/quran/hafs/${HAFS_QCF_VERSION}/woff2/p${pageNumber}.woff2`;
 
+  if (failedFonts.has(pageNumber)) {
+    // Already failed once for this page — don't keep re-trying every render.
+    return;
+  }
+
   if (!loadedFonts.has(pageNumber)) {
-    /* `block` avoids swapping to fallback during load (glyphs would render as garbage). */
-    const font = new FontFace(fontName, `url('${fontUrl}')`, { display: "block" });
-    await font.load();
-    document.fonts.add(font);
-    loadedFonts.add(pageNumber);
+    try {
+      /* `block` avoids swapping to fallback during load (glyphs would render as garbage). */
+      const font = new FontFace(fontName, `url('${fontUrl}')`, { display: "block" });
+      await font.load();
+      document.fonts.add(font);
+      loadedFonts.add(pageNumber);
+    } catch (err) {
+      failedFonts.add(pageNumber);
+      console.error(`[mushafFontLoader] Failed to load font for page ${pageNumber}:`, err);
+      onLoadFailure?.(pageNumber, err);
+      return;
+    }
   }
 
   try {

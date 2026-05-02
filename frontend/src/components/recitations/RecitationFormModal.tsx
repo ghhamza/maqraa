@@ -3,7 +3,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
+import { api } from "../../lib/api";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
+import { useFormSubmit } from "../../hooks/useFormSubmit";
 import {
   getAvailableRiwayat,
   getSurahAyahCount,
@@ -75,8 +77,7 @@ export function RecitationFormModal({
   const [grade, setGrade] = useState<RecitationGrade | "">("");
   const [notes, setNotes] = useState("");
   const [riwaya, setRiwaya] = useState<QuranRiwaya>("hafs");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { loading, error, setError, submit, reset: resetSubmit } = useFormSubmit();
 
   const maxAyah = getSurahAyahCount(surah, riwaya);
 
@@ -92,7 +93,7 @@ export function RecitationFormModal({
 
   useEffect(() => {
     if (!open) return;
-    setError(null);
+    resetSubmit();
     if (mode === "edit" && recitation) {
       setStudentId(recitation.student_id ?? "");
       setRoomId(recitation.room_id ?? "");
@@ -114,7 +115,7 @@ export function RecitationFormModal({
       setNotes("");
       setRiwaya("hafs");
     }
-  }, [open, mode, recitation, defaultStudentId, defaultRoomId, defaultSessionId]);
+  }, [open, mode, recitation, defaultStudentId, defaultRoomId, defaultSessionId, resetSubmit]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -131,31 +132,29 @@ export function RecitationFormModal({
     setAyahEnd((e) => Math.max(ayahStart, Math.min(e, maxAyah)));
   }, [ayahStart, maxAyah]);
 
-  useEffect(() => {
-    if (!open || !user) return;
-    let cancelled = false;
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (!open || !user) return;
       try {
-        const { data: roomsPage } = await api.get<Paginated<Room>>("rooms");
+        const { data: roomsPage } = await api.get<Paginated<Room>>("rooms", { signal });
         const roomList = roomsPage.items;
-        if (!cancelled) {
-          const mine =
-            user.role === "admin"
-              ? roomList
-              : roomList.filter((r) => r.teacher_id === user.id);
-          setRooms(mine);
-        }
+        const mine =
+          user.role === "admin"
+            ? roomList
+            : roomList.filter((r) => r.teacher_id === user.id);
+        setRooms(mine);
+
         if (user.role === "admin") {
-          const { data: studs } = await api.get<StudentOption[]>("students");
-          if (!cancelled) setStudents(studs);
+          const { data: studs } = await api.get<StudentOption[]>("students", { signal });
+          setStudents(studs);
         } else if (user.role === "teacher") {
-          const mine = roomList.filter((r) => r.teacher_id === user.id);
+          const teachersRooms = roomList.filter((r) => r.teacher_id === user.id);
           const map = new Map<string, StudentOption>();
-          for (const r of mine) {
+          for (const r of teachersRooms) {
             try {
-              const { data: ens } = await api.get<{ student_id: string; student_name: string; student_email: string }[]>(
-                `rooms/${r.id}/enrollments`,
-              );
+              const { data: ens } = await api.get<
+                { student_id: string; student_name: string; student_email: string }[]
+              >(`rooms/${r.id}/enrollments`, { signal });
               for (const e of ens) {
                 if (!map.has(e.student_id)) {
                   map.set(e.student_id, {
@@ -165,33 +164,30 @@ export function RecitationFormModal({
                   });
                 }
               }
-            } catch {
-              /* skip */
+            } catch (err) {
+              // Per-room enrollment failures are non-fatal; aborts bubble up.
+              if ((err as { name?: string })?.name === "CanceledError") throw err;
             }
           }
-          if (!cancelled) setStudents([...map.values()].sort((a, b) => a.name.localeCompare(b.name)));
+          setStudents([...map.values()].sort((a, b) => a.name.localeCompare(b.name)));
         }
-      } catch {
-        if (!cancelled) {
-          setRooms([]);
-          setStudents([]);
-        }
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setRooms([]);
+        setStudents([]);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, user]);
+    },
+    [open, user],
+  );
 
-  useEffect(() => {
-    if (!open || !roomId) {
-      setSessions([]);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (!open || !roomId) {
+        setSessions([]);
+        return;
+      }
       try {
-        const { data } = await api.get<SessionPublic[]>(`rooms/${roomId}/sessions`);
+        const { data } = await api.get<SessionPublic[]>(`rooms/${roomId}/sessions`, { signal });
         const ok = data.filter(
           (s) =>
             s.status === "scheduled" ||
@@ -199,15 +195,14 @@ export function RecitationFormModal({
             s.status === "completed" ||
             (defaultSessionId && s.id === defaultSessionId),
         );
-        if (!cancelled) setSessions(ok);
-      } catch {
-        if (!cancelled) setSessions([]);
+        setSessions(ok);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setSessions([]);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, roomId, defaultSessionId]);
+    },
+    [open, roomId, defaultSessionId],
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -216,9 +211,7 @@ export function RecitationFormModal({
       setError(t("errors.badRequest"));
       return;
     }
-    setError(null);
-    setLoading(true);
-    try {
+    await submit(async () => {
       if (mode === "create") {
         await api.post<RecitationPublic>("recitations", {
           student_id: studentId,
@@ -242,11 +235,7 @@ export function RecitationFormModal({
       }
       onSaved();
       onClose();
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   const studentLocked = mode === "edit" || !!defaultStudentId;

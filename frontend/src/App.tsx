@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Direction } from "radix-ui";
@@ -31,7 +31,11 @@ import { AccountLinksPage } from "./pages/settings/AccountLinksPage";
 import { MushafPage } from "./pages/mushaf/MushafPage";
 import { useAuthStore } from "./stores/authStore";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ErrorBoundary } from "./components/ui/ErrorBoundary";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "./lib/queryClient";
 import { LiveSessionsProvider } from "./contexts/LiveSessionsContext";
+import { setFontLoadFailureHandler } from "./lib/mushafFontLoader";
 
 /** Radix `useDirection()` defaults to LTR unless this provider is set; it does not read `document.dir`. */
 function RadixDirectionProvider({ children }: { children: ReactNode }) {
@@ -119,10 +123,21 @@ const router = createBrowserRouter([
 
 function RouterWithAuth() {
   const loadUser = useAuthStore((s) => s.loadUser);
+  const { t } = useTranslation();
+  const fontFailureAlerted = useRef(false);
 
   useEffect(() => {
     void loadUser();
   }, [loadUser]);
+
+  useEffect(() => {
+    setFontLoadFailureHandler(() => {
+      if (fontFailureAlerted.current) return;
+      fontFailureAlerted.current = true;
+      alert(t("mushaf.fontLoadFailed"));
+    });
+    return () => setFontLoadFailureHandler(null);
+  }, [t]);
 
   return <RouterProvider router={router} />;
 }
@@ -130,13 +145,17 @@ function RouterWithAuth() {
 export default function App() {
   return (
     <RadixDirectionProvider>
-      <TooltipProvider delayDuration={300} skipDelayDuration={200}>
-        <LiveSessionsProvider>
-          <div className="flex min-h-[100dvh] w-full min-w-0 flex-1 flex-col">
-            <RouterWithAuth />
-          </div>
-        </LiveSessionsProvider>
-      </TooltipProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider delayDuration={300} skipDelayDuration={200}>
+          <ErrorBoundary scope="app">
+            <LiveSessionsProvider>
+              <div className="flex min-h-[100dvh] w-full min-w-0 flex-1 flex-col">
+                <RouterWithAuth />
+              </div>
+            </LiveSessionsProvider>
+          </ErrorBoundary>
+        </TooltipProvider>
+      </QueryClientProvider>
     </RadixDirectionProvider>
   );
 }

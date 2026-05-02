@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useState } from "react";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
 import type { HalaqahType, QuranRiwaya, Room, TeacherOption } from "../../types";
@@ -69,27 +70,23 @@ export function RoomFormModal({
     }
   }, [open, mode, room]);
 
-  useEffect(() => {
-    if (!open || !isAdmin || mode !== "create") return;
-    let cancelled = false;
-    setLoadingTeachers(true);
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (!open || !isAdmin || mode !== "create") return;
+      setLoadingTeachers(true);
       try {
-        const { data } = await api.get<TeacherOption[]>("teachers");
-        if (!cancelled) {
-          setTeachers(data);
-          setTeacherId((prev) => prev || data[0]?.id || "");
-        }
-      } catch {
-        if (!cancelled) setTeachers([]);
+        const { data } = await api.get<TeacherOption[]>("teachers", { signal });
+        setTeachers(data);
+        setTeacherId((prev) => prev || data[0]?.id || "");
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setTeachers([]);
       } finally {
-        if (!cancelled) setLoadingTeachers(false);
+        if (!signal.aborted) setLoadingTeachers(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, isAdmin, mode]);
+    },
+    [open, isAdmin, mode],
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

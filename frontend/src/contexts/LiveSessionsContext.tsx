@@ -1,15 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useAuthStore } from "../stores/authStore";
 import type { Paginated, SessionPublic } from "../types";
@@ -21,49 +14,36 @@ export interface LiveSessionsContextValue {
   hasLiveSession: boolean;
   primaryLiveSession: SessionPublic | null;
   loading: boolean;
+  /** Truthy after a poll fails — surface in UI as a non-blocking warning. */
+  error: Error | null;
   refresh: () => Promise<void>;
-  /** Increments after each successful poll so UI can reset ephemeral state (e.g. banner dismiss). */
+  /** Increments after each successful poll so UI can reset ephemeral state. */
   pollVersion: number;
 }
 
 const LiveSessionsContext = createContext<LiveSessionsContextValue | null>(null);
 
+async function fetchLiveSessions(signal: AbortSignal): Promise<SessionPublic[]> {
+  const { data } = await api.get<Paginated<SessionPublic>>("sessions", {
+    params: { status: "in_progress", limit: 100 },
+    signal,
+  });
+  return data.items;
+}
+
 export function LiveSessionsProvider({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user);
-  const [sessions, setSessions] = useState<SessionPublic[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pollVersion, setPollVersion] = useState(0);
 
-  const fetchLive = useCallback(async () => {
-    try {
-      const { data } = await api.get<Paginated<SessionPublic>>("sessions", {
-        params: { status: "in_progress", limit: 100 },
-      });
-      setSessions(data.items);
-    } catch {
-      setSessions([]);
-    } finally {
-      setLoading(false);
-      setPollVersion((v) => v + 1);
-    }
-  }, []);
+  const query = useQuery({
+    queryKey: ["live-sessions", user?.id ?? null],
+    queryFn: ({ signal }) => fetchLiveSessions(signal),
+    enabled: !!user,
+    refetchInterval: POLL_MS,
+    refetchOnWindowFocus: true,
+    staleTime: POLL_MS / 2,
+  });
 
-  useEffect(() => {
-    if (!user) {
-      setSessions([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    void fetchLive();
-    const id = window.setInterval(() => void fetchLive(), POLL_MS);
-    const onFocus = () => void fetchLive();
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.clearInterval(id);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [user, fetchLive]);
+  const sessions = query.data ?? [];
 
   const primaryLiveSession = useMemo(() => {
     if (sessions.length === 0) return null;
@@ -72,16 +52,19 @@ export function LiveSessionsProvider({ children }: { children: ReactNode }) {
     )[0]!;
   }, [sessions]);
 
-  const value = useMemo(
-    (): LiveSessionsContextValue => ({
+  const value = useMemo<LiveSessionsContextValue>(
+    () => ({
       sessions,
       hasLiveSession: sessions.length > 0,
       primaryLiveSession,
-      loading,
-      refresh: fetchLive,
-      pollVersion,
+      loading: query.isPending && !!user,
+      error: query.error as Error | null,
+      refresh: async () => {
+        await query.refetch();
+      },
+      pollVersion: query.dataUpdatedAt,
     }),
-    [sessions, primaryLiveSession, loading, fetchLive, pollVersion],
+    [sessions, primaryLiveSession, query.isPending, query.error, query.refetch, query.dataUpdatedAt, user],
   );
 
   return <LiveSessionsContext.Provider value={value}>{children}</LiveSessionsContext.Provider>;

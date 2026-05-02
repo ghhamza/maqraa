@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useCancellableEffect } from "./useCancellableEffect";
 import { getPageForSurahStart, getSurahAyahAtPageStart } from "../lib/quranService";
 import type { Riwaya } from "../lib/quranService";
 
@@ -346,26 +347,25 @@ export function useQuranPage(pageNumber: number, riwaya: Riwaya): {
   const [error, setError] = useState<Error | null>(null);
   const [token, setToken] = useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    setData(null);
-    setLoading(true);
-    setError(null);
-    prefetchAdjacentPageData(pageNumber, riwaya, 2);
-    void fetchPage(pageNumber, riwaya)
-      .then((d) => {
-        if (!cancelled) setData(d);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [pageNumber, riwaya, token]);
+  useCancellableEffect(
+    async (signal) => {
+      setData(null);
+      setLoading(true);
+      setError(null);
+      prefetchAdjacentPageData(pageNumber, riwaya, 2);
+      try {
+        const d = await fetchPage(pageNumber, riwaya);
+        if (signal.aborted) return;
+        setData(d);
+      } catch (e: unknown) {
+        if (signal.aborted) return;
+        setError(e instanceof Error ? e : new Error(String(e)));
+      } finally {
+        if (!signal.aborted) setLoading(false);
+      }
+    },
+    [pageNumber, riwaya, token],
+  );
 
   const reload = () => {
     PAGE_CACHE.delete(pageCacheKey(pageNumber));

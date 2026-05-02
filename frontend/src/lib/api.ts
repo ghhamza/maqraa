@@ -7,6 +7,10 @@ import i18n from "../i18n";
 /** Maps axios errors to localized messages (prefers API `code` then `message`). */
 export function userFacingApiError(err: unknown, fallbackKey = "errors.generic"): string {
   if (!axios.isAxiosError(err)) return i18n.t(fallbackKey);
+  // axios marks both client-side timeouts and explicit aborts as `ERR_CANCELED` /
+  // `ECONNABORTED`. Treat the timeout case as a network error so the user sees a
+  // retry-friendly message instead of "errors.generic".
+  if (err.code === "ECONNABORTED") return i18n.t("errors.timeout");
   const status = err.response?.status;
   const data = err.response?.data as { message?: string; code?: string } | undefined;
   if (data?.code) {
@@ -42,8 +46,12 @@ export function getApiBaseUrl(): string {
   return "/api";
 }
 
+/** Default request timeout in ms. Long enough for slow uploads, short enough to surface hangs. */
+const DEFAULT_TIMEOUT_MS = 30_000;
+
 export const api = axios.create({
   baseURL: getApiBaseUrl(),
+  timeout: DEFAULT_TIMEOUT_MS,
   headers: {
     "Content-Type": "application/json",
   },

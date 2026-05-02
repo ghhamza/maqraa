@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useState } from "react";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
 import type { CreateSessionsResponse, Paginated, Room, SessionPublic } from "../../types";
@@ -84,32 +85,28 @@ export function SessionFormModal({
     }
   }, [open, mode, session, defaultRoomId, defaultDatetime, presetMorningStart]);
 
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setLoadingRooms(true);
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (!open) return;
+      setLoadingRooms(true);
       try {
-        const { data } = await api.get<Paginated<Room>>("rooms");
+        const { data } = await api.get<Paginated<Room>>("rooms", { signal });
         const items = data.items;
-        if (!cancelled) {
-          setRooms(items);
-          setRoomId((prev) => {
-            if (prev && items.some((r) => r.id === prev)) return prev;
-            if (defaultRoomId && items.some((r) => r.id === defaultRoomId)) return defaultRoomId;
-            return items[0]?.id ?? "";
-          });
-        }
-      } catch {
-        if (!cancelled) setRooms([]);
+        setRooms(items);
+        setRoomId((prev) => {
+          if (prev && items.some((r) => r.id === prev)) return prev;
+          if (defaultRoomId && items.some((r) => r.id === defaultRoomId)) return defaultRoomId;
+          return items[0]?.id ?? "";
+        });
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setRooms([]);
       } finally {
-        if (!cancelled) setLoadingRooms(false);
+        if (!signal.aborted) setLoadingRooms(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, defaultRoomId]);
+    },
+    [open, defaultRoomId],
+  );
 
   useEffect(() => {
     if (!repeatEnabled || !datetimeLocal) return;

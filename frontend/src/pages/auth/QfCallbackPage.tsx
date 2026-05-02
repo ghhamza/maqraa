@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
@@ -34,19 +35,18 @@ export function QfCallbackPage() {
     return null;
   }, [code, queryError, state, t]);
 
-  useEffect(() => {
-    if (initialError || !code || !state) {
-      setError(initialError);
-      return;
-    }
-    const exchangeKey = `${code}:${state}`;
-    let cancelled = false;
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (initialError || !code || !state) {
+        setError(initialError);
+        return;
+      }
+      const exchangeKey = `${code}:${state}`;
       try {
         let req = exchangeRequests.get(exchangeKey);
         if (!req) {
           req = api
-            .post<QfExchangeResponse>("auth/qf/exchange", { code, state })
+            .post<QfExchangeResponse>("auth/qf/exchange", { code, state }, { signal })
             .then((res) => res.data)
             .finally(() => {
               exchangeRequests.delete(exchangeKey);
@@ -54,7 +54,7 @@ export function QfCallbackPage() {
           exchangeRequests.set(exchangeKey, req);
         }
         const data = await req;
-        if (cancelled) return;
+        if (signal.aborted) return;
         if ("token" in data) {
           login(data.token, data.user);
           if (data.redirect_after === "/auth/role-selection") {
@@ -67,13 +67,12 @@ export function QfCallbackPage() {
         await loadUser();
         navigate(data.redirect_after || "/settings", { replace: true });
       } catch (err) {
-        if (!cancelled) setError(userFacingApiError(err, "auth.qfCallback.failed"));
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        if (!signal.aborted) setError(userFacingApiError(err, "auth.qfCallback.failed"));
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [code, initialError, loadUser, login, navigate, state, t]);
+    },
+    [code, initialError, loadUser, login, navigate, state, t],
+  );
 
   if (!error) {
     return (
