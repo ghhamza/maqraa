@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BookMarked, TrendingUp } from "lucide-react";
@@ -29,6 +29,7 @@ import { PageShell } from "../../components/layout/PageShell";
 import { getAvailableRiwayat, getSurahNameWithArabic } from "../../lib/quranService";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { cn } from "@/lib/utils";
 
 /** Align with SurahPicker + native date inputs (Radix trigger defaults include `sm:text-base`). */
@@ -62,53 +63,61 @@ export function RecitationsPage() {
   const isStudent = user?.role === "student";
   const canAdd = user?.role === "teacher" || user?.role === "admin";
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params: Record<string, string> = {};
-      if (surahFilter !== "") params.surah = String(surahFilter);
-      if (gradeTab) params.grade = gradeTab;
-      if (fromDate) params.from = new Date(fromDate + "T00:00:00").toISOString();
-      if (toDate) params.to = new Date(toDate + "T23:59:59").toISOString();
-      if (studentFilter && (user?.role === "teacher" || user?.role === "admin")) {
-        params.student_id = studentFilter;
+  const fetchAll = useCallback(
+    async (signal?: AbortSignal) => {
+      setLoading(true);
+      try {
+        const params: Record<string, string> = {};
+        if (surahFilter !== "") params.surah = String(surahFilter);
+        if (gradeTab) params.grade = gradeTab;
+        if (fromDate) params.from = new Date(fromDate + "T00:00:00").toISOString();
+        if (toDate) params.to = new Date(toDate + "T23:59:59").toISOString();
+        if (studentFilter && (user?.role === "teacher" || user?.role === "admin")) {
+          params.student_id = studentFilter;
+        }
+        if (riwayaFilter) params.riwaya = riwayaFilter;
+        const [statsRes, listRes] = await Promise.all([
+          api.get<RecitationStats>("recitations/stats", { signal }),
+          api.get<Paginated<RecitationPublic>>("recitations", { params, signal }),
+        ]);
+        setStats(statsRes.data);
+        setRows(listRes.data.items);
+      } catch (err) {
+        const name = (err as { name?: string })?.name;
+        const code = (err as { code?: string })?.code;
+        if (name === "CanceledError" || name === "AbortError" || code === "ERR_CANCELED") return;
+        setStats(null);
+        setRows([]);
+      } finally {
+        setLoading(false);
       }
-      if (riwayaFilter) params.riwaya = riwayaFilter;
-      const [statsRes, listRes] = await Promise.all([
-        api.get<RecitationStats>("recitations/stats"),
-        api.get<Paginated<RecitationPublic>>("recitations", { params }),
-      ]);
-      setStats(statsRes.data);
-      setRows(listRes.data.items);
-    } catch {
-      setStats(null);
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [surahFilter, gradeTab, fromDate, toDate, studentFilter, riwayaFilter, user?.role]);
+    },
+    [surahFilter, gradeTab, fromDate, toDate, studentFilter, riwayaFilter, user?.role],
+  );
 
-  useEffect(() => {
-    void fetchAll();
-  }, [fetchAll]);
+  useCancellableEffect(
+    async (signal) => {
+      await fetchAll(signal);
+    },
+    [fetchAll],
+  );
 
-  useEffect(() => {
-    if (!user || user.role === "student") return;
-    let cancelled = false;
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (!user || user.role === "student") return;
       try {
         if (user.role === "admin") {
-          const { data } = await api.get<StudentOption[]>("students");
-          if (!cancelled) setStudents(data);
+          const { data } = await api.get<StudentOption[]>("students", { signal });
+          setStudents(data);
         } else {
-          const { data: roomsPage } = await api.get<Paginated<Room>>("rooms");
+          const { data: roomsPage } = await api.get<Paginated<Room>>("rooms", { signal });
           const mine = roomsPage.items.filter((r) => r.teacher_id === user.id);
           const map = new Map<string, StudentOption>();
           for (const r of mine) {
             try {
               const { data: ens } = await api.get<
                 { student_id: string; student_name: string; student_email: string }[]
-              >(`rooms/${r.id}/enrollments`);
+              >(`rooms/${r.id}/enrollments`, { signal });
               for (const e of ens) {
                 if (!map.has(e.student_id)) {
                   map.set(e.student_id, {
@@ -118,20 +127,19 @@ export function RecitationsPage() {
                   });
                 }
               }
-            } catch {
-              /* */
+            } catch (err) {
+              if ((err as { name?: string })?.name === "CanceledError") throw err;
             }
           }
-          if (!cancelled) setStudents([...map.values()].sort((a, b) => a.name.localeCompare(b.name)));
+          setStudents([...map.values()].sort((a, b) => a.name.localeCompare(b.name)));
         }
-      } catch {
-        if (!cancelled) setStudents([]);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setStudents([]);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
+    },
+    [user],
+  );
 
   const canEditRow = useCallback(
     (r: RecitationPublic) => {

@@ -296,7 +296,12 @@
       "nextPage": "Go to the next page of the Mushaf (in RTL layout this is the left arrow).",
       "prevPage": "Go to the previous page (in RTL layout this is the right arrow).",
       "jumpOpen": "Open the panel to jump to a surah, juz, or page number."
-    }
+    },
+    "aria": {
+      "word": "{{surah}}, ayah {{ayah}}, word {{word}}",
+      "ayahMarker": "End of ayah {{ayah}}, {{surah}}"
+    },
+    "fontLoadFailed": "Could not load Quran page fonts. Check your connection or try again later."
   },
   "enrollment": {
     "title": "Enrollment",
@@ -368,6 +373,7 @@
     "badRequest": "Invalid data.",
     "sessionExpired": "Session expired. Log in again.",
     "network": "Cannot reach the server.",
+    "timeout": "Request timed out. Please try again.",
     "serverDown": "Server error. Try again later.",
     "serviceUnavailable": "Service temporarily unavailable.",
     "session_overlap": "This time overlaps another session in the room.",
@@ -669,6 +675,9 @@
       "startedAgo": "Started {{minutes}} min ago",
       "dismiss": "Dismiss"
     },
+    "errors": {
+      "pollingFailed": "Could not refresh live sessions. You can keep working; we will retry automatically."
+    },
     "dashboard": {
       "title": "Live now",
       "join": "Join"
@@ -757,5 +766,16 @@
     "waqf_ibtida": "Stop/start",
     "shadda": "Emphasis",
     "other": "Other"
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred. You can try again or reload the page.",
+    "tryAgain": "Try again",
+    "reload": "Reload page",
+    "liveSession": {
+      "title": "Live session error",
+      "description": "The live session view crashed unexpectedly. You can try again or leave the session.",
+      "leave": "Leave session"
+    }
   }
 }

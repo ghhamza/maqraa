@@ -43,6 +43,40 @@ interface TokenResponse {
   identity: string;
 }
 
+/**
+ * Manages a single LiveKit `Room` instance per session, with safe reconnect.
+ *
+ * # The generation-counter pattern
+ *
+ * Every time we kick off a new connect attempt we bump `generationRef.current`
+ * and capture the new value as `myGen`. Every async step inside the connect
+ * flow checks `if (generationRef.current !== myGen) return;` before touching
+ * state — this lets a *stale* attempt (e.g. one that started, then was
+ * superseded by a re-connect during the intervening await) bail out instead
+ * of stomping on the current attempt's room/state.
+ *
+ * The cleanup function also bumps the generation, so any resolution that
+ * arrives after unmount is automatically considered stale and discarded.
+ *
+ * Why this is needed: LiveKit `Room.connect()` is async and there is no
+ * cancellation API. Without the generation guard, a slow connect kicked off
+ * before a re-connect could resolve *after* the new connect resolved and
+ * either (a) overwrite the new room ref or (b) emit events that look like
+ * they came from the current room. Both bugs have happened before in this
+ * file — do not remove the guards.
+ *
+ * # Auto-mic-permission sync
+ *
+ * The server may flip `canPublish` mid-session (teacher hands the mic over).
+ * The participant-permissions-changed handler watches for this and toggles
+ * the local mic publication so the user does not have to click anything.
+ *
+ * # Reconnect backoff
+ *
+ * Driven by `reconnectTrigger` state which the disconnect handler bumps.
+ * Backoff is exponential (1s..30s). The cleanup-on-unmount path is distinct
+ * from the reconnect path so unmount does not trigger a reconnect.
+ */
 export function useLivekitConnection(
   options: UseLivekitConnectionOptions,
 ): UseLivekitConnectionResult {
@@ -109,8 +143,7 @@ export function useLivekitConnection(
       return;
     }
 
-    // Bump generation. Any previously in-flight connect attempt will see
-    // its captured generation !== this one and bail out.
+    // Bump generation so any in-flight attempt becomes stale. See header doc.
     generationRef.current += 1;
     const myGen = generationRef.current;
 
@@ -302,6 +335,7 @@ export function useLivekitConnection(
       // blocking React. Because React can't await cleanup, we rely on the
       // generation check in the in-flight attempt to prevent it from
       // claiming the (now null) roomRef.
+      // Bump generation in cleanup so async results that arrive post-unmount bail.
       generationRef.current += 1;
       tokenAbort.abort();
       void teardownCurrentRoom();

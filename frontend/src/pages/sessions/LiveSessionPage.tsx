@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useBlocker, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
@@ -21,14 +21,21 @@ import { useSessionState, type SessionParticipant } from "../../hooks/useSession
 import { MushafCanvas } from "../../components/mushaf/MushafCanvas";
 import { MushafNavigatorSheet } from "../../components/mushaf/MushafNavigatorSheet";
 import { MushafReader } from "../../components/mushaf/MushafReader";
-import { SessionControlsCorner } from "../../components/session/SessionControlsCorner";
 import {
   LiveSessionMobileBottomBar,
   LiveSessionMobileTopBar,
   LiveSessionOverflowSheet,
 } from "../../components/session/LiveSessionMobileChrome";
 import { ParticipantDrawer } from "../../components/session/ParticipantDrawer";
-import { Modal } from "../../components/ui/Modal";
+import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
+import {
+  LiveSessionAnotherTab,
+  LiveSessionLoadError,
+  LiveSessionLoading,
+} from "./components/LiveSessionEarlyStates";
+import { LiveSessionDesktopActionBar } from "./components/LiveSessionDesktopActionBar";
+import { LiveSessionConfirmModals } from "./components/LiveSessionConfirmModals";
+import { LiveSessionToastsAndOverlays } from "./components/LiveSessionToastsAndOverlays";
 import {
   Dialog,
   DialogContent,
@@ -50,9 +57,7 @@ import {
   getTotalPages,
 } from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
-import { AutoFollowBadge } from "../../components/session/AutoFollowBadge";
 import { GradingPanel } from "../../components/session/GradingPanel";
-import { GradeToast } from "../../components/session/GradeToast";
 import { ReconnectingOverlay } from "../../components/session/ReconnectingOverlay";
 import { SessionStatusCorner } from "../../components/session/SessionStatusCorner";
 import { AnnotationToolbar, type AnnotationTarget } from "../../components/session/AnnotationToolbar";
@@ -60,8 +65,7 @@ import { StudentAnnotationPopover } from "../../components/session/StudentAnnota
 import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudioButton";
 import { cn } from "@/lib/utils";
 import { useLivekitConnection } from "@/hooks/useLivekitConnection";
-import { MEET_ICON_BTN_BASE } from "../../components/session/sessionMeetButtonStyles";
-import { Info, LogOut, Menu, MessageSquare, PhoneOff, Users, Volume2 } from "lucide-react";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
@@ -77,30 +81,43 @@ function shouldShowStudentPopoverContent(found: ErrorAnnotation[]): boolean {
   return !onlyRepeat;
 }
 
-/** Desktop session chrome regions (`data-session-zone` for tests / layout hooks). */
-function SessionLayoutZone({
-  zoneId,
-  ariaLabel,
-  className,
-  children,
-}: {
-  zoneId: string;
-  ariaLabel: string;
-  className?: string;
-  children: ReactNode;
-}) {
+export function LiveSessionPage() {
   return (
-    <section
-      aria-label={ariaLabel}
-      data-session-zone={zoneId}
-      className={cn("flex min-h-0 min-w-0 flex-col p-2", className)}
-    >
-      <div className="min-h-0 flex-1">{children}</div>
-    </section>
+    <ErrorBoundary scope="live-session" fallback={LiveSessionErrorFallback}>
+      <LiveSessionPageInner />
+    </ErrorBoundary>
   );
 }
 
-export function LiveSessionPage() {
+function LiveSessionErrorFallback({ error, reset }: { error: Error; reset: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      role="alert"
+      className="flex min-h-[100dvh] w-full flex-col items-center justify-center gap-4 bg-background px-6 py-10 text-center"
+    >
+      <h1 className="text-xl font-semibold">{t("errorBoundary.liveSession.title")}</h1>
+      <p className="max-w-md text-sm text-muted-foreground">
+        {t("errorBoundary.liveSession.description")}
+      </p>
+      {import.meta.env.DEV && (
+        <pre className="max-w-full overflow-auto rounded bg-muted p-2 text-start text-xs text-muted-foreground">
+          {error.message}
+        </pre>
+      )}
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <Button variant="secondary" onClick={reset}>
+          {t("errorBoundary.tryAgain")}
+        </Button>
+        <Button onClick={() => (window.location.href = "/live")}>
+          {t("errorBoundary.liveSession.leave")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function LiveSessionPageInner() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
@@ -824,19 +841,19 @@ export function LiveSessionPage() {
 
   // Same recitation row for teacher and all students: the active reciter's latest for this session.
   // Defensive `session_id === id` avoids picking legacy rows with NULL or a different session (WS create-annotation rejects those).
-  useEffect(() => {
-    if (!id || !activeReciterParticipant?.userId) {
-      setCurrentRecitationId(null);
-      return;
-    }
-    const epoch = ++recitationFetchEpochRef.current;
-    let cancelled = false;
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (!id || !activeReciterParticipant?.userId) {
+        setCurrentRecitationId(null);
+        return;
+      }
+      const epoch = ++recitationFetchEpochRef.current;
       try {
         const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
           params: { session_id: id, limit: 50 },
+          signal,
         });
-        if (cancelled || epoch !== recitationFetchEpochRef.current) return;
+        if (signal.aborted || epoch !== recitationFetchEpochRef.current) return;
         const forActiveStudent = data.items.filter((r) => r.student_id === activeReciterParticipant.userId);
         const forSessionAndStudent = forActiveStudent.filter((r) => r.session_id === id);
         forSessionAndStudent.sort(
@@ -846,14 +863,13 @@ export function LiveSessionPage() {
           setAnnounce(t("annotation.noRecitation"));
         }
         setCurrentRecitationId(forSessionAndStudent[0]?.id ?? null);
-      } catch {
-        if (!cancelled && epoch === recitationFetchEpochRef.current) setCurrentRecitationId(null);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        if (epoch === recitationFetchEpochRef.current) setCurrentRecitationId(null);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, activeReciterParticipant?.userId, isTeacher, t]);
+    },
+    [id, activeReciterParticipant?.userId, isTeacher, t],
+  );
 
   useEffect(() => {
     setAnnotationTarget(null);
@@ -949,82 +965,28 @@ export function LiveSessionPage() {
     return null;
   }
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)]">
-        <div
-          className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent"
-          role="status"
-          aria-label={t("common.loading")}
-        />
-      </div>
-    );
-  }
+  if (loading) return <LiveSessionLoading />;
 
   if (loadError || !sessionDetail || !room || !user || !token) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--color-bg)] p-6">
-        <p className="text-center text-[var(--color-text-muted)]">{loadError ?? t("errors.not_found")}</p>
-        <Button type="button" variant="outline" onClick={() => navigate(`/sessions/${id}`)}>
-          {t("common.back")}
-        </Button>
-      </div>
-    );
+    return <LiveSessionLoadError message={loadError} onBack={() => navigate(`/sessions/${id}`)} />;
   }
 
-  if (anotherTab) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[var(--color-bg)] p-6">
-        <p className="max-w-md text-center text-[var(--color-text)]">{t("liveSession.connectedFromAnotherTab")}</p>
-        <Button type="button" variant="primary" onClick={() => window.location.reload()}>
-          {t("liveSession.refreshPage")}
-        </Button>
-      </div>
-    );
-  }
+  if (anotherTab) return <LiveSessionAnotherTab />;
 
   return (
     <div
       className="relative flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-white"
       dir={i18n.language?.startsWith("ar") ? "rtl" : "ltr"}
     >
-      <div className="sr-only" aria-live="polite" aria-atomic="true">
-        {announce}
-      </div>
-      {livekit.audioPlaybackBlocked && (
-        <button
-          type="button"
-          onClick={() => void livekit.startAudio()}
-          className="fixed inset-x-0 top-[max(0.5rem,env(safe-area-inset-top))] z-[70] flex items-center justify-center gap-2 bg-[#D4A843] px-4 py-2 text-sm text-white"
-        >
-          <Volume2 className="h-4 w-4" />
-          {t("liveSession.tapToEnableAudio")}
-        </button>
-      )}
-      {!browserSupported ? (
-        <div
-          className="fixed top-[max(0.5rem,env(safe-area-inset-top))] left-0 right-0 z-[60] border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
-          role="alert"
-        >
-          {t("liveSession.browserNotSupported")}
-        </div>
-      ) : null}
-      
-      {reconnectedToast ? (
-        <div
-          className="fixed top-[max(3rem,env(safe-area-inset-top))] left-1/2 z-[60] -translate-x-1/2 rounded-full border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-900 shadow-md"
-          role="status"
-        >
-          {t("liveSession.reconnected")}
-        </div>
-      ) : null}
-      {gradeToast ? (
-        <GradeToast
-          grade={gradeToast.grade}
-          notes={gradeToast.notes}
-          onDismiss={() => setGradeToast(null)}
-        />
-      ) : null}
+      <LiveSessionToastsAndOverlays
+        announce={announce}
+        audioPlaybackBlocked={livekit.audioPlaybackBlocked}
+        onEnableAudio={() => void livekit.startAudio()}
+        browserSupported={browserSupported}
+        reconnectedToast={!!reconnectedToast}
+        gradeToast={gradeToast}
+        onDismissGradeToast={() => setGradeToast(null)}
+      />
 
       <main
         className={
@@ -1113,148 +1075,28 @@ export function LiveSessionPage() {
             onEndSession={() => setEndSessionOpen(true)}
           />
 
-          {/* Bottom row — leave anchored to the left screen corner; everything else
-              centered. Locked to LTR so icon positions are stable across languages. */}
-          <div
-            dir="ltr"
-            className="hidden md:col-span-3 md:row-start-2 md:flex md:items-center md:justify-between md:gap-2 md:px-2 md:py-2"
-          >
-            {/* Left corner — leave + end session (teacher) */}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleLeave}
-                title={t("liveSession.tooltip.leave")}
-                aria-label={t("liveSession.leave")}
-                className={cn(
-                  MEET_ICON_BTN_BASE,
-                  "bg-gradient-to-b from-slate-100 to-slate-200/90 text-slate-700 hover:from-slate-200 hover:to-slate-300/90",
-                )}
-              >
-                <LogOut className="h-5 w-5" strokeWidth={2.25} />
-              </button>
-              {isTeacher ? (
-                <button
-                  type="button"
-                  onClick={() => setEndSessionOpen(true)}
-                  title={t("liveSession.tooltip.endSession")}
-                  aria-label={t("liveSession.endSession")}
-                  className={cn(
-                    MEET_ICON_BTN_BASE,
-                    "bg-gradient-to-b from-[#EF5350] to-[#E53935] text-white hover:from-[#E53935] hover:to-[#C62828]",
-                  )}
-                >
-                  <PhoneOff className="h-5 w-5" strokeWidth={2.25} />
-                </button>
-              ) : null}
-            </div>
-
-            {/* Center cluster — controls. Order is fixed left→right (LTR), most-used
-                pair (mic + pen) sits visually centered. */}
-            <div className="flex items-center justify-center gap-2">
-              {/* Info */}
-              <button
-                type="button"
-                onClick={() => window.alert(t("common.comingSoon"))}
-                title={t("liveSession.tooltip.sessionInfo")}
-                aria-label={t("liveSession.sessionInfo")}
-                className={cn(
-                  MEET_ICON_BTN_BASE,
-                  "bg-gradient-to-b from-sky-50 to-sky-100/90 text-sky-700 hover:from-sky-100 hover:to-sky-200/90",
-                )}
-              >
-                <Info className="h-5 w-5" strokeWidth={2.25} />
-              </button>
-
-              {/* Chat */}
-              <button
-                type="button"
-                onClick={() => window.alert(t("common.comingSoon"))}
-                title={t("liveSession.tooltip.chat")}
-                aria-label={t("liveSession.chat")}
-                className={cn(
-                  MEET_ICON_BTN_BASE,
-                  "bg-gradient-to-b from-violet-50 to-violet-100/90 text-violet-700 hover:from-violet-100 hover:to-violet-200/90",
-                )}
-              >
-                <MessageSquare className="h-5 w-5" strokeWidth={2.25} />
-              </button>
-
-              {/* Participants */}
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(true)}
-                title={t("liveSession.tooltip.participants")}
-                aria-label={t("liveSession.participants")}
-                className={cn(
-                  MEET_ICON_BTN_BASE,
-                  "bg-gradient-to-b from-emerald-50 to-emerald-100/90 text-emerald-800 hover:from-emerald-100 hover:to-emerald-200/90",
-                )}
-              >
-                <Users className="h-5 w-5" strokeWidth={2.25} />
-              </button>
-
-              {/* Mic + Pen (or AutoFollow for student) — the visual center */}
-              <SessionControlsCorner
-                isTeacher={isTeacher}
-                isActiveReciter={isActiveReciter}
-                canPublishAudio={canPublishAudio}
-                livekitConnected={livekit.status === "connected"}
-                livekitStatus={livekit.status}
-                isMicEnabled={livekit.isMicEnabled}
-                onToggleMic={() => void livekit.setMicEnabled(!livekit.isMicEnabled)}
-                annotationMode={annotationMode}
-                onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
-              />
-              {!isTeacher ? (
-                <AutoFollowBadge enabled={autoFollow} onToggle={handleAutoFollowToggle} inline />
-              ) : null}
-
-              {/* Menu — surah label renders RTL inside an LTR parent. dir="rtl"
-                  on the inner span is required so "البقرة" reads correctly. */}
-              <button
-                type="button"
-                onClick={() => setNavigatorOpen(true)}
-                title={t("liveSession.tooltip.openMenu")}
-                aria-label={t("common.openMenu")}
-                className={cn(
-                  MEET_ICON_BTN_BASE,
-                  "w-auto gap-2 px-3 bg-gradient-to-b from-slate-50 to-slate-100/90 text-[#2c5f7c] hover:from-slate-100 hover:to-slate-200/90",
-                )}
-              >
-                <Menu className="h-5 w-5" strokeWidth={2.25} />
-                <span
-                  dir="rtl"
-                  className="hidden min-w-0 max-w-[14rem] truncate text-sm font-semibold lg:inline"
-                  style={{ fontFamily: "var(--font-ui)" }}
-                >
-                  {navCornerLabels.surahLabel}
-                </span>
-                <span
-                  className="hidden whitespace-nowrap text-xs font-medium text-[#374151] lg:inline"
-                  style={{ fontFamily: "var(--font-ui)" }}
-                >
-                  {t("mushaf.pageOf", { n: page })}
-                  {navCornerLabels.juzN > 0 ? (
-                    <>
-                      <span className="mx-1 text-muted-foreground/60" aria-hidden>
-                        ·
-                      </span>
-                      {t("mushaf.juzN", { n: navCornerLabels.juzN })}
-                    </>
-                  ) : null}
-                </span>
-              </button>
-            </div>
-
-            {/* Right corner — placeholder spacer to balance the leave cluster so the
-                center group stays visually centered. Width matches the leave cluster
-                (1 button for student, 2 for teacher). */}
-            <div className="flex items-center gap-2" aria-hidden>
-              <div className="h-10 w-10 opacity-0" />
-              {isTeacher ? <div className="h-10 w-10 opacity-0" /> : null}
-            </div>
-          </div>
+          <LiveSessionDesktopActionBar
+            isTeacher={isTeacher}
+            isActiveReciter={isActiveReciter}
+            canPublishAudio={canPublishAudio}
+            livekitConnected={livekit.status === "connected"}
+            livekitStatus={livekit.status}
+            isMicEnabled={livekit.isMicEnabled}
+            annotationMode={annotationMode}
+            autoFollow={autoFollow}
+            page={page}
+            surahLabel={navCornerLabels.surahLabel}
+            juzN={navCornerLabels.juzN}
+            onToggleMic={() => void livekit.setMicEnabled(!livekit.isMicEnabled)}
+            onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
+            onAutoFollowToggle={handleAutoFollowToggle}
+            onOpenParticipants={() => setDrawerOpen(true)}
+            onOpenNavigator={() => setNavigatorOpen(true)}
+            onOpenInfo={() => window.alert(t("common.comingSoon"))}
+            onOpenChat={() => window.alert(t("common.comingSoon"))}
+            onLeave={handleLeave}
+            onEndSession={() => setEndSessionOpen(true)}
+          />
         </div>
       </main>
 
@@ -1340,55 +1182,24 @@ export function LiveSessionPage() {
         </Dialog>
       ) : null}
 
-      <Modal open={leaveOpen} title={t("liveSession.leave")} onClose={() => setLeaveOpen(false)}>
-        <p className="mb-6 text-sm text-[var(--color-text-muted)]">{t("liveSession.leaveConfirm")}</p>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => setLeaveOpen(false)}>
-            {t("common.cancel")}
-          </Button>
-          <Button type="button" variant="primary" onClick={confirmLeave}>
-            {t("liveSession.leave")}
-          </Button>
-        </div>
-      </Modal>
-
-      <Modal open={endSessionOpen} title={t("liveSession.endSession")} onClose={() => setEndSessionOpen(false)}>
-        <p className="mb-4 text-sm text-[var(--color-text-muted)]">{t("liveSession.endSessionConfirm")}</p>
-        {endError ? <p className="mb-4 text-sm text-red-600">{endError}</p> : null}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => setEndSessionOpen(false)}>
-            {t("common.cancel")}
-          </Button>
-          <Button type="button" variant="danger" loading={endingSession} onClick={() => void confirmEndSession()}>
-            {t("liveSession.endSession")}
-          </Button>
-        </div>
-      </Modal>
-
-      <Modal
-        open={blocker.state === "blocked"}
-        title={t("liveSession.leaveSessionConfirm")}
-        onClose={() => blocker.reset?.()}
-      >
-        <p className="mb-6 text-sm text-[var(--color-text-muted)]">{t("liveSession.navigationLeaveHint")}</p>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => blocker.reset?.()}>
-            {t("liveSession.stay")}
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => {
-              skipGradingModalRef.current = true;
-              disconnectWebrtc();
-              sessionState.disconnect();
-              blocker.proceed?.();
-            }}
-          >
-            {t("liveSession.leave")}
-          </Button>
-        </div>
-      </Modal>
+      <LiveSessionConfirmModals
+        leaveOpen={leaveOpen}
+        onLeaveCancel={() => setLeaveOpen(false)}
+        onLeaveConfirm={confirmLeave}
+        endSessionOpen={endSessionOpen}
+        endError={endError}
+        endingSession={endingSession}
+        onEndSessionCancel={() => setEndSessionOpen(false)}
+        onEndSessionConfirm={() => void confirmEndSession()}
+        navBlockOpen={blocker.state === "blocked"}
+        onNavStay={() => blocker.reset?.()}
+        onNavLeave={() => {
+          skipGradingModalRef.current = true;
+          disconnectWebrtc();
+          sessionState.disconnect();
+          blocker.proceed?.();
+        }}
+      />
 
       {isTeacher ? (
         <AnnotationToolbar

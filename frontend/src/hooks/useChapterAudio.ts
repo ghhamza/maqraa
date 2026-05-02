@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useCancellableEffect } from "./useCancellableEffect";
 import { api } from "../lib/api";
 
 export interface ChapterAudio {
@@ -18,7 +19,11 @@ function cacheKey(chapter: number, recitationId: number) {
   return `${AUDIO_CACHE_VERSION}:${recitationId}:${chapter}`;
 }
 
-async function fetchChapterAudio(chapter: number, recitationId: number): Promise<ChapterAudio> {
+async function fetchChapterAudio(
+  chapter: number,
+  recitationId: number,
+  signal?: AbortSignal,
+): Promise<ChapterAudio> {
   const key = cacheKey(chapter, recitationId);
   const cached = cache.get(key);
   if (cached) return cached;
@@ -33,6 +38,7 @@ async function fetchChapterAudio(chapter: number, recitationId: number): Promise
       try {
         const res = await api.get<{ audio_files: Record<string, string> }>(
           `quran/recitations/${rid}/by_chapter/${chapter}`,
+          signal ? { signal } : {},
         );
         const result: ChapterAudio = { audioFiles: res.data.audio_files, recitationId: rid };
         cache.set(key, result);
@@ -57,25 +63,24 @@ export function useChapterAudio(chapter: number | null, recitationId = 1) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
-  useEffect(() => {
-    if (chapter == null) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetchChapterAudio(chapter, recitationId)
-      .then((d) => {
-        if (!cancelled) setData(d);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [chapter, recitationId]);
+  useCancellableEffect(
+    async (signal) => {
+      if (chapter == null) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const d = await fetchChapterAudio(chapter, recitationId, signal);
+        if (signal.aborted) return;
+        setData(d);
+      } catch (e) {
+        if (signal.aborted) return;
+        setError(e);
+      } finally {
+        if (!signal.aborted) setLoading(false);
+      }
+    },
+    [chapter, recitationId],
+  );
 
   return { data, loading, error };
 }

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Archive,
@@ -106,20 +107,21 @@ export function RoomDetailPage() {
   const [recitationFormOpen, setRecitationFormOpen] = useState(false);
   const [studentActionLoading, setStudentActionLoading] = useState(false);
 
-  const loadRoom = useCallback(async () => {
+  const loadRoom = useCallback(async (signal?: AbortSignal) => {
     if (!id) return;
-    const { data } = await api.get<Room>(`rooms/${id}`);
+    const { data } = await api.get<Room>(`rooms/${id}`, signal ? { signal } : {});
     setRoom(data);
   }, [id]);
 
-  const loadEnrollments = useCallback(async () => {
+  const loadEnrollments = useCallback(async (signal?: AbortSignal) => {
     if (!id) return;
-    const { data } = await api.get<Enrollment[]>(`rooms/${id}/enrollments`);
+    const { data } = await api.get<Enrollment[]>(`rooms/${id}/enrollments`, signal ? { signal } : {});
     setEnrollments(data);
   }, [id]);
 
-  const refreshSessions = useCallback(async () => {
+  const refreshSessions = useCallback(async (signal?: AbortSignal) => {
     if (!id) return;
+    const sig = signal ? { signal } : {};
     if (sessionsViewMode === "calendar") {
       const from = calendarGridStart(calendarCursor);
       const to = calendarGridEnd(calendarCursor);
@@ -130,6 +132,7 @@ export function RoomDetailPage() {
           to: to.toISOString(),
           limit: "500",
         },
+        ...sig,
       });
       setSessions(data.items);
       return;
@@ -143,6 +146,7 @@ export function RoomDetailPage() {
         to: to.toISOString(),
         limit: "500",
       },
+      ...sig,
     });
     const sorted = [...data.items].sort(
       (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
@@ -150,10 +154,11 @@ export function RoomDetailPage() {
     setSessions(sorted);
   }, [id, sessionsViewMode, calendarCursor, listMonthCursor]);
 
-  const loadRoomRecitations = useCallback(async () => {
+  const loadRoomRecitations = useCallback(async (signal?: AbortSignal) => {
     if (!id) return;
     const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
       params: { room_id: id },
+      ...(signal ? { signal } : {}),
     });
     setRoomRecitations(data.items.slice(0, 15));
   }, [id]);
@@ -174,85 +179,77 @@ export function RoomDetailPage() {
     }
   }, [id, user]);
 
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
-    setLoading(true);
-    setForbidden(false);
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (!id) return;
+      setLoading(true);
+      setForbidden(false);
       try {
-        await loadRoom();
+        await loadRoom(signal);
       } catch (err: unknown) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
         const status = (err as { response?: { status?: number } })?.response?.status;
         if (status === 403) {
-          if (!cancelled) setForbidden(true);
-          if (!cancelled) setRoom(null);
+          setForbidden(true);
+          setRoom(null);
         } else {
-          if (!cancelled) setRoom(null);
+          setRoom(null);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, loadRoom]);
+    },
+    [id, loadRoom],
+  );
 
-  useEffect(() => {
-    if (!id || !room || !user) return;
-    if (!canManage(user, room)) {
-      setEnrollments([]);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        await loadEnrollments();
-      } catch {
-        if (!cancelled) setEnrollments([]);
+  useCancellableEffect(
+    async (signal) => {
+      if (!id || !room || !user) return;
+      if (!canManage(user, room)) {
+        setEnrollments([]);
+        return;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, room, user, loadEnrollments]);
-
-  useEffect(() => {
-    if (!id || !room) return;
-    let cancelled = false;
-    setSessionsLoading(true);
-    void (async () => {
       try {
-        await refreshSessions();
-      } catch {
-        if (!cancelled) setSessions([]);
+        await loadEnrollments(signal);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setEnrollments([]);
+      }
+    },
+    [id, room, user, loadEnrollments],
+  );
+
+  useCancellableEffect(
+    async (signal) => {
+      if (!id || !room) return;
+      setSessionsLoading(true);
+      try {
+        await refreshSessions(signal);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setSessions([]);
       } finally {
-        if (!cancelled) setSessionsLoading(false);
+        if (!signal.aborted) setSessionsLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, room, refreshSessions]);
+    },
+    [id, room, refreshSessions],
+  );
 
-  useEffect(() => {
-    if (!id || !room) return;
-    let cancelled = false;
-    setRecitationsLoading(true);
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (!id || !room) return;
+      setRecitationsLoading(true);
       try {
-        await loadRoomRecitations();
-      } catch {
-        if (!cancelled) setRoomRecitations([]);
+        await loadRoomRecitations(signal);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setRoomRecitations([]);
       } finally {
-        if (!cancelled) setRecitationsLoading(false);
+        if (!signal.aborted) setRecitationsLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, room, loadRoomRecitations]);
+    },
+    [id, room, loadRoomRecitations],
+  );
 
   const locale = intlLocaleForAppLanguage(i18n.language);
 

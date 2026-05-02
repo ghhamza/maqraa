@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -112,20 +113,18 @@ export function CalendarPage() {
     void fetchSessions();
   }, [fetchSessions]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
       try {
-        const { data } = await api.get<Paginated<Room>>("rooms");
-        if (!cancelled) setRooms(data.items);
-      } catch {
-        if (!cancelled) setRooms([]);
+        const { data } = await api.get<Paginated<Room>>("rooms", { signal });
+        setRooms(data.items);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setRooms([]);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    },
+    [],
+  );
 
   const byDay = useMemo(() => groupByDay(sessions), [sessions]);
 

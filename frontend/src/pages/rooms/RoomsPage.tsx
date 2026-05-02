@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, DoorOpen } from "lucide-react";
 import { api, userFacingApiError } from "../../lib/api";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
@@ -32,12 +33,10 @@ function canAddRoom(user: { role: string } | null): boolean {
 
 export function RoomsPage() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === "admin";
 
-  const [stats, setStats] = useState<RoomStats | null>(null);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("active");
@@ -51,41 +50,30 @@ export function RoomsPage() {
   const [joinLoading, setJoinLoading] = useState<string | null>(null);
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
 
-  const fetchRoomsPage = useCallback(async () => {
-    return Promise.all([
-      api.get<RoomStats>("rooms/stats"),
-      api.get<Paginated<Room>>("rooms", {
-        params: {
-          ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
-          ...(activeFilter === "all" ? {} : { active: activeFilter === "active" }),
-        },
-      }),
-    ]);
-  }, [debouncedSearch, activeFilter]);
+  const roomsQuery = useQuery({
+    queryKey: ["rooms", debouncedSearch, activeFilter] as const,
+    queryFn: async ({ signal }) => {
+      const [statsRes, roomsRes] = await Promise.all([
+        api.get<RoomStats>("rooms/stats", { signal }),
+        api.get<Paginated<Room>>("rooms", {
+          signal,
+          params: {
+            ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
+            ...(activeFilter === "all" ? {} : { active: activeFilter === "active" }),
+          },
+        }),
+      ]);
+      return { stats: statsRes.data, rooms: roomsRes.data.items };
+    },
+  });
+
+  const stats = roomsQuery.data?.stats ?? null;
+  const rooms = roomsQuery.data?.rooms ?? [];
+  const loading = roomsQuery.isPending;
 
   const refreshAll = useCallback(async () => {
-    const [statsRes, roomsRes] = await fetchRoomsPage();
-    setStats(statsRes.data);
-    setRooms(roomsRes.data.items);
-  }, [fetchRoomsPage]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    void (async () => {
-      try {
-        const [statsRes, roomsRes] = await fetchRoomsPage();
-        if (cancelled) return;
-        setStats(statsRes.data);
-        setRooms(roomsRes.data.items);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchRoomsPage]);
+    await queryClient.invalidateQueries({ queryKey: ["rooms"] });
+  }, [queryClient]);
 
   function openCreate() {
     setFormMode("create");

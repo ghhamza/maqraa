@@ -296,7 +296,12 @@
       "nextPage": "Page suivante du Mushaf (en RTL, flèche gauche).",
       "prevPage": "Page précédente (en RTL, flèche droite).",
       "jumpOpen": "Ouvrir le panneau pour aller à une sourate, un juz ou une page."
-    }
+    },
+    "aria": {
+      "word": "{{surah}}, verset {{ayah}}, mot {{word}}",
+      "ayahMarker": "Fin du verset {{ayah}}, {{surah}}"
+    },
+    "fontLoadFailed": "Impossible de charger les polices des pages du Coran. Vérifiez votre connexion ou réessayez plus tard."
   },
   "enrollment": {
     "title": "Inscription",
@@ -368,6 +373,7 @@
     "badRequest": "Données invalides.",
     "sessionExpired": "Session expirée. Reconnectez-vous.",
     "network": "Impossible de joindre le serveur.",
+    "timeout": "La requête a expiré. Veuillez réessayer.",
     "serverDown": "Erreur serveur. Réessayez plus tard.",
     "serviceUnavailable": "Service temporairement indisponible.",
     "session_overlap": "Conflit avec une autre session dans cette salle.",
@@ -669,6 +675,9 @@
       "startedAgo": "Commencée il y a {{minutes}} min",
       "dismiss": "Masquer"
     },
+    "errors": {
+      "pollingFailed": "Impossible d’actualiser les sessions en direct. Vous pouvez continuer ; nouvel essai automatique."
+    },
     "dashboard": {
       "title": "En direct maintenant",
       "join": "Rejoindre"
@@ -757,5 +766,16 @@
     "waqf_ibtida": "Arrêt/reprise",
     "shadda": "Accentuation",
     "other": "Autre"
+  },
+  "errorBoundary": {
+    "title": "Une erreur est survenue",
+    "description": "Une erreur inattendue s'est produite. Vous pouvez réessayer ou recharger la page.",
+    "tryAgain": "Réessayer",
+    "reload": "Recharger la page",
+    "liveSession": {
+      "title": "Erreur de la session en direct",
+      "description": "L'affichage de la session en direct a échoué de manière inattendue. Vous pouvez réessayer ou quitter la session.",
+      "leave": "Quitter la session"
+    }
   }
 }

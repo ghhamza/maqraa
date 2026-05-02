@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { Link, useParams } from "react-router-dom";
 import { Flame } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -27,43 +28,37 @@ export function StudentProgressPage() {
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
 
-  useEffect(() => {
-    if (!id || !user) return;
-    if (user.role === "student" && user.id !== id) {
-      setForbidden(true);
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setForbidden(false);
-    setLoading(true);
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (!id || !user) return;
+      if (user.role === "student" && user.id !== id) {
+        setForbidden(true);
+        setLoading(false);
+        return;
+      }
+      setForbidden(false);
+      setLoading(true);
       try {
         const [pRes, rRes] = await Promise.all([
-          api.get<StudentProgress>(`students/${id}/progress`),
-          api.get<RecitationPublic[]>(`students/${id}/recitations`),
+          api.get<StudentProgress>(`students/${id}/progress`, { signal }),
+          api.get<RecitationPublic[]>(`students/${id}/recitations`, { signal }),
         ]);
-        if (!cancelled) {
-          setProgress(pRes.data);
-          setRecent(rRes.data.slice(0, 10));
-        }
+        setProgress(pRes.data);
+        setRecent(rRes.data.slice(0, 10));
       } catch (err: unknown) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
         const status = (err as { response?: { status?: number } })?.response?.status;
         if (status === 403) {
-          if (!cancelled) setForbidden(true);
+          setForbidden(true);
         }
-        if (!cancelled) {
-          setProgress(null);
-          setRecent([]);
-        }
+        setProgress(null);
+        setRecent([]);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, user]);
+    },
+    [id, user],
+  );
 
   if (loading) {
     return (

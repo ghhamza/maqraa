@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useMemo, useState } from "react";
+import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BookOpen, Link as LinkIcon, LogOut, Menu, User } from "lucide-react";
@@ -36,6 +37,7 @@ import {
 } from "../ui/sheet";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { LiveSessionBanner } from "./LiveSessionBanner";
+import { LiveSessionsErrorToast } from "./LiveSessionsErrorToast";
 
 /** Up to two letters: first + last word, or first two chars of a single name. */
 function nameToInitials(name: string): string {
@@ -127,23 +129,19 @@ export function AppLayout() {
     setMobileNavOpen(false);
   }, [location.pathname]);
 
-  useEffect(() => {
-    if (!user) {
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
+  useCancellableEffect(
+    async (signal) => {
+      if (!user) return;
       try {
-        const { data } = await api.get<RoomStats>("rooms/stats");
-        if (!cancelled) setRoomCount(data.total);
-      } catch {
-        if (!cancelled) setRoomCount(null);
+        const { data } = await api.get<RoomStats>("rooms/stats", { signal });
+        setRoomCount(data.total);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+        setRoomCount(null);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
+    },
+    [user],
+  );
 
   const sheetSide = isRtl ? "right" : "left";
 
@@ -427,6 +425,7 @@ export function AppLayout() {
         </div>
       </header>
 
+      <LiveSessionsErrorToast />
       <LiveSessionBanner />
 
       <main
