@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import axios from "axios";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { BookMarked, Pencil, Repeat, Trash2 } from "lucide-react";
+import { BookMarked, BookOpen, Calendar, Clock, Pencil, Repeat, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
 import type { Paginated, RecitationPublic, SessionAttendance, SessionDetail, SessionPublic } from "../../types";
@@ -25,28 +25,41 @@ import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
 import { EmptyState } from "../../components/ui/EmptyState";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog";
 import { RecitationFormModal } from "../../components/recitations/RecitationFormModal";
 import { RecentRecitationsList } from "../../components/recitations/RecentRecitationsList";
+import { SessionCountdown } from "../../components/sessions/SessionCountdown";
+import { Modal } from "../../components/ui/Modal";
+import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
+import { cn } from "@/lib/utils";
+
+/** Localized “in 3 days” / “in 25 minutes” for the early-start confirmation. */
+function formatScheduledRelativeToNow(iso: string, intlLocale: string): string {
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const ms = then - now;
+  const rtf = new Intl.RelativeTimeFormat(intlLocale, { numeric: "auto" });
+  const sec = Math.round(ms / 1000);
+  if (Math.abs(sec) < 60) return rtf.format(sec, "second");
+  const min = Math.round(ms / 60000);
+  if (Math.abs(min) < 60) return rtf.format(min, "minute");
+  const hour = Math.round(ms / 3600000);
+  if (Math.abs(hour) < 24) return rtf.format(hour, "hour");
+  const day = Math.round(ms / 86400000);
+  return rtf.format(day, "day");
+}
 
 function canManage(user: { id: string; role: string } | null, session: SessionPublic): boolean {
   if (!user) return false;
   if (user.role === "admin") return true;
   return user.role === "teacher" && user.id === session.teacher_id;
-}
-
-function statusVariant(s: SessionPublic["status"]): "green" | "gray" | "blue" | "gold" {
-  switch (s) {
-    case "scheduled":
-      return "green";
-    case "in_progress":
-      return "blue";
-    case "completed":
-      return "gray";
-    case "cancelled":
-      return "gray";
-    default:
-      return "gray";
-  }
 }
 
 function statusLabelKey(s: SessionPublic["status"]): string {
@@ -58,12 +71,57 @@ function statusLabelKey(s: SessionPublic["status"]): string {
   }
 }
 
+function SessionStatusBadge({ status }: { status: SessionPublic["status"] }) {
+  const { t } = useTranslation();
+  const label = t(`sessions.${statusLabelKey(status)}`);
+  switch (status) {
+    case "scheduled":
+      return (
+        <Badge
+          variant="outline"
+          className="border-[#1B5E20]/40 bg-transparent font-medium text-[#1B5E20] dark:text-emerald-300"
+        >
+          {label}
+        </Badge>
+      );
+    case "in_progress":
+      return (
+        <Badge
+          variant="outline"
+          className="animate-pulse border-red-500/50 bg-red-50 font-medium text-red-900 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-100"
+        >
+          {label}
+        </Badge>
+      );
+    case "completed":
+      return (
+        <Badge
+          variant="outline"
+          className="border-emerald-800/25 bg-emerald-50/90 font-medium text-emerald-900 dark:border-emerald-600/30 dark:bg-emerald-950/30 dark:text-emerald-100"
+        >
+          {label}
+        </Badge>
+      );
+    case "cancelled":
+      return (
+        <Badge
+          variant="outline"
+          className="border-red-600/50 bg-transparent font-medium text-red-800 dark:text-red-200"
+        >
+          {label}
+        </Badge>
+      );
+    default:
+      return <Badge variant="gray">{label}</Badge>;
+  }
+}
+
 export function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const routerLocation = useLocation();
-  const { t } = useTranslation();
-  const { full, mediumTime } = useLocaleDate();
+  const { t, i18n } = useTranslation();
+  const { mediumTime, shortWeekdayDate, timeShort, full } = useLocaleDate();
   const user = useAuthStore((s) => s.user);
 
   const [detail, setDetail] = useState<SessionDetail | null>(null);
@@ -84,6 +142,9 @@ export function SessionDetailPage() {
   const [recitationFormOpen, setRecitationFormOpen] = useState(false);
   const [liveSessionFlash, setLiveSessionFlash] = useState<string | null>(null);
   const [activeSessionConflictId, setActiveSessionConflictId] = useState<string | null>(null);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [earlyStartConfirmOpen, setEarlyStartConfirmOpen] = useState(false);
+  const [liveTick, setLiveTick] = useState(0);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     if (!id) return;
@@ -136,6 +197,12 @@ export function SessionDetailPage() {
     }
   }, [routerLocation.state, navigate]);
 
+  useEffect(() => {
+    if (detail?.status !== "in_progress") return;
+    const interval = setInterval(() => setLiveTick((n) => n + 1), 30000);
+    return () => clearInterval(interval);
+  }, [detail?.status]);
+
   useCancellableEffect(
     async (signal) => {
       if (!id) return;
@@ -160,14 +227,39 @@ export function SessionDetailPage() {
   );
 
   const manage = detail && user ? canManage(user, detail) : false;
+  const canEditSession = manage && (detail?.status === "scheduled" || detail?.status === "in_progress");
+  const canDeleteSession = manage && detail?.status !== "in_progress";
+  const attendanceDisabled = manage && detail?.status === "cancelled";
+
+  const minutesRunning = useMemo(() => {
+    if (!detail || detail.status !== "in_progress") return 0;
+    void liveTick;
+    const start = new Date(detail.scheduled_at).getTime();
+    return Math.max(0, Math.floor((Date.now() - start) / 60000));
+  }, [detail, liveTick]);
 
   const presentCount = useMemo(() => {
     if (!detail) return 0;
     return detail.attendance.filter((a) => localAttendance[a.student_id] ?? a.attended).length;
   }, [detail, localAttendance]);
 
+  const infoDatePod = useMemo(
+    () => (detail ? shortWeekdayDate(detail.scheduled_at) : ""),
+    [detail, shortWeekdayDate],
+  );
+
+  const infoTimePod = useMemo(() => {
+    if (!detail) return "";
+    const startMs = new Date(detail.scheduled_at).getTime();
+    const endDate = new Date(startMs + detail.duration_minutes * 60_000);
+    if (detail.status === "completed") {
+      return `${timeShort(detail.scheduled_at)}\u2013${timeShort(endDate.toISOString())}`;
+    }
+    return `${timeShort(detail.scheduled_at)} \u00b7 ${t("sessions.durationValue", { minutes: detail.duration_minutes })}`;
+  }, [detail, t, timeShort]);
+
   async function saveAttendance() {
-    if (!id || !detail || !manage) return;
+    if (!id || !detail || !manage || attendanceDisabled) return;
     setSavingAttendance(true);
     setError(null);
     try {
@@ -231,6 +323,21 @@ export function SessionDetailPage() {
     }
   }
 
+  const handleStartClick = () => {
+    if (!detail) return;
+    const minutesUntilStart = (new Date(detail.scheduled_at).getTime() - Date.now()) / 60_000;
+    if (minutesUntilStart > 30) {
+      setEarlyStartConfirmOpen(true);
+      return;
+    }
+    void startSessionAndEnterLive();
+  };
+
+  const handleEarlyStartConfirm = () => {
+    setEarlyStartConfirmOpen(false);
+    void startSessionAndEnterLive();
+  };
+
   async function confirmDelete() {
     if (!id || !detail) return;
     setActionLoading(true);
@@ -290,8 +397,75 @@ export function SessionDetailPage() {
     );
   }
 
-  const title = detail.title?.trim() || t("sessions.untitledTitle");
-  const showEditDelete = manage && detail.status !== "completed";
+  const title = detail.title?.trim() || detail.room_name || t("sessions.untitledTitle");
+  const status = detail.status;
+
+  const attendanceTitle =
+    manage && status === "completed" ? t("sessions.attendanceTitleFinal") : t("sessions.markAttendance");
+
+  const attendanceHelper = !manage
+    ? undefined
+    : status === "scheduled"
+      ? t("sessions.attendanceHelperScheduled")
+      : status === "in_progress"
+        ? t("sessions.attendanceHelperInProgress")
+        : status === "completed"
+          ? t("sessions.attendanceHelperCompleted")
+          : t("sessions.attendanceHelperCancelled");
+
+  const dangerHelper =
+    status === "scheduled"
+      ? t("sessions.dangerZoneHelperScheduled")
+      : status === "completed"
+        ? t("sessions.dangerZoneHelperCompleted")
+        : t("sessions.dangerZoneHelperCancelled");
+
+  const recitationSectionTitle = !manage
+    ? t("recitations.sessionRecitations")
+    : status === "scheduled"
+      ? t("sessions.recitationsSectionPlan")
+      : status === "in_progress"
+        ? t("sessions.recitationsSectionDuring")
+        : status === "completed"
+          ? t("sessions.recitationsSectionAfter")
+          : t("sessions.recitationsSectionPlanCancelled");
+
+  const recitationEmpty =
+    !manage
+      ? {
+          title: t("roomDetail.recitationsEmptyTitle"),
+          description: t("roomDetail.recitationsEmptyDescriptionStudent"),
+          primaryLabel: undefined as string | undefined,
+        }
+      : status === "scheduled"
+        ? {
+            title: t("sessions.recitationsEmptyPlanTitle"),
+            description: t("sessions.recitationsEmptyPlanDescription"),
+            primaryLabel: t("sessions.recitationsAddToPlan"),
+          }
+        : status === "in_progress"
+          ? {
+              title: t("sessions.recitationsEmptyDuringTitle"),
+              description: t("sessions.recitationsEmptyDuringDescription"),
+              primaryLabel: t("sessions.recitationsLogOne"),
+            }
+          : status === "completed"
+            ? {
+                title: t("sessions.recitationsEmptyAfterTitle"),
+                description: t("sessions.recitationsEmptyAfterDescription"),
+                primaryLabel: t("recitations.addRecitation"),
+              }
+            : {
+                title: t("sessions.recitationsEmptyCancelled"),
+                description: undefined,
+                primaryLabel: undefined,
+              };
+
+  const showRecitationAddButton = manage && status !== "cancelled";
+  const primaryRecitationActionLabel = showRecitationAddButton
+    ? recitationEmpty.primaryLabel ?? t("recitations.addRecitation")
+    : undefined;
+  const showRecitationHeaderAdd = showRecitationAddButton && sessionRecitations.length > 0;
 
   return (
     <PageShell
@@ -300,62 +474,78 @@ export function SessionDetailPage() {
         { label: t("sessions.calendar"), to: "/calendar" },
         { label: title },
       ]}
-      title={
-        <span className="inline-flex items-center gap-2">
-          {detail.recurrence_group_id || detail.schedule_id ? (
-            <Repeat className="h-6 w-6 shrink-0 text-[var(--color-text-muted)]" aria-hidden />
-          ) : null}
-          <span>{title}</span>
-        </span>
-      }
+      title={<span>{title}</span>}
       actions={
-        showEditDelete ? (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                if (detail.recurrence_group_id) setRecurrencePrompt("edit");
-                else {
-                  setEditScope(undefined);
-                  setFormOpen(true);
-                }
-              }}
-            >
-              <span className="inline-flex items-center gap-2">
-                <Pencil className="h-4 w-4" />
-                {t("common.edit")}
-              </span>
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              onClick={() => {
-                if (detail.recurrence_group_id) setRecurrencePrompt("delete");
-                else {
-                  setDeleteScope(null);
-                  setDeleteOpen(true);
-                }
-              }}
-            >
-              <span className="inline-flex items-center gap-2">
-                <Trash2 className="h-4 w-4" />
-                {t("sessions.deleteSession")}
-              </span>
-            </Button>
-          </div>
+        canEditSession && status !== "scheduled" ? (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              if (detail.recurrence_group_id) setRecurrencePrompt("edit");
+              else {
+                setEditScope(undefined);
+                setFormOpen(true);
+              }
+            }}
+          >
+            <span className="inline-flex items-center gap-2">
+              <Pencil className="h-4 w-4" />
+              {t("common.edit")}
+            </span>
+          </Button>
         ) : undefined
       }
       contentClassName="space-y-8"
     >
-      {manage && detail.status === "scheduled" ? (
-        <div className="rounded-2xl border border-[#1B5E20]/25 bg-[#1B5E20]/[0.06] p-4 shadow-sm">
+      {liveSessionFlash ? (
+        <div
+          className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          role="status"
+        >
+          <span>{liveSessionFlash}</span>
+          <button type="button" className="shrink-0 underline" onClick={() => setLiveSessionFlash(null)}>
+            {t("common.close")}
+          </button>
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">
+          {error}
+        </div>
+      ) : null}
+
+      {manage && status === "scheduled" ? (
+        <div className="flex flex-col">
+          {canEditSession ? (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  if (detail.recurrence_group_id) setRecurrencePrompt("edit");
+                  else {
+                    setEditScope(undefined);
+                    setFormOpen(true);
+                  }
+                }}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Pencil className="h-4 w-4" />
+                  {t("common.edit")}
+                </span>
+              </Button>
+            </div>
+          ) : null}
           <Button
             type="button"
             variant="primary"
             loading={actionLoading}
-            onClick={() => void startSessionAndEnterLive()}
-            className="min-h-14 w-full bg-[#1B5E20] text-base font-semibold hover:opacity-95"
+            onClick={handleStartClick}
+            className={cn(
+              "min-h-14 w-full bg-[#1B5E20] text-base font-semibold hover:opacity-95 md:mx-auto md:max-w-md",
+              canEditSession && "mt-4",
+            )}
           >
             {t("liveSession.startSession")}
           </Button>
@@ -370,121 +560,148 @@ export function SessionDetailPage() {
         </div>
       ) : null}
 
-      {liveSessionFlash ? (
-        <div
-          className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
-          role="status"
-        >
-          <span>{liveSessionFlash}</span>
-          <button
-            type="button"
-            className="shrink-0 underline"
-            onClick={() => setLiveSessionFlash(null)}
-          >
-            {t("common.close")}
-          </button>
-        </div>
-      ) : null}
-
-      {detail.status === "in_progress" ? (
-        <div>
-          <Link to={`/sessions/${detail.id}/live`}>
-            <Button type="button" variant="primary">
-              {t("liveSession.enterLive")}
-            </Button>
-          </Link>
-        </div>
-      ) : null}
-
-      <PageCard>
-        <dl className="space-y-4 text-start">
-          <div>
-            <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.room")}</dt>
-            <dd className="mt-1">
-              <Link
-                to={`/rooms/${detail.room_id}`}
-                className="text-lg font-medium text-[var(--color-primary)] hover:underline"
-              >
-                {detail.room_name}
-              </Link>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.date")}</dt>
-            <dd className="mt-1 text-[var(--color-text)]">{full(detail.scheduled_at)}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.duration")}</dt>
-            <dd className="mt-1 text-[var(--color-text)]">
-              {t("sessions.durationValue", { minutes: detail.duration_minutes })}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.status")}</dt>
-            <dd className="mt-2">
-              <Badge variant={statusVariant(detail.status)}>{t(`sessions.${statusLabelKey(detail.status)}`)}</Badge>
-            </dd>
-          </div>
-          {detail.recurrence_group_id ? (
-            <div>
-              <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.seriesLabel")}</dt>
-              <dd className="mt-1 flex items-center gap-2 text-[var(--color-text)]">
-                <Repeat className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" aria-hidden />
-                {t("sessions.partOfSeries")}
-              </dd>
-            </div>
-          ) : null}
-          {detail.notes ? (
-            <div>
-              <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.notes")}</dt>
-              <dd className="mt-1 whitespace-pre-wrap text-[var(--color-text)]">{detail.notes}</dd>
-            </div>
-          ) : null}
-        </dl>
-      </PageCard>
-
-      {manage ? (
-        <div className="flex flex-wrap gap-2">
-          {detail.status === "scheduled" ? (
-            <Button
-              type="button"
-              variant="secondary"
-              loading={actionLoading}
-              onClick={() => void patchStatus("cancelled")}
-            >
-              {t("sessions.cancel")}
-            </Button>
-          ) : null}
-          {detail.status === "in_progress" ? (
-            <Button
-              type="button"
-              variant="primary"
-              loading={actionLoading}
-              onClick={() => void patchStatus("completed")}
-            >
+      {manage && status === "in_progress" ? (
+        <div className="rounded-2xl border-2 border-orange-400/50 bg-gradient-to-br from-orange-50/90 to-red-50/50 p-4 shadow-sm dark:border-orange-500/30 dark:from-orange-950/30 dark:to-red-950/20">
+          <p className="text-sm font-medium text-orange-950 dark:text-orange-100">
+            {minutesRunning < 1
+              ? t("sessions.primaryRunningJustStarted")
+              : t("sessions.primaryRunningFor", { count: minutesRunning })}
+          </p>
+          <p className="mt-2 text-sm text-[var(--color-text)]">{t("sessions.primaryLiveHelper")}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link to={`/sessions/${detail.id}/live`}>
+              <Button type="button" variant="primary">
+                {t("liveSession.enterLive")}
+              </Button>
+            </Link>
+            <Button type="button" variant="secondary" loading={actionLoading} onClick={() => void patchStatus("completed")}>
               {t("sessions.complete")}
             </Button>
-          ) : null}
+          </div>
         </div>
       ) : null}
 
+      {!manage && status === "in_progress" ? (
+        <div className="rounded-2xl border-2 border-orange-400/50 bg-gradient-to-br from-orange-50/90 to-red-50/50 p-4 shadow-sm dark:border-orange-500/30 dark:from-orange-950/30 dark:to-red-950/20">
+          <p className="text-sm text-[var(--color-text)]">{t("sessions.primaryLiveHelper")}</p>
+          <div className="mt-4">
+            <Link to={`/sessions/${detail.id}/live`}>
+              <Button type="button" variant="primary">
+                {t("liveSession.enterLive")}
+              </Button>
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Session info */}
+      <PageCard>
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-3">
+          <div className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-2">
+            <BookOpen className="h-4 w-4 shrink-0 text-[var(--color-primary)]/80" aria-hidden />
+            <Link
+              to={`/rooms/${detail.room_id}`}
+              className="text-base font-semibold text-[var(--color-primary)] hover:underline"
+            >
+              {detail.room_name}
+            </Link>
+            <SessionStatusBadge status={detail.status} />
+            {detail.recurrence_group_id ? (
+              <span className="inline-flex shrink-0" title={t("sessions.recurringIndicator")}>
+                <Repeat className="h-3.5 w-3.5 text-[var(--color-text-muted)]" aria-hidden />
+              </span>
+            ) : null}
+          </div>
+          <div className="min-h-0 min-w-0 flex-1 max-sm:hidden" aria-hidden />
+          <div className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-4 max-sm:basis-full sm:ms-auto">
+            <span className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text)]">
+              <Calendar className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" aria-hidden />
+              {infoDatePod}
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text)]">
+              <Clock className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" aria-hidden />
+              {infoTimePod}
+            </span>
+            <SessionCountdown
+              scheduledAt={detail.scheduled_at}
+              durationMinutes={detail.duration_minutes}
+              status={detail.status}
+            />
+          </div>
+        </div>
+        {detail.notes && status !== "cancelled" ? (
+          <p className="mt-3 whitespace-pre-wrap text-sm text-[var(--color-text)]">{detail.notes}</p>
+        ) : null}
+        {status === "cancelled" ? (
+          <div className="mt-3 border-t border-red-100 pt-3 dark:border-red-900/40">
+            <p className="font-medium text-red-800 dark:text-red-200">{t("sessions.cancelledSessionBanner")}</p>
+            {detail.notes?.trim() ? (
+              <p className="mt-2 text-sm text-red-900/90 dark:text-red-200/95">
+                {t("sessions.cancelledSessionNotes", { notes: detail.notes })}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </PageCard>
+
+      {/* Session recitations */}
+      <PageCard>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-[var(--color-text)]">{recitationSectionTitle}</h2>
+          {showRecitationHeaderAdd ? (
+            <Button type="button" variant="primary" onClick={() => setRecitationFormOpen(true)}>
+              {primaryRecitationActionLabel}
+            </Button>
+          ) : null}
+        </div>
+        {sessionRecitations.length === 0 ? (
+          <EmptyState
+            className="border-0 bg-transparent py-10"
+            icon={<BookMarked className="h-12 w-12" />}
+            title={recitationEmpty.title}
+            {...(recitationEmpty.description ? { description: recitationEmpty.description } : {})}
+            primaryAction={
+              showRecitationAddButton && primaryRecitationActionLabel
+                ? { label: primaryRecitationActionLabel, onClick: () => setRecitationFormOpen(true) }
+                : undefined
+            }
+          />
+        ) : (
+          <RecentRecitationsList items={sessionRecitations} showStudent />
+        )}
+      </PageCard>
+
+      {/* Attendance */}
       {manage && detail.attendance.length === 0 ? (
-        <PageCard>
-          <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("sessions.markAttendance")}</h2>
+        <PageCard
+          className={cn(status === "completed" && "border-gray-200/90 bg-[var(--color-surface)]/95")}
+        >
+          {status === "completed" ? (
+            <p className="mb-3 text-sm text-[var(--color-text-muted)]">{t("sessions.sessionEndedSummary")}</p>
+          ) : null}
+          <h2 className="text-lg font-semibold text-[var(--color-text)]">{attendanceTitle}</h2>
+          {attendanceHelper ? <p className="mt-1 text-sm text-[var(--color-text-muted)]">{attendanceHelper}</p> : null}
           <EmptyState
             className="mt-4 border-0 bg-transparent py-10"
             icon={<BookMarked className="h-12 w-12" />}
             title={t("sessions.attendanceEmptyTitle")}
-            description={t("sessions.attendanceEmptyDescription")}
-            primaryAction={
-              manage ? { label: t("users.tabsStudents"), to: `/rooms/${detail.room_id}` } : undefined
+            description={
+              status === "cancelled"
+                ? t("sessions.attendanceHelperCancelled")
+                : t("sessions.attendanceEmptyDescription")
             }
+            primaryAction={manage && status !== "cancelled" ? { label: t("users.tabsStudents"), to: `/rooms/${detail.room_id}` } : undefined}
           />
         </PageCard>
       ) : manage && detail.attendance.length > 0 ? (
-        <PageCard>
-          <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("sessions.markAttendance")}</h2>
-          {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+        <PageCard
+          className={cn(status === "completed" && "border-gray-200/90 bg-[var(--color-surface)]/95")}
+        >
+          {status === "completed" ? (
+            <p className="mb-3 text-sm text-[var(--color-text-muted)]">{t("sessions.sessionEndedSummary")}</p>
+          ) : null}
+          <h2 className="text-lg font-semibold text-[var(--color-text)]">{attendanceTitle}</h2>
+          {attendanceHelper ? <p className="mt-1 text-sm text-[var(--color-text-muted)]">{attendanceHelper}</p> : null}
           <div className="mt-4">
             <AttendanceSheet
               sessionId={detail.id}
@@ -492,6 +709,7 @@ export function SessionDetailPage() {
               localState={localAttendance}
               localNotes={localNotes}
               studentGrades={studentGrades}
+              disabled={attendanceDisabled}
               onToggle={(studentId, attended) =>
                 setLocalAttendance((prev) => ({ ...prev, [studentId]: attended }))
               }
@@ -516,43 +734,57 @@ export function SessionDetailPage() {
               presentCount={presentCount}
             />
           </div>
-          <div className="mt-4 flex justify-end">
-            <Button type="button" variant="primary" loading={savingAttendance} onClick={() => void saveAttendance()}>
-              {t("sessions.saveAttendance")}
-            </Button>
-          </div>
+          {!attendanceDisabled ? (
+            <div className="mt-4 flex justify-end">
+              <Button type="button" variant="primary" loading={savingAttendance} onClick={() => void saveAttendance()}>
+                {t("sessions.saveAttendance")}
+              </Button>
+            </div>
+          ) : null}
         </PageCard>
       ) : null}
 
-      <PageCard>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("recitations.sessionRecitations")}</h2>
-          {manage ? (
-            <Button type="button" variant="primary" onClick={() => setRecitationFormOpen(true)}>
-              {t("recitations.addRecitation")}
+      {/* Danger zone */}
+      {canDeleteSession ? (
+        <section
+          className="rounded-xl border-2 border-red-200 bg-red-50/60 p-5 shadow-sm dark:bg-red-950/20"
+          aria-labelledby="session-danger-heading"
+        >
+          <h2 id="session-danger-heading" className="text-base font-semibold text-red-900 dark:text-red-100">
+            {t("sessions.dangerZoneTitle")}
+          </h2>
+          <p className="mt-1 text-sm text-red-800/95 dark:text-red-200/90">{dangerHelper}</p>
+          <div className="mt-4 flex flex-col gap-3 border-t border-red-200/90 pt-4 sm:flex-row sm:flex-wrap sm:items-center">
+            {status === "scheduled" ? (
+              <Button
+                type="button"
+                variant="secondary"
+                loading={actionLoading}
+                className="border-2 border-[#1B5E20] bg-[var(--color-surface)] text-[#1B5E20] hover:bg-[#1B5E20]/5 dark:border-emerald-600 dark:text-emerald-300"
+                onClick={() => setCancelConfirmOpen(true)}
+              >
+                {t("sessions.cancel")}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => {
+                if (detail.recurrence_group_id) setRecurrencePrompt("delete");
+                else {
+                  setDeleteScope(null);
+                  setDeleteOpen(true);
+                }
+              }}
+            >
+              <span className="inline-flex items-center gap-2">
+                <Trash2 className="h-4 w-4" aria-hidden />
+                {t("sessions.deleteSession")}
+              </span>
             </Button>
-          ) : null}
-        </div>
-        {sessionRecitations.length === 0 ? (
-          <EmptyState
-            className="border-0 bg-transparent py-10"
-            icon={<BookMarked className="h-12 w-12" />}
-            title={t("roomDetail.recitationsEmptyTitle")}
-            description={
-              manage
-                ? t("roomDetail.recitationsEmptyDescriptionTeacher")
-                : t("roomDetail.recitationsEmptyDescriptionStudent")
-            }
-            primaryAction={
-              manage
-                ? { label: t("recitations.addRecitation"), onClick: () => setRecitationFormOpen(true) }
-                : undefined
-            }
-          />
-        ) : (
-          <RecentRecitationsList items={sessionRecitations} showStudent />
-        )}
-      </PageCard>
+          </div>
+        </section>
+      ) : null}
 
       <RecitationFormModal
         open={recitationFormOpen}
@@ -605,6 +837,62 @@ export function SessionDetailPage() {
         onConfirm={() => void confirmDelete()}
         loading={actionLoading}
       />
+
+      <Modal
+        open={earlyStartConfirmOpen}
+        onClose={() => setEarlyStartConfirmOpen(false)}
+        title={t("sessions.earlyStartTitle")}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--color-text)]">
+            {t("sessions.earlyStartBody", {
+              date: full(detail.scheduled_at),
+              relative: formatScheduledRelativeToNow(
+                detail.scheduled_at,
+                intlLocaleForAppLanguage(i18n.language),
+              ),
+            })}
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setEarlyStartConfirmOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              loading={actionLoading}
+              onClick={handleEarlyStartConfirm}
+            >
+              {t("sessions.earlyStartConfirm")}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <AlertDialog open={cancelConfirmOpen} onOpenChange={(open) => !open && setCancelConfirmOpen(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("sessions.cancel")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("sessions.cancelSessionConfirm")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button type="button" variant="outline" onClick={() => setCancelConfirmOpen(false)} disabled={actionLoading}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              loading={actionLoading}
+              onClick={() => {
+                setCancelConfirmOpen(false);
+                void patchStatus("cancelled");
+              }}
+            >
+              {t("common.confirm")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }

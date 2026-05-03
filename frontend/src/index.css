@@ -38,6 +38,7 @@
   --color-surface: #FFFFFF;
   --color-text: #1A1A1A;
   --color-text-muted: #6B7280;
+  --color-warning: #d97706;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);

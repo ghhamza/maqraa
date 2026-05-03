@@ -26,7 +26,7 @@ export function DeleteSessionModal({
   const { mediumTime } = useLocaleDate();
   if (!session) return null;
 
-  const blocked = session.status === "completed" || session.status === "in_progress";
+  const blocked = session.status === "in_progress";
   const title = session.title?.trim() || t("sessions.untitledTitle");
 
   return (

@@ -32,6 +32,8 @@ export interface AttendanceSheetProps {
   onAbsentAll: () => void;
   total: number;
   presentCount: number;
+  /** When true, toggles and bulk actions are disabled (e.g. cancelled session). */
+  disabled?: boolean;
 }
 
 export function AttendanceSheet({
@@ -46,6 +48,7 @@ export function AttendanceSheet({
   onAbsentAll,
   total,
   presentCount,
+  disabled = false,
 }: AttendanceSheetProps) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -53,12 +56,12 @@ export function AttendanceSheet({
   const listDir = i18n.language === "ar" ? "rtl" : "ltr";
 
   return (
-    <div className="space-y-4">
+    <div className={disabled ? "pointer-events-none space-y-4 opacity-60" : "space-y-4"}>
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="secondary" size="xs" onClick={onPresentAll}>
+        <Button type="button" variant="secondary" size="xs" disabled={disabled} onClick={onPresentAll}>
           {t("sessions.presentAll")}
         </Button>
-        <Button type="button" variant="secondary" size="xs" onClick={onAbsentAll}>
+        <Button type="button" variant="secondary" size="xs" disabled={disabled} onClick={onAbsentAll}>
           {t("sessions.absentAll")}
         </Button>
         <span className="text-xs text-[var(--color-text-muted)]">
@@ -96,6 +99,7 @@ export function AttendanceSheet({
                 <select
                   className="max-w-[9rem] rounded-md border border-gray-200 bg-transparent px-2 py-1 text-xs text-[var(--color-text-muted)]"
                   value={note}
+                  disabled={disabled}
                   onChange={(e) => onNoteChange(row.student_id, e.target.value)}
                   aria-label={t("sessions.attendanceNote")}
                 >
@@ -112,6 +116,7 @@ export function AttendanceSheet({
                   type="checkbox"
                   className="peer sr-only"
                   checked={attended}
+                  disabled={disabled}
                   onChange={(e) => onToggle(row.student_id, e.target.checked)}
                 />
                 <div className="peer h-5 w-9 rounded-full bg-gray-300 after:absolute after:start-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-[var(--color-primary)] peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full" />
@@ -121,7 +126,7 @@ export function AttendanceSheet({
                 type="button"
                 variant="secondary"
                 size="xs"
-                disabled={!attended}
+                disabled={disabled || !attended}
                 onClick={() => navigate(`/sessions/${sessionId}/students/${row.student_id}`)}
               >
                 {t("sessions.studentSheet")}

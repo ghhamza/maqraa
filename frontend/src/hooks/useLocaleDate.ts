@@ -17,6 +17,24 @@ export function useLocaleDate() {
         new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
           new Date(d),
         ),
+      /** Time only (locale-aware), for ranges paired with date pods. */
+      timeShort: (d: string | Date) =>
+        new Intl.DateTimeFormat(locale, { timeStyle: "short" }).format(new Date(d)),
+      /** e.g. "Fri, May 8" / Arabic weekday + day + month — no year. */
+      shortWeekdayDate: (d: string | Date) =>
+        new Intl.DateTimeFormat(locale, {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+        }).format(new Date(d)),
+      /** Weekday + calendar date, e.g. "Friday, May 8, 2026" in `en-US`. */
+      weekdayDate: (d: string | Date) =>
+        new Intl.DateTimeFormat(locale, {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        }).format(new Date(d)),
       full: (d: string | Date) =>
         new Intl.DateTimeFormat(locale, { dateStyle: "full", timeStyle: "short" }).format(
           new Date(d),

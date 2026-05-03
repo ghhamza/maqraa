@@ -923,7 +923,7 @@ pub async fn delete_session(
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?
         .ok_or((StatusCode::NOT_FOUND, Json(json!({ "code": "not_found" }))))?;
-    if matches!(session.status.as_str(), "completed" | "in_progress") {
+    if session.status.as_str() == "in_progress" {
         return Err((StatusCode::BAD_REQUEST, Json(json!({ "code": "session_delete_forbidden" }))));
     }
     if !can_manage_room(&state.db, &auth, session.room_id)
