@@ -38,6 +38,10 @@ export interface GradingPanelProps {
   onGradeSubmitted: (studentId: string, grade: string, notes?: string) => void;
   /** Fires after POST /recitations succeeds — use for linking error annotations to a recitation row. */
   onRecitationCreated?: (rec: RecitationPublic) => void;
+  /** When set with `gradingMode: "completePlan"`, submit uses POST /recitations/:id/complete. */
+  gradingMode?: "create" | "completePlan";
+  planToComplete?: RecitationPublic | null;
+  onPlanCompleted?: (rec: RecitationPublic) => void;
   /** When the title is shown elsewhere (e.g. Dialog header). */
   hideTitle?: boolean;
   className?: string;
@@ -53,6 +57,9 @@ export function GradingPanel({
   locale,
   onGradeSubmitted,
   onRecitationCreated,
+  gradingMode = "create",
+  planToComplete = null,
+  onPlanCompleted,
   hideTitle = false,
   className,
 }: GradingPanelProps) {
@@ -83,6 +90,12 @@ export function GradingPanel({
   const [qfSyncToast, setQfSyncToast] = useState<{ kind: "success" | "error"; relinkNeeded?: boolean } | null>(null);
 
   useEffect(() => {
+    if (gradingMode === "completePlan" && planToComplete) {
+      setSurah(planToComplete.surah);
+      setAyahStart(planToComplete.ayah_start);
+      setAyahEnd(planToComplete.ayah_end);
+      return;
+    }
     if (highlightRange) {
       setSurah(highlightRange.surah);
       setAyahStart(highlightRange.ayahStart);
@@ -93,6 +106,10 @@ export function GradingPanel({
       setAyahEnd(currentAyah.ayah);
     }
   }, [
+    gradingMode,
+    planToComplete?.surah,
+    planToComplete?.ayah_start,
+    planToComplete?.ayah_end,
     highlightRange?.surah,
     highlightRange?.ayahStart,
     highlightRange?.ayahEnd,
@@ -132,7 +149,45 @@ export function GradingPanel({
   const surahSelectTriggerClass = rangeFieldClass;
   const surahSelectStyle = { fontFamily: "var(--font-ui)", color: "var(--color-text)" } as const;
 
+  const isCompletePlan = gradingMode === "completePlan" && planToComplete != null;
+
   const submitGrade = async (grade: RecitationGrade) => {
+    if (isCompletePlan) {
+      if (!planToComplete) return;
+      setSubmitting(true);
+      setError(null);
+      try {
+        const { data } = await api.post<RecitationPublic>(`recitations/${planToComplete.id}/complete`, {
+          grade,
+          teacher_notes: notes.trim() || undefined,
+        });
+        setList((prev) => {
+          const rest = prev.filter((r) => r.id !== data.id);
+          return [data, ...rest];
+        });
+        setNotes("");
+        setOkFlash(true);
+        window.setTimeout(() => setOkFlash(false), 1800);
+        onPlanCompleted?.(data);
+        const sid = planToComplete.student_id ?? activeReciter?.userId;
+        if (sid) onGradeSubmitted(sid, grade, notes.trim() || undefined);
+        const sync = await waitForQfSyncStatus(data.id);
+        if (sync?.synced_at) {
+          setQfSyncToast({ kind: "success" });
+        } else if (sync?.error && sync.error !== "not_linked") {
+          setQfSyncToast({
+            kind: "error",
+            relinkNeeded: sync.error === "insufficient_scope",
+          });
+        }
+      } catch (e: unknown) {
+        setError(userFacingApiError(e));
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     if (!activeReciter) return;
     setSubmitting(true);
     setError(null);
@@ -170,7 +225,7 @@ export function GradingPanel({
     }
   };
 
-  const disabled = !activeReciter;
+  const disabled = isCompletePlan ? !planToComplete : !activeReciter;
 
   return (
     <div
@@ -194,54 +249,56 @@ export function GradingPanel({
         <>
           <p className="mb-2 text-sm text-[var(--color-text)]">
             <span className="text-[var(--color-text-muted)]">{t("liveSession.reciter")}:</span>{" "}
-            {activeReciter.name}
+            {activeReciter?.name ?? planToComplete?.student_name ?? "—"}
           </p>
           <p className="mb-2 text-xs text-[var(--color-text-muted)]" style={{ fontFamily: "var(--font-quran)" }}>
             {getSurahNameWithArabic(surah, locale)} · {t("liveSession.ayahRange")}: {ayahStart}–{ayahEnd}
           </p>
-          <div className="mb-3 grid grid-cols-3 gap-2 text-xs items-end">
-            <label className="col-span-1 flex min-w-0 flex-col gap-1.5">
-              <span className="leading-tight text-[var(--color-text-muted)]">{t("recitations.surah")}</span>
-              <FormSelect
-                value={String(surah)}
-                onValueChange={(v) => {
-                  const n = Number(v);
-                  if (n < 1 || n > 114) return;
-                  setSurah(n);
-                  const max = getSurahAyahCount(n, riwayaTyped);
-                  const clamp = (x: number) => Math.max(1, Math.min(x, max));
-                  setAyahStart((a) => clamp(a));
-                  setAyahEnd((a) => clamp(a));
-                }}
-                dir={isRtl ? "rtl" : "ltr"}
-                aria-label={t("recitations.selectSurah")}
-                triggerClassName={surahSelectTriggerClass}
-                triggerStyle={surahSelectStyle}
-                contentClassName="max-h-[min(22rem,70vh)]"
-                options={surahSelectOptions}
-              />
-            </label>
-            <label className="flex min-w-0 flex-col gap-1.5">
-              <span className="leading-tight text-[var(--color-text-muted)]">{t("recitations.ayahStart")}</span>
-              <input
-                type="number"
-                min={1}
-                className={cn(rangeFieldClass, "tabular-nums")}
-                value={ayahStart}
-                onChange={(e) => setAyahStart(Number(e.target.value))}
-              />
-            </label>
-            <label className="flex min-w-0 flex-col gap-1.5">
-              <span className="leading-tight text-[var(--color-text-muted)]">{t("recitations.ayahEnd")}</span>
-              <input
-                type="number"
-                min={1}
-                className={cn(rangeFieldClass, "tabular-nums")}
-                value={ayahEnd}
-                onChange={(e) => setAyahEnd(Number(e.target.value))}
-              />
-            </label>
-          </div>
+          {!isCompletePlan ? (
+            <div className="mb-3 grid grid-cols-3 gap-2 text-xs items-end">
+              <label className="col-span-1 flex min-w-0 flex-col gap-1.5">
+                <span className="leading-tight text-[var(--color-text-muted)]">{t("recitations.surah")}</span>
+                <FormSelect
+                  value={String(surah)}
+                  onValueChange={(v) => {
+                    const n = Number(v);
+                    if (n < 1 || n > 114) return;
+                    setSurah(n);
+                    const max = getSurahAyahCount(n, riwayaTyped);
+                    const clamp = (x: number) => Math.max(1, Math.min(x, max));
+                    setAyahStart((a) => clamp(a));
+                    setAyahEnd((a) => clamp(a));
+                  }}
+                  dir={isRtl ? "rtl" : "ltr"}
+                  aria-label={t("recitations.selectSurah")}
+                  triggerClassName={surahSelectTriggerClass}
+                  triggerStyle={surahSelectStyle}
+                  contentClassName="max-h-[min(22rem,70vh)]"
+                  options={surahSelectOptions}
+                />
+              </label>
+              <label className="flex min-w-0 flex-col gap-1.5">
+                <span className="leading-tight text-[var(--color-text-muted)]">{t("recitations.ayahStart")}</span>
+                <input
+                  type="number"
+                  min={1}
+                  className={cn(rangeFieldClass, "tabular-nums")}
+                  value={ayahStart}
+                  onChange={(e) => setAyahStart(Number(e.target.value))}
+                />
+              </label>
+              <label className="flex min-w-0 flex-col gap-1.5">
+                <span className="leading-tight text-[var(--color-text-muted)]">{t("recitations.ayahEnd")}</span>
+                <input
+                  type="number"
+                  min={1}
+                  className={cn(rangeFieldClass, "tabular-nums")}
+                  value={ayahEnd}
+                  onChange={(e) => setAyahEnd(Number(e.target.value))}
+                />
+              </label>
+            </div>
+          ) : null}
 
           <div className="mb-3 flex flex-wrap gap-2">
             {GRADE_ORDER.map((g) => (

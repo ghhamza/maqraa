@@ -254,7 +254,7 @@ export interface RecitationPublic {
   /** Display order for session plan rows (session-linked recitations). */
   order_index: number;
   /** Session plan lifecycle; null when not part of a session plan. */
-  plan_status: "planned" | "in_progress" | "completed" | null;
+  plan_status: "planned" | "in_progress" | "paused" | "completed" | "skipped" | null;
 }
 
 export type ErrorSeverity = "jali" | "khafi";

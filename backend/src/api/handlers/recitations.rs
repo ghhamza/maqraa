@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 use crate::riwaya::parse_riwaya;
 use crate::api::extractors::AuthenticatedUser;
+use crate::api::ws::messages::ServerMessage;
 use crate::api::types::{
     GradeCounts, Paginated, RecitationPublic, RecitationStatsResponse, StudentProgressResponse, SurahBestGrade,
     SurahCount,
@@ -411,10 +412,10 @@ pub async fn create_recitation(
         0
     };
 
-    let plan_status: Option<&'static str> = match (session_id, grade_sql) {
-        (Some(_), Some(_)) => Some("completed"),
-        (Some(_), None) => Some("planned"),
-        _ => None,
+    // Session-linked rows start as planned; lifecycle uses dedicated POST endpoints.
+    let plan_status: Option<&'static str> = match session_id {
+        Some(_) => Some("planned"),
+        None => None,
     };
 
     let id: Uuid = sqlx::query_scalar(
@@ -503,15 +504,8 @@ pub async fn update_recitation(
         Some(r) => Some(validate_star_rating(r)?),
     };
 
-    let plan_status_val: Option<String> = if existing.session_id.is_some() {
-        if grade_val.is_some() {
-            Some("completed".into())
-        } else {
-            existing.plan_status.clone().or(Some("planned".into()))
-        }
-    } else {
-        None
-    };
+    // Do not derive plan_status from grade; transitions are POST /recitations/:id/{start|...}.
+    let plan_status_val: Option<String> = existing.plan_status.clone();
 
     sqlx::query(
         "UPDATE recitations SET surah = $1, ayah_start = $2, ayah_end = $3, grade = $4, teacher_notes = $5, \
@@ -668,6 +662,319 @@ pub async fn reorder_session_plans(
     })?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn fetch_plan_for_transition(
+    db: &PgPool,
+    rec_id: Uuid,
+) -> Result<RecitationPublic, StatusCode> {
+    let rec = fetch_recitation_public(db, rec_id)
+        .await?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    if rec.session_id.is_none() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(rec)
+}
+
+fn require_recitation_teacher_or_admin_for_plan(
+    auth: &AuthenticatedUser,
+    rec: &RecitationPublic,
+) -> Result<(), StatusCode> {
+    if auth.role == "admin" {
+        return Ok(());
+    }
+    if auth.role == "teacher" && Some(auth.id) == rec.teacher_id {
+        return Ok(());
+    }
+    Err(StatusCode::FORBIDDEN)
+}
+
+async fn broadcast_plan_status(
+    state: &AppState,
+    session_id: Uuid,
+    rec_id: Uuid,
+    new_status: &str,
+    active_reciter_id: Option<Uuid>,
+) {
+    let msg = ServerMessage::PlanStatusChanged {
+        recitation_id: rec_id,
+        plan_status: new_status.to_string(),
+        active_reciter_id,
+    };
+    state.rooms.broadcast(session_id, &msg, None).await;
+}
+
+fn allowed_plan_transition(_from: Option<&str>, to: &str) -> bool {
+    matches!(
+        to,
+        "planned" | "in_progress" | "paused" | "completed" | "skipped"
+    )
+}
+
+/// RoomManager APIs require the session teacher as `requester_id`, not the admin caller.
+fn room_requester_id(rec: &RecitationPublic) -> Result<Uuid, StatusCode> {
+    rec.teacher_id.ok_or(StatusCode::BAD_REQUEST)
+}
+
+pub async fn start_plan(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<RecitationPublic>, StatusCode> {
+    let rec = fetch_plan_for_transition(&state.db, id).await?;
+    require_recitation_teacher_or_admin_for_plan(&auth, &rec)?;
+    let session_id = rec.session_id.ok_or(StatusCode::BAD_REQUEST)?;
+    let student_id = rec.student_id.ok_or(StatusCode::BAD_REQUEST)?;
+    let room_req = room_requester_id(&rec)?;
+
+    if !allowed_plan_transition(rec.plan_status.as_deref(), "in_progress") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let auto_paused: Vec<Uuid> = sqlx::query_scalar(
+        "UPDATE recitations SET plan_status = 'paused' \
+         WHERE session_id = $1 AND plan_status = 'in_progress' AND id <> $2 \
+         RETURNING id",
+    )
+    .bind(session_id)
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    sqlx::query("UPDATE recitations SET plan_status = 'in_progress' WHERE id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    tx.commit()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if let Err(e) = state
+        .rooms
+        .set_active_reciter(session_id, student_id, room_req)
+        .await
+    {
+        tracing::debug!(?e, session_id = %session_id, "set_active_reciter skipped (no live room or student not in session)");
+    }
+
+    for paused_id in auto_paused {
+        broadcast_plan_status(&state, session_id, paused_id, "paused", None).await;
+    }
+    broadcast_plan_status(
+        &state,
+        session_id,
+        id,
+        "in_progress",
+        Some(student_id),
+    )
+    .await;
+
+    let updated = fetch_recitation_public(&state.db, id)
+        .await?
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(updated))
+}
+
+pub async fn pause_plan(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<RecitationPublic>, StatusCode> {
+    let rec = fetch_plan_for_transition(&state.db, id).await?;
+    require_recitation_teacher_or_admin_for_plan(&auth, &rec)?;
+    let session_id = rec.session_id.ok_or(StatusCode::BAD_REQUEST)?;
+    let room_req = room_requester_id(&rec)?;
+
+    if !allowed_plan_transition(rec.plan_status.as_deref(), "paused") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    sqlx::query("UPDATE recitations SET plan_status = 'paused' WHERE id = $1")
+        .bind(id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if let Some(sid) = rec.student_id {
+        let was_active = state.rooms.is_active_reciter(session_id, sid).await;
+        if was_active {
+            let _ = state.rooms.clear_active_reciter(session_id, room_req).await;
+        }
+    }
+
+    broadcast_plan_status(&state, session_id, id, "paused", None).await;
+
+    let updated = fetch_recitation_public(&state.db, id)
+        .await?
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(updated))
+}
+
+pub async fn skip_plan(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<RecitationPublic>, StatusCode> {
+    let rec = fetch_plan_for_transition(&state.db, id).await?;
+    require_recitation_teacher_or_admin_for_plan(&auth, &rec)?;
+    let session_id = rec.session_id.ok_or(StatusCode::BAD_REQUEST)?;
+    let room_req = room_requester_id(&rec)?;
+
+    if !allowed_plan_transition(rec.plan_status.as_deref(), "skipped") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    sqlx::query("UPDATE recitations SET plan_status = 'skipped' WHERE id = $1")
+        .bind(id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if let Some(sid) = rec.student_id {
+        let was_active = state.rooms.is_active_reciter(session_id, sid).await;
+        if was_active {
+            let _ = state.rooms.clear_active_reciter(session_id, room_req).await;
+        }
+    }
+
+    broadcast_plan_status(&state, session_id, id, "skipped", None).await;
+
+    let updated = fetch_recitation_public(&state.db, id)
+        .await?
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(updated))
+}
+
+#[derive(Deserialize)]
+pub struct ReopenPlanRequest {
+    #[serde(default = "reopen_default_clear_grade")]
+    pub clear_grade: bool,
+}
+
+fn reopen_default_clear_grade() -> bool {
+    true
+}
+
+pub async fn reopen_plan(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<ReopenPlanRequest>,
+) -> Result<Json<RecitationPublic>, StatusCode> {
+    let rec = fetch_plan_for_transition(&state.db, id).await?;
+    require_recitation_teacher_or_admin_for_plan(&auth, &rec)?;
+    let session_id = rec.session_id.ok_or(StatusCode::BAD_REQUEST)?;
+
+    if !allowed_plan_transition(rec.plan_status.as_deref(), "planned") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if req.clear_grade {
+        sqlx::query(
+            "UPDATE recitations SET plan_status = 'planned', grade = NULL, star_rating = NULL \
+             WHERE id = $1",
+        )
+        .bind(id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    } else {
+        sqlx::query("UPDATE recitations SET plan_status = 'planned' WHERE id = $1")
+            .bind(id)
+            .execute(&state.db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    broadcast_plan_status(&state, session_id, id, "planned", None).await;
+
+    let updated = fetch_recitation_public(&state.db, id)
+        .await?
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(updated))
+}
+
+#[derive(Deserialize, Default)]
+pub struct CompletePlanRequest {
+    pub grade: Option<String>,
+    pub teacher_notes: Option<String>,
+    pub star_rating: Option<i16>,
+}
+
+pub async fn complete_plan(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<CompletePlanRequest>,
+) -> Result<Json<RecitationPublic>, StatusCode> {
+    let rec = fetch_plan_for_transition(&state.db, id).await?;
+    require_recitation_teacher_or_admin_for_plan(&auth, &rec)?;
+    let session_id = rec.session_id.ok_or(StatusCode::BAD_REQUEST)?;
+    let room_req = room_requester_id(&rec)?;
+
+    if !allowed_plan_transition(rec.plan_status.as_deref(), "completed") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let grade_val: Option<&str> = match &req.grade {
+        Some(g) => parse_grade(g.trim()),
+        None => None,
+    };
+    if req.grade.is_some() && grade_val.is_none() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let star_rating = match req.star_rating {
+        None => None,
+        Some(r) => Some(validate_star_rating(r)?),
+    };
+
+    if grade_val.is_some() || req.teacher_notes.is_some() || req.star_rating.is_some() {
+        sqlx::query(
+            "UPDATE recitations \
+             SET plan_status = 'completed', \
+                 grade = COALESCE($1, grade), \
+                 teacher_notes = COALESCE($2, teacher_notes), \
+                 star_rating = COALESCE($3, star_rating) \
+             WHERE id = $4",
+        )
+        .bind(grade_val)
+        .bind(req.teacher_notes.as_ref())
+        .bind(star_rating)
+        .bind(id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    } else {
+        sqlx::query("UPDATE recitations SET plan_status = 'completed' WHERE id = $1")
+            .bind(id)
+            .execute(&state.db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    if let Some(sid) = rec.student_id {
+        let was_active = state.rooms.is_active_reciter(session_id, sid).await;
+        if was_active {
+            let _ = state.rooms.clear_active_reciter(session_id, room_req).await;
+        }
+    }
+
+    broadcast_plan_status(&state, session_id, id, "completed", None).await;
+
+    let updated = fetch_recitation_public(&state.db, id)
+        .await?
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(updated))
 }
 
 async fn top_surahs(

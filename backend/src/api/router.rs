@@ -81,6 +81,26 @@ pub fn build_router(state: AppState) -> Router {
                 .delete(handlers::recitations::delete_recitation),
         )
         .route(
+            "/api/recitations/{id}/start",
+            post(handlers::recitations::start_plan),
+        )
+        .route(
+            "/api/recitations/{id}/pause",
+            post(handlers::recitations::pause_plan),
+        )
+        .route(
+            "/api/recitations/{id}/skip",
+            post(handlers::recitations::skip_plan),
+        )
+        .route(
+            "/api/recitations/{id}/reopen",
+            post(handlers::recitations::reopen_plan),
+        )
+        .route(
+            "/api/recitations/{id}/complete",
+            post(handlers::recitations::complete_plan),
+        )
+        .route(
             "/api/error-annotations/summary",
             get(handlers::error_annotations::annotation_summary),
         )
