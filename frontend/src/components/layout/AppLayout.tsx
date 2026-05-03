@@ -118,6 +118,7 @@ export function AppLayout() {
 
   const localeBase = (i18n.language || "ar").split("-")[0] ?? "ar";
   const isRtl = localeBase === "ar";
+  const logoSrc = localeBase === "ar" ? "/logo-ar.svg" : "/logo.svg";
   const isAdmin = user?.role === "admin";
   const roomsBadgeCount = user ? roomCount : null;
   const showPendingDot =
@@ -272,9 +273,13 @@ export function AppLayout() {
               </SheetTrigger>
               <SheetContent side={sheetSide} className="flex w-[min(100%,20rem)] flex-col gap-0 bg-[var(--color-surface)] p-0">
                 <SheetHeader className="border-b border-border px-4 py-4 text-start">
-                  <SheetTitle style={{ fontFamily: "var(--font-quran)" }} className="text-xl font-bold">
-                    {t("common.appName")}
-                  </SheetTitle>
+                  <SheetTitle className="sr-only">{t("common.appName")}</SheetTitle>
+                  <img
+                    src={logoSrc}
+                    alt=""
+                    decoding="async"
+                    className="h-8 w-auto max-w-[min(100%,12rem)] object-contain object-start"
+                  />
                 </SheetHeader>
                 <nav className="flex flex-1 flex-col gap-1 p-4" role="navigation">
                   {renderNavLinks("column")}
@@ -305,12 +310,19 @@ export function AppLayout() {
               </SheetContent>
             </Sheet>
 
-            <h1
-              className="min-w-0 truncate text-lg font-bold text-foreground sm:text-xl"
-              style={{ fontFamily: "var(--font-quran)" }}
+            <NavLink
+              to="/"
+              end
+              className="inline-flex min-w-0 shrink-0 items-center py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md"
+              aria-label={t("common.appName")}
             >
-              {t("common.appName")}
-            </h1>
+              <img
+                src={logoSrc}
+                alt=""
+                decoding="async"
+                className="h-7 w-auto max-w-[min(100%,11rem)] object-contain object-start sm:h-8 sm:max-w-[12rem]"
+              />
+            </NavLink>
           </div>
 
           <NavigationMenu viewport={false} className="hidden max-w-none flex-1 justify-center md:flex">

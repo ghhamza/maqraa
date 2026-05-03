@@ -14,7 +14,7 @@
     "inactive": "غير نشطة",
     "actions": "إجراءات",
     "comingSoon": "سيتوفر قريبًا",
-    "appName": "المقرأ",
+    "appName": "المِقْرَأة",
     "closeMenu": "إغلاق القائمة",
     "openMenu": "القائمة",
     "close": "إغلاق",
@@ -68,7 +68,7 @@
       "alreadyLinked": "هذا الحساب مرتبط بمستخدم آخر"
     },
     "roleSelection": {
-      "title": "اختر دورك في المقرأ",
+      "title": "اختر دورك في المِقْرَأة",
       "subtitle": "يمكنك تغيير ذلك لاحقاً من إعدادات حسابك",
       "student": "طالب",
       "studentDesc": "أتعلم القرآن وأتلقى الدروس من المعلمين",
@@ -103,8 +103,8 @@
     "recitationsEmptyDescriptionStudent": "ستظهر تلاواتك هنا فور تقييمها من المعلّم."
   },
   "livePage": {
-    "subtitle": "حصص مباشرة عامة على المقرأ الآن. ابحث عن حلقة للاستماع أو الانضمام.",
-    "publicHeaderTitle": "حصص عامة على منصة المقرأ",
+    "subtitle": "حصص مباشرة عامة على المِقْرَأة الآن. ابحث عن حلقة للاستماع أو الانضمام.",
+    "publicHeaderTitle": "حصص عامة على منصة المِقْرَأة",
     "publicHeaderDescription": "هذه حصص في حلقات عامة. للانضمام قد تحتاج إلى التسجيل أولًا، أو يمكنك الاستماع فقط.",
     "imminentBadge": "حصتك على وشك أن تبدأ",
     "startNow": "ابدأ الآن",
@@ -161,7 +161,7 @@
     "quranMapDescription": "١١٤ سورة. يمتلئ كل مربّع عند إتمام السورة مع معلّمك.",
     "studentStartingTitle": "كل شيء جاهز",
     "studentStartingDescription": "ستظهر هنا تلاواتك وتقدّمك فور تسجيل المعلّم لأول تلاوة.",
-    "teacherEmptyTitle": "مرحبًا بك في المقرأ",
+    "teacherEmptyTitle": "مرحبًا بك في المِقْرَأة",
     "teacherEmptyDescription": "أنشئ حلقتك الأولى لتبدأ تدريس الطلاب.",
     "teacherEmptyCta": "أنشئ حلقتك الأولى",
     "studentEmptyTitle": "ابحث عن حلقتك الأولى",
@@ -174,7 +174,7 @@
     "moreStats": "المزيد من الإحصاءات",
     "createHalaqah": "إنشاء حلقة",
     "streakTitle": "السلسلة",
-    "miqraaStreak": "المقرأ",
+    "miqraaStreak": "المِقْرَأة",
     "teacherDashboard": "لوحة المعلّم",
     "myRooms": "غرفي",
     "myStudents": "طلابي",
