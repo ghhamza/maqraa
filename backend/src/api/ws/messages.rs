@@ -107,6 +107,14 @@ pub enum ServerMessage {
 
     #[serde(rename = "annotation-removed")]
     AnnotationRemoved { annotation_id: Uuid },
+
+    #[serde(rename = "plan-status-changed")]
+    PlanStatusChanged {
+        recitation_id: Uuid,
+        plan_status: String,
+        /// Active reciter after this transition (`Some` when moving to in_progress).
+        active_reciter_id: Option<Uuid>,
+    },
 }
 
 #[derive(Serialize, Clone)]

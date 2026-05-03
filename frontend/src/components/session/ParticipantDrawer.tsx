@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { Crown, Mic, MicOff, UserCheck, UserMinus, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { X } from "lucide-react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "../ui/Button";
@@ -14,28 +14,39 @@ import {
   SheetHeader,
   SheetTitle,
 } from "../ui/sheet";
-import { cn } from "@/lib/utils";
 import type { SessionParticipant } from "../../hooks/useSessionState";
+import type { RecitationPublic } from "../../types";
+import { SessionRecitationsSortableList } from "../sessions/SessionRecitationsSortableList";
+import { userFacingApiError } from "../../lib/api";
+import { ZoneSection } from "./plan-rows/ZoneSection";
+import { TeacherRow } from "./plan-rows/TeacherRow";
+import { DonePlanRow } from "./plan-rows/DonePlanRow";
+import { NowRecitingCard } from "./plan-rows/NowRecitingCard";
+import { PausedPlanRow } from "./plan-rows/PausedPlanRow";
+import { NotInPlanRow } from "./plan-rows/NotInPlanRow";
+import { OfflineStudentRow } from "./plan-rows/OfflineStudentRow";
 
 interface ParticipantDrawerProps {
   open: boolean;
   onClose: () => void;
   participants: SessionParticipant[];
   teacherId: string;
-  activeReciterId: string | null;
   isTeacher: boolean;
-  onSetReciter: (userId: string) => void;
-  onClearReciter: () => void;
-  /** Teacher-only grading UI below the list */
-  gradingPanel?: ReactNode;
   /** Same pattern as mushaf navigator: LTR → right edge, RTL → left edge. */
   side?: "left" | "right";
-}
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
-  return name.slice(0, 2).toUpperCase() || "?";
+  /** Enrolled students not in the live room (from session attendance); no session plan row for them. */
+  offlineStudents: { student_id: string; student_name: string }[];
+  sessionId: string;
+  plans: RecitationPublic[];
+  onPlansChange: (next: RecitationPublic[]) => void;
+  onStartPlan: (planId: string) => Promise<void>;
+  onPausePlan: (planId: string) => Promise<void>;
+  onSkipPlan: (planId: string) => Promise<void>;
+  onReopenPlan: (planId: string, clearGrade: boolean) => Promise<void>;
+  onAdHocStart: (studentId: string) => void;
+  onEndGradeForPlan: (planId: string) => void;
+  onPlanTransitionError: (message: string) => void;
 }
 
 export function ParticipantDrawer({
@@ -43,22 +54,101 @@ export function ParticipantDrawer({
   onClose,
   participants,
   teacherId,
-  activeReciterId,
   isTeacher,
-  onSetReciter,
-  onClearReciter,
+  offlineStudents,
   side: sideProp,
+  sessionId,
+  plans,
+  onPlansChange,
+  onStartPlan,
+  onPausePlan,
+  onSkipPlan,
+  onReopenPlan,
+  onAdHocStart,
+  onEndGradeForPlan,
+  onPlanTransitionError,
 }: ParticipantDrawerProps) {
   const { t, i18n } = useTranslation();
+  const loc = i18n.language === "ar" ? "ar" : i18n.language === "fr" ? "fr" : "en";
 
-  const sheetSide =
-    sideProp ?? (i18n.language?.startsWith("ar") ? "left" : "right");
+  const sheetSide = sideProp ?? (i18n.language?.startsWith("ar") ? "left" : "right");
 
-  const sorted = [...participants].sort((a, b) => {
-    if (a.userId === teacherId) return -1;
-    if (b.userId === teacherId) return 1;
-    return a.name.localeCompare(b.name, "ar");
-  });
+  const sorted = useMemo(
+    () =>
+      [...participants].sort((a, b) => {
+        if (a.userId === teacherId) return -1;
+        if (b.userId === teacherId) return 1;
+        return a.name.localeCompare(b.name, "ar");
+      }),
+    [participants, teacherId],
+  );
+
+  const teacher = sorted.find((p) => p.userId === teacherId);
+  const onlineStudents = sorted.filter((p) => p.userId !== teacherId);
+
+  const participantById = useMemo(() => {
+    const m = new Map<string, SessionParticipant>();
+    for (const p of sorted) m.set(p.userId, p);
+    return m;
+  }, [sorted]);
+
+  const donePlans = useMemo(
+    () =>
+      plans
+        .filter((p) => p.plan_status === "completed" || p.plan_status === "skipped")
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+    [plans],
+  );
+
+  const activePlan = useMemo(() => plans.find((p) => p.plan_status === "in_progress") ?? null, [plans]);
+
+  const pausedPlans = useMemo(
+    () => plans.filter((p) => p.plan_status === "paused").sort((a, b) => a.order_index - b.order_index),
+    [plans],
+  );
+
+  const plannedPlans = useMemo(() => {
+    const list = plans.filter((p) => p.plan_status === "planned");
+    const onlineIds = new Set(onlineStudents.map((s) => s.userId));
+    return [...list].sort((a, b) => {
+      const aLive = Boolean(a.student_id && onlineIds.has(a.student_id));
+      const bLive = Boolean(b.student_id && onlineIds.has(b.student_id));
+      if (aLive !== bLive) return aLive ? -1 : 1;
+      return a.order_index - b.order_index;
+    });
+  }, [plans, onlineStudents]);
+
+  const studentsWithAnyPlan = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of plans) {
+      if (p.student_id) s.add(p.student_id);
+    }
+    return s;
+  }, [plans]);
+
+  const onlineNotInPlan = useMemo(
+    () => onlineStudents.filter((p) => !studentsWithAnyPlan.has(p.userId)),
+    [onlineStudents, studentsWithAnyPlan],
+  );
+
+  const connectedStudentIds = useMemo(
+    () => new Set(onlineStudents.map((p) => p.userId)),
+    [onlineStudents],
+  );
+
+  const wrapPlanOp = (fn: () => Promise<void>) => {
+    void fn().catch((e: unknown) => {
+      onPlanTransitionError(userFacingApiError(e));
+    });
+  };
+
+  const plannedToolbar = isTeacher
+    ? {
+        isTeacher: true,
+        onStartPlan: (planId: string) => wrapPlanOp(() => onStartPlan(planId)),
+        onSkipPlan: (planId: string) => wrapPlanOp(() => onSkipPlan(planId)),
+      }
+    : undefined;
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
@@ -93,73 +183,91 @@ export function ParticipantDrawer({
           className="flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3"
           style={{ fontFamily: "var(--font-ui)" }}
         >
-          <ul className="flex flex-col gap-0.5" role="list">
-            {sorted.map((p) => {
-              const isT = p.userId === teacherId;
-              const isReciter = activeReciterId === p.userId;
-              return (
-                <li key={p.userId}>
-                  <div
-                    className={cn(
-                      "flex w-full items-center gap-3 rounded-md px-3 py-3 text-start text-sm transition-colors",
-                      "hover:bg-muted/80",
-                      isReciter && "bg-muted font-medium text-foreground",
-                    )}
-                  >
-                    <div
-                      className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
-                      aria-hidden
-                    >
-                      {initials(p.name)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        {isT ? <Crown className="size-4 shrink-0 text-[#1B5E20]" aria-hidden /> : null}
-                        <span className="truncate font-medium">{p.name}</span>
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <span
-                          className={cn(
-                            "rounded px-1.5 py-0.5",
-                            isT ? "bg-[#1B5E20]/10 text-[#1B5E20]" : "bg-muted text-muted-foreground",
-                          )}
-                        >
-                          {p.role === "teacher" ? t("liveSession.teacherBadge") : t("liveSession.studentBadge")}
-                        </span>
-                        {p.isMuted ? (
-                          <MicOff className="size-4 shrink-0 text-[#EF5350]" aria-label={t("liveSession.mute")} />
-                        ) : (
-                          <Mic className="size-4 shrink-0 text-[#4CAF50]" aria-label={t("liveSession.unmute")} />
-                        )}
-                      </div>
-                    </div>
-                    {isTeacher && !isT && p.role === "student" ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="min-w-0 shrink gap-1.5 px-2.5"
-                        onClick={() =>
-                          isReciter ? onClearReciter() : onSetReciter(p.userId)
-                        }
-                      >
-                        {isReciter ? (
-                          <UserMinus className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
-                        ) : (
-                          <UserCheck className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
-                        )}
-                        <span className="truncate">
-                          {isReciter
-                            ? t("liveSession.clearReciter")
-                            : t("liveSession.setReciter")}
-                        </span>
-                      </Button>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="space-y-4 pb-4">
+            {teacher ? <TeacherRow participant={teacher} /> : null}
+
+            {donePlans.length > 0 ? (
+              <ZoneSection title={t("liveSession.zoneDone")}>
+                {donePlans.map((plan) => (
+                  <DonePlanRow
+                    key={plan.id}
+                    plan={plan}
+                    studentName={participantById.get(plan.student_id ?? "")?.name ?? plan.student_name ?? "—"}
+                    isTeacher={isTeacher}
+                    locale={loc}
+                    onReopen={(clearGrade) => {
+                      wrapPlanOp(() => onReopenPlan(plan.id, clearGrade));
+                    }}
+                  />
+                ))}
+              </ZoneSection>
+            ) : null}
+
+            {activePlan ? (
+              <ZoneSection title={t("liveSession.zoneNow")}>
+                <NowRecitingCard
+                  plan={activePlan}
+                  studentName={
+                    participantById.get(activePlan.student_id ?? "")?.name ?? activePlan.student_name ?? "—"
+                  }
+                  locale={loc}
+                  isTeacher={isTeacher}
+                  onPause={() => wrapPlanOp(() => onPausePlan(activePlan.id))}
+                  onSkip={() => wrapPlanOp(() => onSkipPlan(activePlan.id))}
+                  onEndGrade={() => onEndGradeForPlan(activePlan.id)}
+                />
+              </ZoneSection>
+            ) : null}
+
+            {pausedPlans.length > 0 ? (
+              <ZoneSection title={t("liveSession.zonePaused")}>
+                {pausedPlans.map((plan) => (
+                  <PausedPlanRow
+                    key={plan.id}
+                    plan={plan}
+                    studentName={participantById.get(plan.student_id ?? "")?.name ?? plan.student_name ?? "—"}
+                    locale={loc}
+                    isTeacher={isTeacher}
+                    onResume={() => wrapPlanOp(() => onStartPlan(plan.id))}
+                    onMarkDone={() => onEndGradeForPlan(plan.id)}
+                    onSkip={() => wrapPlanOp(() => onSkipPlan(plan.id))}
+                  />
+                ))}
+              </ZoneSection>
+            ) : null}
+
+            {plannedPlans.length > 0 ? (
+              <ZoneSection title={t("liveSession.zoneNext")}>
+                <SessionRecitationsSortableList
+                  items={plannedPlans}
+                  fullPlansForReorderMerge={plans}
+                  sessionId={sessionId}
+                  showStudent
+                  liveConnectedStudentIds={connectedStudentIds}
+                  plannedToolbar={plannedToolbar}
+                  onItemsChange={onPlansChange}
+                  onPersistFailed={() => onPlanTransitionError(t("plan.reorderFailed"))}
+                  onEditItem={undefined}
+                />
+              </ZoneSection>
+            ) : null}
+
+            {onlineNotInPlan.length > 0 ? (
+              <ZoneSection title={t("liveSession.zoneOnlineNotInPlan")}>
+                {onlineNotInPlan.map((p) => (
+                  <NotInPlanRow key={p.userId} participant={p} isTeacher={isTeacher} onGiveMic={() => onAdHocStart(p.userId)} />
+                ))}
+              </ZoneSection>
+            ) : null}
+
+            {offlineStudents.length > 0 ? (
+              <ZoneSection title={t("liveSession.zoneNotConnected")}>
+                {offlineStudents.map((s) => (
+                  <OfflineStudentRow key={s.student_id} studentName={s.student_name} />
+                ))}
+              </ZoneSection>
+            ) : null}
+          </div>
         </div>
       </SheetContent>
     </Sheet>

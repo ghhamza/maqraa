@@ -5,6 +5,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useBlocker, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
+import type { PlanStatusChangedMessage } from "../../hooks/useSessionWebSocket";
+import { useSessionPlans } from "../../hooks/useSessionPlans";
 import type {
   ErrorAnnotation,
   ErrorCategory,
@@ -27,6 +29,7 @@ import {
   LiveSessionOverflowSheet,
 } from "../../components/session/LiveSessionMobileChrome";
 import { ParticipantDrawer } from "../../components/session/ParticipantDrawer";
+import { AdHocStartModal } from "../../components/session/AdHocStartModal";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import {
   LiveSessionAnotherTab,
@@ -60,6 +63,14 @@ import type { Riwaya } from "../../lib/quranService";
 import { GradingPanel } from "../../components/session/GradingPanel";
 import { ReconnectingOverlay } from "../../components/session/ReconnectingOverlay";
 import { SessionStatusCorner } from "../../components/session/SessionStatusCorner";
+import {
+  StudentPlanPauseSkipNotice,
+  type StudentPlanNoticeKind,
+} from "../../components/session/StudentPlanPauseSkipNotice";
+import {
+  TeacherActiveReciterPeek,
+  type TeacherReciterPeek,
+} from "../../components/session/TeacherActiveReciterPeek";
 import { AnnotationToolbar, type AnnotationTarget } from "../../components/session/AnnotationToolbar";
 import { StudentAnnotationPopover } from "../../components/session/StudentAnnotationPopover";
 import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudioButton";
@@ -168,21 +179,10 @@ function LiveSessionPageInner() {
     ayahEnd: number;
   } | null>(null);
 
-  const [gradingDialogOpen, setGradingDialogOpen] = useState(false);
-  /** Bumps when the grading modal opens so GradingPanel remounts with fresh surah/ayah state. */
-  const [gradingDialogSeq, setGradingDialogSeq] = useState(0);
-  const [gradingDialogContext, setGradingDialogContext] = useState<{
-    participant: SessionParticipant;
-    currentAyah: { surah: number; ayah: number } | null;
-    highlightRange: { surah: number; ayahStart: number; ayahEnd: number } | null;
-  } | null>(null);
-  const skipGradingModalRef = useRef(false);
-  const prevActiveReciterIdRef = useRef<string | null>(null);
-  const gradingContextSnapshotRef = useRef<{
-    participant: SessionParticipant;
-    currentAyah: { surah: number; ayah: number } | null;
-    highlightRange: { surah: number; ayahStart: number; ayahEnd: number } | null;
-  } | null>(null);
+  const [sessionPlans, setSessionPlans] = useState<RecitationPublic[]>([]);
+  const [adHocStudentId, setAdHocStudentId] = useState<string | null>(null);
+  const [planEndGradeDialogOpen, setPlanEndGradeDialogOpen] = useState(false);
+  const [planEndGradePlanId, setPlanEndGradePlanId] = useState<string | null>(null);
 
   const studentPopoverPinnedRef = useRef(false);
   const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -268,6 +268,35 @@ function LiveSessionPageInner() {
     });
   }, [id, navigate, t]);
 
+  const refetchPlans = useCallback(async () => {
+    if (!id) return;
+    try {
+      const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
+        params: { session_id: id, limit: 100 },
+      });
+      setSessionPlans(data.items);
+    } catch {
+      /* ignore */
+    }
+  }, [id]);
+
+  const handlePlanStatusChanged = useCallback(
+    (evt: PlanStatusChangedMessage) => {
+      setSessionPlans((prev) => {
+        const idx = prev.findIndex((p) => p.id === evt.recitation_id);
+        if (idx === -1) {
+          void refetchPlans();
+          return prev;
+        }
+        const next = [...prev];
+        const row = next[idx]!;
+        next[idx] = { ...row, plan_status: evt.plan_status };
+        return next;
+      });
+    },
+    [refetchPlans],
+  );
+
   const onGradeNotification = useCallback(
     (grade: string, notes?: string) => {
       setGradeToast({ grade, notes });
@@ -313,6 +342,22 @@ function LiveSessionPageInner() {
   }, [loadSessionAndRoom]);
 
   const sessionReady = !!(sessionDetail && room && id && user && token);
+
+  useCancellableEffect(
+    async (signal) => {
+      if (!id || !sessionReady) return;
+      try {
+        const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
+          params: { session_id: id, limit: 100 },
+          signal,
+        });
+        if (!signal.aborted) setSessionPlans(data.items);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "CanceledError") return;
+      }
+    },
+    [id, sessionReady],
+  );
 
   const sessionState = useSessionState({
     sessionId: id ?? "",
@@ -364,9 +409,12 @@ function LiveSessionPageInner() {
     onParticipantLeft: (_userId, name) => {
       if (name) setAnnounce(t("liveSession.userLeftAnnounce", { name }));
     },
+    onPlanStatusChanged: handlePlanStatusChanged,
   });
 
   isTeacherRef.current = sessionState.isTeacher;
+
+  const planOps = useSessionPlans({ setPlans: setSessionPlans });
 
   const browserSupported = typeof RTCPeerConnection !== "undefined";
   const blocker = useBlocker(
@@ -569,6 +617,25 @@ function LiveSessionPageInner() {
     }
   }, [syncSurah, syncAyah, autoFollow, isTeacher, setHighlightRange, setActiveWord]);
 
+  /** Teacher: when a plan gets the mic (in_progress), jump the mushaf to that turn and sync ayah for the room. */
+  const sessionPlansRef = useRef(sessionPlans);
+  sessionPlansRef.current = sessionPlans;
+  const goToAyahForMicRef = useRef(interaction.goToAyah);
+  goToAyahForMicRef.current = interaction.goToAyah;
+  const setCurrentAyahForMicRef = useRef(sessionState.setCurrentAyah);
+  setCurrentAyahForMicRef.current = sessionState.setCurrentAyah;
+  const activeMicNavKey = useMemo(() => {
+    const active = sessionPlans.find((p) => p.plan_status === "in_progress");
+    return active ? `${active.id}:${active.surah}:${active.ayah_start}` : null;
+  }, [sessionPlans]);
+  useEffect(() => {
+    if (!isTeacher || !sessionReady || anotherTab || !activeMicNavKey) return;
+    const active = sessionPlansRef.current.find((p) => p.plan_status === "in_progress");
+    if (!active) return;
+    goToAyahForMicRef.current(active.surah, active.ayah_start);
+    setCurrentAyahForMicRef.current(active.surah, active.ayah_start);
+  }, [isTeacher, sessionReady, anotherTab, activeMicNavKey]);
+
   const closeAnnotationToolbar = useCallback(() => setAnnotationTarget(null), []);
 
   const handleLiveWordClick = useCallback(
@@ -627,6 +694,85 @@ function LiveSessionPageInner() {
     if (!rid) return null;
     return sessionState.state.participants.find((p) => p.userId === rid) ?? null;
   }, [sessionState.state.activeReciterId, sessionState.state.participants]);
+
+  const planEndGradePlan = useMemo(
+    () => (planEndGradePlanId ? sessionPlans.find((x) => x.id === planEndGradePlanId) ?? null : null),
+    [planEndGradePlanId, sessionPlans],
+  );
+
+  const planEndGradeParticipant = useMemo((): SessionParticipant | null => {
+    const plan = planEndGradePlan;
+    if (!plan?.student_id) return null;
+    const part = sessionState.state.participants.find((x) => x.userId === plan.student_id);
+    if (part) return part;
+    return {
+      userId: plan.student_id,
+      name: plan.student_name ?? "—",
+      role: "student",
+      isMuted: true,
+      joinedAt: "",
+    };
+  }, [planEndGradePlan, sessionState.state.participants]);
+
+  /** Student-only: show a fixed notice when this user's plan row is paused or skipped by the teacher. */
+  const studentPlanNoticeKind = useMemo((): StudentPlanNoticeKind | null => {
+    if (sessionState.isTeacher || !user?.id) return null;
+    const mine = sessionPlans.filter((p) => p.student_id === user.id);
+    if (mine.some((p) => p.plan_status === "paused")) return "paused";
+    if (mine.some((p) => p.plan_status === "skipped")) return "skipped";
+    return null;
+  }, [sessionState.isTeacher, user?.id, sessionPlans]);
+
+  /** Teacher: compact “who is reciting” control; opens participant drawer (same as in-drawer NOW card). */
+  const teacherReciterPeek = useMemo((): TeacherReciterPeek | null => {
+    if (!isTeacher || !sessionDetail?.teacher_id) return null;
+    const tid = sessionDetail.teacher_id;
+    const plan = sessionPlans.find((p) => p.plan_status === "in_progress") ?? null;
+    if (plan?.student_id) {
+      const part = sessionState.state.participants.find((p) => p.userId === plan.student_id);
+      const name = part?.name ?? plan.student_name ?? "—";
+      return { kind: "plan", plan, studentName: name };
+    }
+    const rid = sessionState.state.activeReciterId;
+    if (rid && rid !== tid) {
+      const part = sessionState.state.participants.find((p) => p.userId === rid);
+      if (part) return { kind: "mic", studentName: part.name };
+    }
+    return null;
+  }, [
+    isTeacher,
+    sessionDetail?.teacher_id,
+    sessionPlans,
+    sessionState.state.activeReciterId,
+    sessionState.state.participants,
+  ]);
+
+  useEffect(() => {
+    if (!planEndGradeDialogOpen || !planEndGradePlanId) return;
+    const p = sessionPlans.find((x) => x.id === planEndGradePlanId);
+    if (!p || (p.plan_status !== "in_progress" && p.plan_status !== "paused")) {
+      setPlanEndGradeDialogOpen(false);
+      setPlanEndGradePlanId(null);
+    }
+  }, [planEndGradeDialogOpen, planEndGradePlanId, sessionPlans]);
+
+  const offlineSessionStudents = useMemo(() => {
+    const att = sessionDetail?.attendance;
+    if (!att?.length || !sessionDetail?.teacher_id) return [];
+    const onlineIds = new Set(sessionState.state.participants.map((p) => p.userId));
+    const planStudentIds = new Set(
+      sessionPlans.map((r) => r.student_id).filter((id): id is string => Boolean(id)),
+    );
+    const tid = sessionDetail.teacher_id;
+    const out: { student_id: string; student_name: string }[] = [];
+    for (const row of att) {
+      if (!row.student_id || row.student_id === tid) continue;
+      if (onlineIds.has(row.student_id)) continue;
+      if (planStudentIds.has(row.student_id)) continue;
+      out.push({ student_id: row.student_id, student_name: row.student_name });
+    }
+    return out;
+  }, [sessionDetail?.attendance, sessionDetail?.teacher_id, sessionState.state.participants, sessionPlans]);
 
   const ensureRecitation = useCallback(async (): Promise<string | null> => {
     if (currentRecitationId) return currentRecitationId;
@@ -797,44 +943,6 @@ function LiveSessionPageInner() {
   ]);
 
   useEffect(() => {
-    if (activeReciterParticipant) {
-      const [pageSurah, pageAyah] = getSurahAyahAtPageStart(page, riwaya);
-      const fallbackAyah = { surah: pageSurah, ayah: pageAyah };
-      gradingContextSnapshotRef.current = {
-        participant: activeReciterParticipant,
-        currentAyah: sessionState.state.currentAyah ?? fallbackAyah,
-        highlightRange: interaction.highlightRange,
-      };
-    }
-  }, [
-    activeReciterParticipant,
-    sessionState.state.currentAyah,
-    interaction.highlightRange,
-    page,
-    riwaya,
-  ]);
-
-  useEffect(() => {
-    const cur = sessionState.state.activeReciterId;
-    const prev = prevActiveReciterIdRef.current;
-
-    if (prev && !cur && isTeacher && id) {
-      if (skipGradingModalRef.current) {
-        skipGradingModalRef.current = false;
-      } else {
-        const ctx = gradingContextSnapshotRef.current;
-        if (ctx && ctx.participant.userId === prev) {
-          setGradingDialogContext(ctx);
-          setGradingDialogOpen(true);
-          setGradingDialogSeq((n) => n + 1);
-        }
-      }
-    }
-
-    prevActiveReciterIdRef.current = cur;
-  }, [sessionState.state.activeReciterId, isTeacher, id]);
-
-  useEffect(() => {
     if (!currentRecitationId) return;
     void loadAnnotations(currentRecitationId);
   }, [currentRecitationId, loadAnnotations]);
@@ -862,7 +970,8 @@ function LiveSessionPageInner() {
         if (forSessionAndStudent.length === 0 && forActiveStudent.length > 0 && isTeacher) {
           setAnnounce(t("annotation.noRecitation"));
         }
-        setCurrentRecitationId(forSessionAndStudent[0]?.id ?? null);
+        const inProg = forSessionAndStudent.find((r) => r.plan_status === "in_progress");
+        setCurrentRecitationId(inProg?.id ?? forSessionAndStudent[0]?.id ?? null);
       } catch (err) {
         if ((err as { name?: string })?.name === "CanceledError") return;
         if (epoch === recitationFetchEpochRef.current) setCurrentRecitationId(null);
@@ -884,7 +993,6 @@ function LiveSessionPageInner() {
   }, [livekit.setMicEnabled]);
 
   const confirmLeave = useCallback(() => {
-    skipGradingModalRef.current = true;
     disconnectWebrtc();
     sessionState.disconnect();
     setLeaveOpen(false);
@@ -893,7 +1001,6 @@ function LiveSessionPageInner() {
 
   const confirmEndSession = useCallback(async () => {
     if (!id) return;
-    skipGradingModalRef.current = true;
     setEndingSession(true);
     setEndError(null);
     try {
@@ -988,6 +1095,8 @@ function LiveSessionPageInner() {
         onDismissGradeToast={() => setGradeToast(null)}
       />
 
+      {studentPlanNoticeKind ? <StudentPlanPauseSkipNotice kind={studentPlanNoticeKind} /> : null}
+
       <main
         className={
           browserSupported
@@ -1049,6 +1158,16 @@ function LiveSessionPageInner() {
                 />
               </div>
             </MushafReader>
+            {isTeacher && teacherReciterPeek ? (
+              <div className="pointer-events-auto absolute start-2 top-2 z-10 max-w-[min(20rem,calc(100%-1rem))] md:max-w-[min(22rem,calc(100%-11rem))]">
+                <TeacherActiveReciterPeek
+                  peek={teacherReciterPeek}
+                  locale={loc}
+                  drawerOpen={drawerOpen}
+                  onOpenDrawer={() => setDrawerOpen(true)}
+                />
+              </div>
+            ) : null}
             <div className="pointer-events-auto absolute top-2 z-10 hidden end-2 md:block">
               <SessionStatusCorner
                 wsStatus={sessionState.wsStatus}
@@ -1127,23 +1246,58 @@ function LiveSessionPageInner() {
         onClose={() => setDrawerOpen(false)}
         participants={sessionState.state.participants}
         teacherId={sessionDetail.teacher_id}
-        activeReciterId={sessionState.state.activeReciterId}
         isTeacher={sessionState.isTeacher}
-        onSetReciter={sessionState.setReciter}
-        onClearReciter={sessionState.clearReciter}
+        offlineStudents={offlineSessionStudents}
+        sessionId={id}
+        plans={sessionPlans}
+        onPlansChange={setSessionPlans}
+        onStartPlan={planOps.start}
+        onPausePlan={planOps.pause}
+        onSkipPlan={planOps.skip}
+        onReopenPlan={planOps.reopen}
+        onAdHocStart={(studentId) => setAdHocStudentId(studentId)}
+        onEndGradeForPlan={(planId) => {
+          if (!sessionPlans.some((p) => p.id === planId)) return;
+          setPlanEndGradePlanId(planId);
+          setPlanEndGradeDialogOpen(true);
+          setDrawerOpen(false);
+        }}
+        onPlanTransitionError={(msg) => setAnnounce(msg)}
       />
 
-      {sessionState.isTeacher && id ? (
+      {sessionState.isTeacher && id && sessionDetail?.room_id && room ? (
+        <AdHocStartModal
+          open={adHocStudentId != null}
+          onClose={() => setAdHocStudentId(null)}
+          studentId={adHocStudentId}
+          sessionId={id}
+          roomId={sessionDetail.room_id}
+          riwaya={room.riwaya}
+          onSuccess={(rec) => {
+            setSessionPlans((prev) => {
+              if (prev.some((p) => p.id === rec.id)) {
+                return prev.map((p) => (p.id === rec.id ? rec : p));
+              }
+              return [rec, ...prev];
+            });
+            recitationFetchEpochRef.current++;
+            setCurrentRecitationId(rec.id);
+          }}
+          onErrorMessage={(msg) => setAnnounce(msg)}
+        />
+      ) : null}
+
+      {sessionState.isTeacher && id && sessionDetail ? (
         <Dialog
-          open={gradingDialogOpen}
-          onOpenChange={(open) => {
-            if (!open) {
-              setGradingDialogOpen(false);
-              setGradingDialogContext(null);
+          open={planEndGradeDialogOpen}
+          onOpenChange={(next) => {
+            if (!next) {
+              setPlanEndGradeDialogOpen(false);
+              setPlanEndGradePlanId(null);
             }
           }}
         >
-          {gradingDialogContext ? (
+          {planEndGradePlan && planEndGradeParticipant ? (
             <DialogContent
               className="max-h-[min(90dvh,800px)] gap-0 overflow-y-auto p-0 sm:max-w-lg"
               showCloseButton
@@ -1159,22 +1313,31 @@ function LiveSessionPageInner() {
                 </DialogHeader>
               </div>
               <GradingPanel
-                key={`grading-${gradingDialogSeq}-${gradingDialogContext.participant.userId}`}
+                key={`plan-end-grade-${planEndGradePlan.id}`}
                 hideTitle
                 className="border-0 bg-transparent px-4 pb-4 pt-2"
-                activeReciter={gradingDialogContext.participant}
-                currentAyah={gradingDialogContext.currentAyah}
-                highlightRange={gradingDialogContext.highlightRange}
+                activeReciter={planEndGradeParticipant}
+                currentAyah={{ surah: planEndGradePlan.surah, ayah: planEndGradePlan.ayah_start }}
+                highlightRange={{
+                  surah: planEndGradePlan.surah,
+                  ayahStart: planEndGradePlan.ayah_start,
+                  ayahEnd: planEndGradePlan.ayah_end,
+                }}
                 sessionId={id}
                 roomId={sessionDetail.room_id}
                 riwaya={riwaya}
                 locale={loc}
-                onGradeSubmitted={(studentId, grade, notes) => {
-                  sessionState.sendGradeNotification(studentId, grade, notes);
-                }}
-                onRecitationCreated={(rec) => {
+                gradingMode="completePlan"
+                planToComplete={planEndGradePlan}
+                onPlanCompleted={(rec) => {
+                  setSessionPlans((prev) => prev.map((p) => (p.id === rec.id ? rec : p)));
+                  setPlanEndGradeDialogOpen(false);
+                  setPlanEndGradePlanId(null);
                   recitationFetchEpochRef.current++;
                   setCurrentRecitationId(rec.id);
+                }}
+                onGradeSubmitted={(studentId, grade, notes) => {
+                  sessionState.sendGradeNotification(studentId, grade, notes);
                 }}
               />
             </DialogContent>
@@ -1194,7 +1357,6 @@ function LiveSessionPageInner() {
         navBlockOpen={blocker.state === "blocked"}
         onNavStay={() => blocker.reset?.()}
         onNavLeave={() => {
-          skipGradingModalRef.current = true;
           disconnectWebrtc();
           sessionState.disconnect();
           blocker.proceed?.();

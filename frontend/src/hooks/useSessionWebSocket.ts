@@ -24,6 +24,16 @@ export interface RoomStateMessage {
   room_id: string;
 }
 
+export type PlanStatusWire = "planned" | "in_progress" | "paused" | "completed" | "skipped";
+
+/** Server → client: plan row lifecycle update (snake_case on wire). */
+export interface PlanStatusChangedMessage {
+  type: "plan-status-changed";
+  recitation_id: string;
+  plan_status: PlanStatusWire;
+  active_reciter_id: string | null;
+}
+
 export interface UseSessionWebSocketOptions {
   sessionId: string;
   token: string;
@@ -45,6 +55,8 @@ export interface UseSessionWebSocketOptions {
   onAnnotationAdded?: (annotation: ErrorAnnotation) => void;
   /** An annotation was removed (by the teacher). */
   onAnnotationRemoved?: (annotationId: string) => void;
+  /** Session plan row status changed (broadcast to room). */
+  onPlanStatusChanged?: (evt: PlanStatusChangedMessage) => void;
   onError?: (message: string) => void;
   /** Server closed this socket because the same user joined elsewhere — do not reconnect. */
   onAnotherTab?: () => void;
@@ -520,6 +532,23 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
             const annotationId = msg.annotation_id as string | undefined;
             if (annotationId && o.onAnnotationRemoved) {
               o.onAnnotationRemoved(annotationId);
+            }
+            break;
+          }
+          case "plan-status-changed": {
+            const recitation_id = msg.recitation_id as string | undefined;
+            const plan_status = msg.plan_status as PlanStatusWire | undefined;
+            if (recitation_id && plan_status && o.onPlanStatusChanged) {
+              const active_reciter_id =
+                msg.active_reciter_id === undefined || msg.active_reciter_id === null
+                  ? null
+                  : (msg.active_reciter_id as string);
+              o.onPlanStatusChanged({
+                type: "plan-status-changed",
+                recitation_id,
+                plan_status,
+                active_reciter_id,
+              });
             }
             break;
           }

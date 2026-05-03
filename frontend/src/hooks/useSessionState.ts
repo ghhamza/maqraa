@@ -3,7 +3,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import type { ErrorAnnotation } from "../types";
-import type { ParticipantInfo, RoomStateMessage } from "./useSessionWebSocket";
+import type { ParticipantInfo, PlanStatusChangedMessage, RoomStateMessage } from "./useSessionWebSocket";
 import { useSessionWebSocket } from "./useSessionWebSocket";
 
 export interface SessionParticipant {
@@ -80,6 +80,7 @@ export interface UseSessionStateOptions {
   onMsConsumerResumed?: (consumerId: string) => void;
   onMsNewProducer?: (info: { producerId: string; userId: string; kind: string }) => void;
   onMsProducerClosed?: (producerId: string) => void;
+  onPlanStatusChanged?: (evt: PlanStatusChangedMessage) => void;
 }
 
 export interface UseSessionStateReturn {
@@ -160,6 +161,7 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
     onMsConsumerResumed,
     onMsNewProducer,
     onMsProducerClosed,
+    onPlanStatusChanged,
   } = options;
 
   const [state, setState] = useState<SessionState>(() => emptyState(sessionId, ""));
@@ -242,6 +244,7 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
     onMsConsumerResumed,
     onMsNewProducer,
     onMsProducerClosed,
+    onPlanStatusChanged,
   });
 
   const me = state.participants.find((p) => p.userId === myUserId);
