@@ -4,21 +4,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useBlocker, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
+import { userFacingApiError } from "../../lib/api";
 import type { PlanStatusChangedMessage } from "../../hooks/useSessionWebSocket";
-import { useSessionPlans } from "../../hooks/useSessionPlans";
 import type {
   ErrorAnnotation,
   ErrorCategory,
   ErrorSeverity,
-  Paginated,
-  RecitationPublic,
-  Room,
-  SessionDetail,
 } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { useMushafInteraction, type MushafWordClickData } from "../../hooks/useMushafInteraction";
-import { useAnnotations } from "../../hooks/useAnnotations";
 import { useSessionState, type SessionParticipant } from "../../hooks/useSessionState";
 import { MushafCanvas } from "../../components/mushaf/MushafCanvas";
 import { MushafNavigatorSheet } from "../../components/mushaf/MushafNavigatorSheet";
@@ -76,7 +70,15 @@ import { StudentAnnotationPopover } from "../../components/session/StudentAnnota
 import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudioButton";
 import { cn } from "@/lib/utils";
 import { useLivekitConnection } from "@/hooks/useLivekitConnection";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
+import { useRoom } from "../../data/rooms";
+import {
+  useCreateRecitation,
+  usePatchSessionRecitationsCache,
+  usePlanTransitions,
+  useSessionRecitations,
+} from "../../data/recitations";
+import { usePatchSessionStatus, useSessionDetail } from "../../data/sessions";
+import { useAnnotations } from "../../data/annotations";
 function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
@@ -134,11 +136,7 @@ function LiveSessionPageInner() {
   const { t, i18n } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const token = useAuthStore((s) => s.token);
-
-  const [sessionDetail, setSessionDetail] = useState<SessionDetail | null>(null);
-  const [room, setRoom] = useState<Room | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const patchSessionRecitations = usePatchSessionRecitationsCache(id);
   const [teacherPage, setTeacherPage] = useState(1);
   const [studentBrowsePage, setStudentBrowsePage] = useState(1);
   const [autoFollow, setAutoFollow] = useState(true);
@@ -147,7 +145,6 @@ function LiveSessionPageInner() {
   const [navigatorOpen, setNavigatorOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [endSessionOpen, setEndSessionOpen] = useState(false);
-  const [endingSession, setEndingSession] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
   const [gradeToast, setGradeToast] = useState<{ grade: string; notes?: string } | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -158,8 +155,8 @@ function LiveSessionPageInner() {
   const [reconnectedToast, setReconnectedToast] = useState(false);
   const [annotationTarget, setAnnotationTarget] = useState<AnnotationTarget | null>(null);
   const [annotationMode, setAnnotationMode] = useState(false);
-  const [currentRecitationId, setCurrentRecitationId] = useState<string | null>(null);
-  /** Bumped when the active-reciter fetch starts and when grading creates a recitation; stale fetch completions must not overwrite `currentRecitationId`. */
+  const [currentRecitationId, setCurrentRecitation] = useState<string | null>(null);
+  /** Bumped when grading creates a recitation; used as an invalidation signal in existing handlers. */
   const recitationFetchEpochRef = useRef(0);
   /** Deduplicates concurrent `ensureRecitation` POSTs while the first is in flight. */
   const ensureRecitationInFlightRef = useRef<Promise<string | null> | null>(null);
@@ -179,7 +176,6 @@ function LiveSessionPageInner() {
     ayahEnd: number;
   } | null>(null);
 
-  const [sessionPlans, setSessionPlans] = useState<RecitationPublic[]>([]);
   const [adHocStudentId, setAdHocStudentId] = useState<string | null>(null);
   const [planEndGradeDialogOpen, setPlanEndGradeDialogOpen] = useState(false);
   const [planEndGradePlanId, setPlanEndGradePlanId] = useState<string | null>(null);
@@ -257,8 +253,6 @@ function LiveSessionPageInner() {
   annotationTargetRef.current = annotationTarget;
   const isTeacherRef = useRef(false);
 
-  const riwaya = (room?.riwaya ?? "hafs") as Riwaya;
-  const totalPages = getTotalPages(riwaya);
   const loc = i18n.language === "ar" ? "ar" : i18n.language === "fr" ? "fr" : "en";
 
   const onSessionEndedNav = useCallback(() => {
@@ -268,33 +262,34 @@ function LiveSessionPageInner() {
     });
   }, [id, navigate, t]);
 
+  /**
+   * Session plans. Source of truth for the plans list.
+   *
+   * WebSocket events (`plan_added`, `plan_status_changed`, `plan_reordered`)
+   * reconcile through query cache updates on this key.
+   */
+  const sessionPlansQuery = useSessionRecitations(id, 100, !!id);
+  const sessionPlans = sessionPlansQuery.data ?? [];
+
   const refetchPlans = useCallback(async () => {
-    if (!id) return;
-    try {
-      const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-        params: { session_id: id, limit: 100 },
-      });
-      setSessionPlans(data.items);
-    } catch {
-      /* ignore */
-    }
-  }, [id]);
+    await sessionPlansQuery.refetch();
+  }, [sessionPlansQuery]);
 
   const handlePlanStatusChanged = useCallback(
     (evt: PlanStatusChangedMessage) => {
-      setSessionPlans((prev) => {
+      let found = false;
+      patchSessionRecitations((prev = []) => {
         const idx = prev.findIndex((p) => p.id === evt.recitation_id);
-        if (idx === -1) {
-          void refetchPlans();
-          return prev;
-        }
+        if (idx === -1) return prev;
+        found = true;
         const next = [...prev];
         const row = next[idx]!;
         next[idx] = { ...row, plan_status: evt.plan_status };
         return next;
       });
+      if (!found) void refetchPlans();
     },
-    [refetchPlans],
+    [patchSessionRecitations, refetchPlans],
   );
 
   const onGradeNotification = useCallback(
@@ -306,58 +301,52 @@ function LiveSessionPageInner() {
     [t],
   );
 
-  const loadSessionAndRoom = useCallback(async () => {
-    if (!id) return;
-    setLoadError(null);
-    setLoading(true);
-    try {
-      const { data } = await api.get<SessionDetail>(`sessions/${id}`);
-      if (data.status !== "in_progress") {
-        navigate(`/sessions/${id}`, {
-          replace: true,
-          state: { liveSessionError: t("liveSession.sessionNotActive") },
-        });
-        return;
-      }
-      setSessionDetail(data);
-      const { data: roomData } = await api.get<Room>(`rooms/${data.room_id}`);
-      setRoom(roomData);
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 403) {
-        navigate(`/sessions/${id}`, {
-          replace: true,
-          state: { liveSessionError: t("liveSession.notEnrolled") },
-        });
-        return;
-      }
-      setLoadError(userFacingApiError(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [id, navigate, t]);
+  /**
+   * Session detail. Source of truth for `sessionDetail`, gating most other
+   * queries on this resolving first.
+   *
+   * WebSocket events that mutate session state (`session_status_changed`,
+   * `reciter_changed`) reconcile through this same cache key.
+   */
+  const sessionDetailQuery = useSessionDetail(id, !!id);
+
+  /**
+   * Room detail. Depends on the session's `room_id`. Doesn't change during a
+   * session, so a long staleTime is appropriate.
+   */
+  const roomQuery = useRoom(sessionDetailQuery.data?.room_id);
+
+  const sessionDetail = sessionDetailQuery.data ?? null;
+  const room = roomQuery.data ?? null;
+  const riwaya = (room?.riwaya ?? "hafs") as Riwaya;
+  const totalPages = getTotalPages(riwaya);
+  const loading = sessionDetailQuery.isPending || roomQuery.isPending;
+  const detailErrorStatus =
+    (sessionDetailQuery.error as { response?: { status?: number } } | null)?.response?.status;
+  const loadError =
+    sessionDetailQuery.error && detailErrorStatus !== 403
+      ? userFacingApiError(sessionDetailQuery.error)
+      : null;
 
   useEffect(() => {
-    void loadSessionAndRoom();
-  }, [loadSessionAndRoom]);
+    if (!id) return;
+    if (sessionDetailQuery.data && sessionDetailQuery.data.status !== "in_progress") {
+      navigate(`/sessions/${id}`, {
+        replace: true,
+        state: { liveSessionError: t("liveSession.sessionNotActive") },
+      });
+      return;
+    }
+    if (detailErrorStatus === 403) {
+      navigate(`/sessions/${id}`, {
+        replace: true,
+        state: { liveSessionError: t("liveSession.notEnrolled") },
+      });
+    }
+  }, [id, sessionDetailQuery.data, detailErrorStatus, navigate, t]);
 
   const sessionReady = !!(sessionDetail && room && id && user && token);
 
-  useCancellableEffect(
-    async (signal) => {
-      if (!id || !sessionReady) return;
-      try {
-        const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-          params: { session_id: id, limit: 100 },
-          signal,
-        });
-        if (!signal.aborted) setSessionPlans(data.items);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-      }
-    },
-    [id, sessionReady],
-  );
 
   const sessionState = useSessionState({
     sessionId: id ?? "",
@@ -414,7 +403,7 @@ function LiveSessionPageInner() {
 
   isTeacherRef.current = sessionState.isTeacher;
 
-  const planOps = useSessionPlans({ setPlans: setSessionPlans });
+  const planOps = usePlanTransitions(id ?? "");
 
   const browserSupported = typeof RTCPeerConnection !== "undefined";
   const blocker = useBlocker(
@@ -774,6 +763,12 @@ function LiveSessionPageInner() {
     return out;
   }, [sessionDetail?.attendance, sessionDetail?.teacher_id, sessionState.state.participants, sessionPlans]);
 
+  const ensureRecitationMutation = useCreateRecitation(
+    id ?? "",
+    () => {},
+    () => setAnnounce(t("annotation.creationFailed")),
+  );
+
   const ensureRecitation = useCallback(async (): Promise<string | null> => {
     if (currentRecitationId) return currentRecitationId;
     if (!activeReciterParticipant?.userId) {
@@ -803,17 +798,16 @@ function LiveSessionPageInner() {
           ayah_start = a;
           ayah_end = a;
         }
-        const { data } = await api.post<RecitationPublic>("recitations", {
+        const data = await ensureRecitationMutation.mutateAsync({
           student_id: activeReciterParticipant.userId,
           room_id: sessionDetail.room_id,
-          session_id: id,
+          session_id: id!,
           surah,
           ayah_start,
           ayah_end,
           riwaya,
         });
         recitationFetchEpochRef.current++;
-        setCurrentRecitationId(data.id);
         setAnnounce(t("annotation.recitationCreated"));
         return data.id;
       } catch {
@@ -947,38 +941,54 @@ function LiveSessionPageInner() {
     void loadAnnotations(currentRecitationId);
   }, [currentRecitationId, loadAnnotations]);
 
-  // Same recitation row for teacher and all students: the active reciter's latest for this session.
-  // Defensive `session_id === id` avoids picking legacy rows with NULL or a different session (WS create-annotation rejects those).
-  useCancellableEffect(
-    async (signal) => {
-      if (!id || !activeReciterParticipant?.userId) {
-        setCurrentRecitationId(null);
-        return;
-      }
-      const epoch = ++recitationFetchEpochRef.current;
-      try {
-        const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-          params: { session_id: id, limit: 50 },
-          signal,
-        });
-        if (signal.aborted || epoch !== recitationFetchEpochRef.current) return;
-        const forActiveStudent = data.items.filter((r) => r.student_id === activeReciterParticipant.userId);
-        const forSessionAndStudent = forActiveStudent.filter((r) => r.session_id === id);
-        forSessionAndStudent.sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        );
-        if (forSessionAndStudent.length === 0 && forActiveStudent.length > 0 && isTeacher) {
-          setAnnounce(t("annotation.noRecitation"));
-        }
-        const inProg = forSessionAndStudent.find((r) => r.plan_status === "in_progress");
-        setCurrentRecitationId(inProg?.id ?? forSessionAndStudent[0]?.id ?? null);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        if (epoch === recitationFetchEpochRef.current) setCurrentRecitationId(null);
-      }
-    },
-    [id, activeReciterParticipant?.userId, isTeacher, t],
+  /**
+   * Recitations for this session, used to derive the current active recitation
+   * (the active reciter's latest in_progress or most-recent row).
+   *
+   * WebSocket events that change recitation rows (`plan_added`,
+   * `plan_status_changed`, `plan_reordered`) currently mutate the mirrored
+   * `sessionPlans` state; Prompt 11 will move those writes to query cache.
+   */
+  const sessionRecitationsForActiveQuery = useSessionRecitations(
+    id,
+    50,
+    !!id && !!activeReciterParticipant?.userId,
   );
+
+  useEffect(() => {
+    if (!activeReciterParticipant?.userId) {
+      setCurrentRecitation(null);
+      return;
+    }
+    const items = sessionRecitationsForActiveQuery.data ?? [];
+    const forActiveStudent = items.filter(
+      (r) => r.student_id === activeReciterParticipant.userId,
+    );
+    const forSessionAndStudent = forActiveStudent.filter((r) => r.session_id === id);
+    forSessionAndStudent.sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+    const inProg = forSessionAndStudent.find((r) => r.plan_status === "in_progress");
+    setCurrentRecitation(inProg?.id ?? forSessionAndStudent[0]?.id ?? null);
+  }, [sessionRecitationsForActiveQuery.data, activeReciterParticipant?.userId, id]);
+
+  useEffect(() => {
+    if (!activeReciterParticipant?.userId || !isTeacher) return;
+    const items = sessionRecitationsForActiveQuery.data ?? [];
+    const forActiveStudent = items.filter(
+      (r) => r.student_id === activeReciterParticipant.userId,
+    );
+    const forSessionAndStudent = forActiveStudent.filter((r) => r.session_id === id);
+    if (forSessionAndStudent.length === 0 && forActiveStudent.length > 0) {
+      setAnnounce(t("annotation.noRecitation"));
+    }
+  }, [
+    sessionRecitationsForActiveQuery.data,
+    activeReciterParticipant?.userId,
+    id,
+    isTeacher,
+    t,
+  ]);
 
   useEffect(() => {
     setAnnotationTarget(null);
@@ -999,12 +1009,10 @@ function LiveSessionPageInner() {
     navigate(`/sessions/${id}`, { replace: true });
   }, [disconnectWebrtc, sessionState, navigate, id]);
 
-  const confirmEndSession = useCallback(async () => {
-    if (!id) return;
-    setEndingSession(true);
-    setEndError(null);
-    try {
-      await api.put(`sessions/${id}`, { status: "completed" });
+  const endSessionMutation = usePatchSessionStatus(
+    id ?? "",
+    user?.id ?? null,
+    () => {
       disconnectWebrtc();
       sessionState.disconnect();
       setEndSessionOpen(false);
@@ -1012,12 +1020,17 @@ function LiveSessionPageInner() {
         replace: true,
         state: { sessionEndedMessage: t("liveSession.sessionEndedMessage") },
       });
-    } catch (err: unknown) {
-      setEndError(userFacingApiError(err));
-    } finally {
-      setEndingSession(false);
-    }
-  }, [id, navigate, sessionState, t, disconnectWebrtc]);
+    },
+    (message) => setEndError(message),
+  );
+
+  const endingSession = endSessionMutation.isPending;
+
+  const confirmEndSession = useCallback(() => {
+    if (!id) return;
+    setEndError(null);
+    endSessionMutation.mutate("completed");
+  }, [id, endSessionMutation]);
 
   /** Current ayah for teacher nav (keyboard N/P); UI strip removed until product decides. */
   const currentAyahForNav = sessionState.state.currentAyah;
@@ -1250,7 +1263,9 @@ function LiveSessionPageInner() {
         offlineStudents={offlineSessionStudents}
         sessionId={id}
         plans={sessionPlans}
-        onPlansChange={setSessionPlans}
+        onPlansChange={(next) => {
+          patchSessionRecitations(() => next);
+        }}
         onStartPlan={planOps.start}
         onPausePlan={planOps.pause}
         onSkipPlan={planOps.skip}
@@ -1274,14 +1289,13 @@ function LiveSessionPageInner() {
           roomId={sessionDetail.room_id}
           riwaya={room.riwaya}
           onSuccess={(rec) => {
-            setSessionPlans((prev) => {
+            patchSessionRecitations((prev = []) => {
               if (prev.some((p) => p.id === rec.id)) {
                 return prev.map((p) => (p.id === rec.id ? rec : p));
               }
               return [rec, ...prev];
             });
             recitationFetchEpochRef.current++;
-            setCurrentRecitationId(rec.id);
           }}
           onErrorMessage={(msg) => setAnnounce(msg)}
         />
@@ -1330,11 +1344,10 @@ function LiveSessionPageInner() {
                 gradingMode="completePlan"
                 planToComplete={planEndGradePlan}
                 onPlanCompleted={(rec) => {
-                  setSessionPlans((prev) => prev.map((p) => (p.id === rec.id ? rec : p)));
+                  patchSessionRecitations((prev = []) => prev.map((p) => (p.id === rec.id ? rec : p)));
                   setPlanEndGradeDialogOpen(false);
                   setPlanEndGradePlanId(null);
                   recitationFetchEpochRef.current++;
-                  setCurrentRecitationId(rec.id);
                 }}
                 onGradeSubmitted={(studentId, grade, notes) => {
                   sessionState.sendGradeNotification(studentId, grade, notes);

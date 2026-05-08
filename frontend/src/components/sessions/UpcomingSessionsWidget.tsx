@@ -3,13 +3,12 @@
 
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useMemo, useState } from "react";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
-import { api } from "../../lib/api";
+import { useMemo } from "react";
 import type { SessionPublic } from "../../types";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { Badge } from "../ui/Badge";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
+import { useUpcomingSessions } from "../../data/sessions";
 
 function sessionStatusVariant(s: SessionPublic["status"]): "green" | "gray" | "blue" {
   if (s === "cancelled") return "gray";
@@ -51,8 +50,11 @@ export interface UpcomingSessionsWidgetProps {
 export function UpcomingSessionsWidget({ maxItems, showViewCalendarLink, excludeIds }: UpcomingSessionsWidgetProps) {
   const { t, i18n } = useTranslation();
   const { mediumTime } = useLocaleDate();
-  const [sessions, setSessions] = useState<SessionPublic[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const upcomingQuery = useUpcomingSessions(true);
+
+  const sessions = upcomingQuery.data ?? [];
+  const loading = upcomingQuery.isPending;
 
   const excludeSet = useMemo(() => new Set(excludeIds ?? []), [excludeIds]);
   const visibleSessions = useMemo(
@@ -60,22 +62,6 @@ export function UpcomingSessionsWidget({ maxItems, showViewCalendarLink, exclude
     [sessions, excludeSet],
   );
   const displaySessions = maxItems != null ? visibleSessions.slice(0, maxItems) : visibleSessions;
-
-  useCancellableEffect(
-    async (signal) => {
-      setLoading(true);
-      try {
-        const { data } = await api.get<SessionPublic[]>("sessions/upcoming", { signal });
-        setSessions(data);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setSessions([]);
-      } finally {
-        if (!signal.aborted) setLoading(false);
-      }
-    },
-    [i18n.language],
-  );
 
   if (loading) {
     return (

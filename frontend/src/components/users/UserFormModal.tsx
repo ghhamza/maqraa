@@ -3,12 +3,12 @@
 
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
 import type { UserPublic } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
 import { FormSelect } from "../ui/select";
+import { useCreateUser, useUpdateUser } from "../../data/users";
 
 interface UserFormModalProps {
   open: boolean;
@@ -30,8 +30,24 @@ export function UserFormModal({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"student" | "teacher" | "admin">("student");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const createMutation = useCreateUser(
+    () => {
+      onSaved();
+      onClose();
+    },
+    (message) => setError(message),
+  );
+
+  const updateMutation = useUpdateUser(
+    () => {
+      onSaved();
+      onClose();
+    },
+    (message) => setError(message),
+  );
+
+  const loading = createMutation.isPending || updateMutation.isPending;
 
   useEffect(() => {
     if (!open) return;
@@ -53,33 +69,25 @@ export function UserFormModal({
     e.preventDefault();
     if (loading) return;
     setError(null);
-    setLoading(true);
-    try {
-      if (mode === "create") {
-        if (password.length < 8) {
-          setError(t("auth.passwordMin"));
-          setLoading(false);
-          return;
-        }
-        await api.post("users", {
-          name: name.trim(),
-          email: email.trim(),
-          password,
-          role,
-        });
-      } else if (user) {
-        await api.put(`users/${user.id}`, {
-          name: name.trim(),
-          email: email.trim(),
-          role,
-        });
+
+    if (mode === "create") {
+      if (password.length < 8) {
+        setError(t("auth.passwordMin"));
+        return;
       }
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(userFacingApiError(err, "users.saveFailed"));
-    } finally {
-      setLoading(false);
+      createMutation.mutate({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        role,
+      });
+    } else if (user) {
+      updateMutation.mutate({
+        id: user.id,
+        name: name.trim(),
+        email: email.trim(),
+        role,
+      });
     }
   }
 

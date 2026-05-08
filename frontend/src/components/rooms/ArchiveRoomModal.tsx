@@ -3,9 +3,9 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
+import { useArchiveRoom } from "../../data/rooms";
 
 interface ArchiveRoomModalProps {
   open: boolean;
@@ -18,26 +18,26 @@ interface ArchiveRoomModalProps {
 /** Archives the room (sets inactive). The API uses DELETE but only deactivates the row. */
 export function ArchiveRoomModal({ open, roomId, roomName, onClose, onArchived }: ArchiveRoomModalProps) {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const archiveMutation = useArchiveRoom(
+    () => {
+      onArchived();
+      onClose();
+    },
+    (message) => setError(message),
+  );
+
+  const loading = archiveMutation.isPending;
 
   useEffect(() => {
     if (open) setError(null);
   }, [open]);
 
-  async function confirmArchive() {
+  function confirmArchive() {
     if (!roomId || loading) return;
-    setLoading(true);
     setError(null);
-    try {
-      await api.delete(`rooms/${roomId}`);
-      onArchived();
-      onClose();
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setLoading(false);
-    }
+    archiveMutation.mutate(roomId);
   }
 
   return (

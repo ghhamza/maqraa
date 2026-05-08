@@ -1,20 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Sparkles, X } from "lucide-react";
-import { api } from "../../lib/api";
+import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../ui/Button";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
-
-export interface WhatsNewData {
-  since: string | null;
-  new_recitations: number;
-  new_enrollments: number;
-  completed_sessions: number;
-  pending_requests: number;
-}
+import { useWhatsNew } from "../../data/home";
 
 export interface WhatsNewStripProps {
   role: "student" | "teacher" | "admin";
@@ -33,31 +26,15 @@ function formatRelative(iso: string, locale: string): string {
 
 export function WhatsNewStrip({ role }: WhatsNewStripProps) {
   const { t, i18n } = useTranslation();
+  const userId = useAuthStore((s) => s.user?.id ?? null);
   const [dismissed, setDismissed] = useState(
     () => sessionStorage.getItem("whatsNewDismissed") === "1",
   );
-  const [data, setData] = useState<WhatsNewData | null>(null);
-  const [loadError, setLoadError] = useState(false);
 
-  const load = useCallback(async (signal: AbortSignal) => {
-    setLoadError(false);
-    try {
-      const { data: d } = await api.get<WhatsNewData>("me/whats-new", { signal });
-      setData(d);
-    } catch {
-      if (!signal.aborted) {
-        setLoadError(true);
-        setData(null);
-      }
-    }
-  }, []);
+  const whatsNewQuery = useWhatsNew(userId, dismissed);
 
-  useEffect(() => {
-    if (dismissed) return;
-    const c = new AbortController();
-    void load(c.signal);
-    return () => c.abort();
-  }, [dismissed, load]);
+  const data = whatsNewQuery.data ?? null;
+  const loadError = !!whatsNewQuery.error;
 
   const relativeSince = useMemo(() => {
     if (!data?.since) return "";

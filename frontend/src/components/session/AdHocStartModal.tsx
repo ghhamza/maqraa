@@ -3,7 +3,6 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
 import type { QuranRiwaya, RecitationPublic, TurnType } from "../../types";
 import { getSurahAyahCount } from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
@@ -11,6 +10,7 @@ import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { SurahPicker } from "../recitations/SurahPicker";
 import { FormSelect } from "../ui/select";
+import { useCreateAndStartRecitation } from "../../data/recitations";
 
 export interface AdHocStartModalProps {
   open: boolean;
@@ -40,37 +40,38 @@ export function AdHocStartModal({
   const [ayahStart, setAyahStart] = useState(1);
   const [ayahEnd, setAyahEnd] = useState(1);
   const [turnType, setTurnType] = useState<TurnType>("dars");
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const surahNum = surah ?? 1;
   const maxAyah = getSurahAyahCount(surahNum, riw);
 
-  const handleSubmit = async () => {
-    if (!studentId || surah == null) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const { data: created } = await api.post<RecitationPublic>("recitations", {
-        student_id: studentId,
-        room_id: roomId,
-        session_id: sessionId,
-        surah: surahNum,
-        ayah_start: Math.min(Math.max(1, ayahStart), maxAyah),
-        ayah_end: Math.min(Math.max(1, ayahEnd, ayahStart), maxAyah),
-        turn_type: turnType,
-        riwaya,
-      });
-      const { data: started } = await api.post<RecitationPublic>(`recitations/${created.id}/start`, {});
+  const adHocMutation = useCreateAndStartRecitation(
+    (started) => {
       onSuccess(started);
       onClose();
-    } catch (e: unknown) {
-      const msg = userFacingApiError(e);
-      setError(msg);
-      onErrorMessage(msg);
-    } finally {
-      setSubmitting(false);
-    }
+    },
+    (message) => {
+      setError(message);
+      onErrorMessage(message);
+    },
+  );
+
+  const submitting = adHocMutation.isPending;
+
+  const handleSubmit = () => {
+    if (!studentId || surah == null) return;
+    setError(null);
+    adHocMutation.mutate({
+      studentId,
+      surahNum,
+      ayahStart,
+      ayahEnd,
+      turnType,
+      maxAyah,
+      roomId,
+      sessionId,
+      riwaya,
+    });
   };
 
   return (

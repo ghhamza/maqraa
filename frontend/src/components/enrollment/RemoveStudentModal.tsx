@@ -3,10 +3,10 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
 import type { Enrollment } from "../../types";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
+import { useRemoveEnrolledStudent } from "../../data/rooms";
 
 interface RemoveStudentModalProps {
   open: boolean;
@@ -24,26 +24,27 @@ export function RemoveStudentModal({
   onRemoved,
 }: RemoveStudentModalProps) {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const removeMutation = useRemoveEnrolledStudent(
+    roomId,
+    () => {
+      onRemoved();
+      onClose();
+    },
+    (message) => setError(message),
+  );
+
+  const loading = removeMutation.isPending;
 
   useEffect(() => {
     if (open) setError(null);
   }, [open]);
 
-  async function confirm() {
+  function confirm() {
     if (!enrollment || loading) return;
-    setLoading(true);
     setError(null);
-    try {
-      await api.delete(`rooms/${roomId}/enrollments/${enrollment.id}`);
-      onRemoved();
-      onClose();
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setLoading(false);
-    }
+    removeMutation.mutate(enrollment.id);
   }
 
   return (

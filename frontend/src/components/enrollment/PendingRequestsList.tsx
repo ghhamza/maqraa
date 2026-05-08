@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
-import type { EnrollmentWithStatus } from "../../types";
+import { userFacingApiError } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
+import {
+  useApprovePendingEnrollment,
+  useRejectPendingEnrollment,
+  useRoomPendingRequests,
+} from "../../data/rooms";
 
 interface PendingRequestsListProps {
   roomId: string;
@@ -16,55 +20,42 @@ interface PendingRequestsListProps {
 export function PendingRequestsList({ roomId, onChanged }: PendingRequestsListProps) {
   const { t } = useTranslation();
   const { full } = useLocaleDate();
-  const [items, setItems] = useState<EnrollmentWithStatus[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await api.get<EnrollmentWithStatus[]>(`rooms/${roomId}/enrollments/pending`);
-      setItems(data);
-    } catch (err) {
-      setItems([]);
-      setError(userFacingApiError(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [roomId]);
+  const pendingQuery = useRoomPendingRequests(roomId);
+
+  const items = pendingQuery.data ?? [];
+  const loading = pendingQuery.isPending;
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (pendingQuery.error) {
+      setError((prev) => prev ?? userFacingApiError(pendingQuery.error));
+    }
+  }, [pendingQuery.error]);
 
-  async function approve(id: string) {
+  const approveMutation = useApprovePendingEnrollment(
+    roomId,
+    () => onChanged(),
+    (message) => setError(message),
+  );
+
+  const rejectMutation = useRejectPendingEnrollment(
+    roomId,
+    () => onChanged(),
+    (message) => setError(message),
+  );
+
+  function approve(id: string) {
     setActionId(id);
     setError(null);
-    try {
-      await api.put(`rooms/${roomId}/enrollments/${id}/approve`);
-      await load();
-      onChanged();
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setActionId(null);
-    }
+    approveMutation.mutate(id, { onSettled: () => setActionId(null) });
   }
 
-  async function reject(id: string) {
+  function reject(id: string) {
     setActionId(id);
     setError(null);
-    try {
-      await api.put(`rooms/${roomId}/enrollments/${id}/reject`);
-      await load();
-      onChanged();
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setActionId(null);
-    }
+    rejectMutation.mutate(id, { onSettled: () => setActionId(null) });
   }
 
   if (loading) {

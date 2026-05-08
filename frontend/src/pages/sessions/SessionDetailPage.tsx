@@ -1,25 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { BookMarked, BookOpen, Calendar, Clock, Pencil, Repeat, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
-import type { Paginated, RecitationPublic, SessionAttendance, SessionDetail, SessionPublic } from "../../types";
+import type { RecitationPublic, SessionPublic } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { SessionFormModal } from "../../components/sessions/SessionFormModal";
 import { DeleteSessionModal } from "../../components/sessions/DeleteSessionModal";
 import { RecurrenceScopeModal } from "../../components/sessions/RecurrenceScopeModal";
-import {
-  fetchSessionsInRecurrenceGroup,
-  filterDeletableScheduled,
-  filterTargetsForScope,
-} from "../../lib/recurrenceSessionTargets";
 import { AttendanceSheet, type GradeColor } from "../../components/sessions/AttendanceSheet";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { PageCard } from "../../components/layout/PageCard";
@@ -40,6 +33,19 @@ import { SessionCountdown } from "../../components/sessions/SessionCountdown";
 import { Modal } from "../../components/ui/Modal";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 import { cn } from "@/lib/utils";
+import {
+  useDeleteSession,
+  usePatchSessionDetailCache,
+  usePatchSessionStatus,
+  useSaveSessionAttendance,
+  useSessionDetail,
+  useStartSession,
+} from "../../data/sessions";
+import {
+  usePatchSessionRecitationsCache,
+  useSessionRecitations,
+  useStudentsLastGrades,
+} from "../../data/recitations";
 
 /** Localized “in 3 days” / “in 25 minutes” for the early-start confirmation. */
 function formatScheduledRelativeToNow(iso: string, intlLocale: string): string {
@@ -125,9 +131,6 @@ export function SessionDetailPage() {
   const { mediumTime, shortWeekdayDate, timeShort, full } = useLocaleDate();
   const user = useAuthStore((s) => s.user);
 
-  const [detail, setDetail] = useState<SessionDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [forbidden, setForbidden] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editScope, setEditScope] = useState<"this" | "this_and_future" | "all" | undefined>(undefined);
   const [recurrencePrompt, setRecurrencePrompt] = useState<"edit" | "delete" | null>(null);
@@ -135,11 +138,7 @@ export function SessionDetailPage() {
   const [deleteScope, setDeleteScope] = useState<"this" | "this_and_future" | "all" | null>(null);
   const [localAttendance, setLocalAttendance] = useState<Record<string, boolean>>({});
   const [localNotes, setLocalNotes] = useState<Record<string, string>>({});
-  const [studentGrades, setStudentGrades] = useState<Record<string, GradeColor>>({});
-  const [savingAttendance, setSavingAttendance] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessionRecitations, setSessionRecitations] = useState<RecitationPublic[]>([]);
   const [recitationFormOpen, setRecitationFormOpen] = useState(false);
   const [recitationEditing, setRecitationEditing] = useState<RecitationPublic | null>(null);
   const [liveSessionFlash, setLiveSessionFlash] = useState<string | null>(null);
@@ -147,48 +146,31 @@ export function SessionDetailPage() {
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [earlyStartConfirmOpen, setEarlyStartConfirmOpen] = useState(false);
   const [liveTick, setLiveTick] = useState(0);
+  const patchSessionDetail = usePatchSessionDetailCache(id ?? "");
+  const patchSessionRecitations = usePatchSessionRecitationsCache(id);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    if (!id) return;
-    const sig = signal ? { signal } : {};
-    const [{ data }, recRes] = await Promise.all([
-      api.get<SessionDetail>(`sessions/${id}`, sig),
-      api.get<Paginated<RecitationPublic>>("recitations", {
-        params: { session_id: id },
-        ...sig,
-      }),
-    ]);
-    setDetail(data);
-    setSessionRecitations(recRes.data.items);
-    const next: Record<string, boolean> = {};
-    const notesInit: Record<string, string> = {};
-    for (const a of data.attendance) {
-      next[a.student_id] = a.attended;
-      notesInit[a.student_id] = a.attendance_note ?? "";
-    }
-    setLocalAttendance(next);
-    setLocalNotes(notesInit);
+  const detailQuery = useSessionDetail(id, !!id);
 
-    const gradesMap: Record<string, GradeColor> = {};
-    try {
-      for (const att of data.attendance) {
-        const res = await api.get<Paginated<RecitationPublic>>("recitations", {
-          params: { student_id: att.student_id, room_id: data.room_id, limit: 1 },
-          ...sig,
-        });
-        if (res.data.items.length > 0 && res.data.items[0].grade) {
-          gradesMap[att.student_id] = res.data.items[0].grade as GradeColor;
-        } else {
-          gradesMap[att.student_id] = "none";
-        }
-      }
-    } catch {
-      for (const att of data.attendance) {
-        gradesMap[att.student_id] = "none";
-      }
+  const detail = detailQuery.data ?? null;
+  const loading = detailQuery.isPending;
+  const forbidden =
+    (detailQuery.error as { response?: { status?: number } } | null)?.response?.status === 403;
+
+  const sessionRecitationsQuery = useSessionRecitations(id, undefined, !!id);
+
+  const sessionRecitations = sessionRecitationsQuery.data ?? [];
+
+  useEffect(() => {
+    if (!detail) return;
+    const nextAttendance: Record<string, boolean> = {};
+    const nextNotes: Record<string, string> = {};
+    for (const a of detail.attendance) {
+      nextAttendance[a.student_id] = a.attended;
+      nextNotes[a.student_id] = a.attendance_note ?? "";
     }
-    setStudentGrades(gradesMap);
-  }, [id]);
+    setLocalAttendance(nextAttendance);
+    setLocalNotes(nextNotes);
+  }, [detail]);
 
   useEffect(() => {
     const st = routerLocation.state as { liveSessionError?: string; sessionEndedMessage?: string } | null;
@@ -205,28 +187,14 @@ export function SessionDetailPage() {
     return () => clearInterval(interval);
   }, [detail?.status]);
 
-  useCancellableEffect(
-    async (signal) => {
-      if (!id) return;
-      setLoading(true);
-      setForbidden(false);
-      try {
-        await load(signal);
-      } catch (err: unknown) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        const status = (err as { response?: { status?: number } })?.response?.status;
-        if (status === 403) {
-          setForbidden(true);
-          setDetail(null);
-        } else {
-          setDetail(null);
-        }
-      } finally {
-        if (!signal.aborted) setLoading(false);
-      }
-    },
-    [id, load],
+  const attendanceStudentIds = useMemo(
+    () => (detail?.attendance ?? []).map((a) => a.student_id),
+    [detail?.attendance],
   );
+  const studentGrades = useStudentsLastGrades(attendanceStudentIds, detail?.room_id, !!detail?.room_id) as Record<
+    string,
+    GradeColor
+  >;
 
   const manage = detail && user ? canManage(user, detail) : false;
   const canEditSession = manage && (detail?.status === "scheduled" || detail?.status === "in_progress");
@@ -260,21 +228,16 @@ export function SessionDetailPage() {
     return `${timeShort(detail.scheduled_at)} \u00b7 ${t("sessions.durationValue", { minutes: detail.duration_minutes })}`;
   }, [detail, t, timeShort]);
 
-  async function saveAttendance() {
-    if (!id || !detail || !manage || attendanceDisabled) return;
-    setSavingAttendance(true);
-    setError(null);
-    try {
-      const attendance = detail.attendance.map((a) => {
-        const attended = localAttendance[a.student_id] ?? a.attended;
-        return {
-          student_id: a.student_id,
-          attended,
-          attendance_note: attended ? (localNotes[a.student_id] ?? a.attendance_note ?? null) : null,
-        };
-      });
-      const { data } = await api.put<SessionAttendance[]>(`sessions/${id}/attendance`, { attendance });
-      setDetail((prev) => (prev ? { ...prev, attendance: data } : null));
+  type AttendancePayload = Array<{
+    student_id: string;
+    attended: boolean;
+    attendance_note: string | null;
+  }>;
+
+  const attendanceMutation = useSaveSessionAttendance(
+    id ?? "",
+    (data) => {
+      patchSessionDetail((prev) => (prev ? { ...prev, attendance: data } : prev));
       const next: Record<string, boolean> = {};
       const nextNotes: Record<string, string> = {};
       for (const a of data) {
@@ -283,46 +246,65 @@ export function SessionDetailPage() {
       }
       setLocalAttendance(next);
       setLocalNotes(nextNotes);
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setSavingAttendance(false);
-    }
+    },
+    (message) => setError(message),
+  );
+
+  const savingAttendance = attendanceMutation.isPending;
+
+  function saveAttendance() {
+    if (!id || !detail || !manage || attendanceDisabled) return;
+    setError(null);
+    const attendance: AttendancePayload = detail.attendance.map((a) => {
+      const attended = localAttendance[a.student_id] ?? a.attended;
+      return {
+        student_id: a.student_id,
+        attended,
+        attendance_note: attended ? (localNotes[a.student_id] ?? a.attendance_note ?? null) : null,
+      };
+    });
+    attendanceMutation.mutate(attendance);
   }
 
-  async function patchStatus(status: SessionPublic["status"]) {
+  const statusMutation = usePatchSessionStatus(
+    id ?? "",
+    user?.id ?? null,
+    (data) => {
+      patchSessionDetail((prev) => (prev ? { ...prev, ...data, attendance: prev.attendance } : prev));
+    },
+    (message) => setError(message),
+  );
+
+  function patchStatus(status: SessionPublic["status"]) {
     if (!id || !detail) return;
-    setActionLoading(true);
     setError(null);
-    try {
-      const { data } = await api.put<SessionPublic>(`sessions/${id}`, { status });
-      setDetail((prev) => (prev ? { ...prev, ...data, attendance: prev.attendance } : null));
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setActionLoading(false);
-    }
+    statusMutation.mutate(status);
   }
 
-  async function startSessionAndEnterLive() {
-    if (!id || !detail) return;
-    setActionLoading(true);
-    setError(null);
-    setActiveSessionConflictId(null);
-    try {
-      await api.put<SessionPublic>(`sessions/${id}`, { status: "in_progress" });
+  const startMutation = useStartSession(
+    id ?? "",
+    user?.id ?? null,
+    () => {
       navigate(`/sessions/${id}/live`);
-    } catch (err) {
-      if (axios.isAxiosError(err)) {
-        const data = err.response?.data as { active_session_id?: string; code?: string } | undefined;
+    },
+    (message, error) => {
+      if (axios.isAxiosError(error)) {
+        const data = error.response?.data as
+          | { active_session_id?: string; code?: string }
+          | undefined;
         if (data?.code === "session_already_in_progress" && data.active_session_id) {
           setActiveSessionConflictId(data.active_session_id);
         }
       }
-      setError(userFacingApiError(err));
-    } finally {
-      setActionLoading(false);
-    }
+      setError(message);
+    },
+  );
+
+  function startSessionAndEnterLive() {
+    if (!id || !detail) return;
+    setError(null);
+    setActiveSessionConflictId(null);
+    startMutation.mutate();
   }
 
   const handleStartClick = () => {
@@ -340,34 +322,32 @@ export function SessionDetailPage() {
     void startSessionAndEnterLive();
   };
 
-  async function confirmDelete() {
-    if (!id || !detail) return;
-    setActionLoading(true);
-    setError(null);
-    try {
-      const gid = detail.recurrence_group_id;
-      const scope = deleteScope ?? "this";
-      if (gid && scope === "all") {
-        await api.delete<{ deleted: number }>(`sessions/group/${gid}`);
-      } else if (gid && scope === "this_and_future") {
-        const groupSessions = await fetchSessionsInRecurrenceGroup(gid, detail.room_id);
-        const slice = filterTargetsForScope(groupSessions, detail, "this_and_future");
-        const targets = filterDeletableScheduled(slice);
-        for (const s of targets) {
-          await api.delete(`sessions/${s.id}`);
-        }
-      } else {
-        await api.delete(`sessions/${id}`);
-      }
+  const deleteMutation = useDeleteSession(
+    user?.id ?? null,
+    () => {
       navigate("/calendar", { replace: true });
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setActionLoading(false);
+    },
+    () => {
       setDeleteOpen(false);
       setDeleteScope(null);
-    }
+    },
+    (message) => setError(message),
+  );
+
+  function confirmDelete() {
+    if (!id || !detail) return;
+    setError(null);
+    deleteMutation.mutate({
+      sessionId: id,
+      recurrenceGroupId: detail.recurrence_group_id ?? null,
+      roomId: detail.room_id,
+      scope: deleteScope ?? "this",
+      refSession: detail,
+    });
   }
+
+  const actionLoading =
+    statusMutation.isPending || startMutation.isPending || deleteMutation.isPending;
 
   if (loading) {
     return (
@@ -687,7 +667,9 @@ export function SessionDetailPage() {
             items={sessionRecitations}
             sessionId={detail.id}
             showStudent
-            onItemsChange={setSessionRecitations}
+            onItemsChange={(items) => {
+              patchSessionRecitations(() => items);
+            }}
             onPersistFailed={() => setError(t("plan.reorderFailed"))}
             onEditItem={
               manage
@@ -841,7 +823,10 @@ export function SessionDetailPage() {
           setRecitationFormOpen(false);
           setRecitationEditing(null);
         }}
-        onSaved={() => void load()}
+        onSaved={() => {
+          // No-op: SessionFormModal / RecitationFormModal invalidate their domain keys.
+          // The detail page picks up changes through cache invalidation.
+        }}
       />
 
       <RecurrenceScopeModal
@@ -870,7 +855,10 @@ export function SessionDetailPage() {
           setFormOpen(false);
           setEditScope(undefined);
         }}
-        onSaved={() => void load()}
+        onSaved={() => {
+          // No-op: SessionFormModal / RecitationFormModal invalidate their domain keys.
+          // The detail page picks up changes through cache invalidation.
+        }}
       />
 
       <DeleteSessionModal

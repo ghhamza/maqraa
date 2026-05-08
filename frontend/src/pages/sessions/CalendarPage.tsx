@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Calendar, ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { api } from "../../lib/api";
-import type { Paginated, Room, SessionPublic } from "../../types";
+import type { SessionPublic } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../../components/ui/Button";
 import { FormSelect } from "../../components/ui/select";
@@ -28,6 +26,8 @@ import {
 } from "../../lib/calendarUtils";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 import { sessionNavigatePath } from "../../lib/sessionNav";
+import { useRoomsList } from "../../data/rooms";
+import { useCalendarSessions } from "../../data/sessions";
 
 type ViewMode = "month" | "week" | "agenda";
 
@@ -55,10 +55,7 @@ export function CalendarPage() {
   const user = useAuthStore((s) => s.user);
   const [view, setView] = useState<ViewMode>("month");
   const [cursor, setCursor] = useState(() => new Date());
-  const [sessions, setSessions] = useState<SessionPublic[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [roomFilter, setRoomFilter] = useState<string>("");
-  const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [prefillDate, setPrefillDate] = useState<Date | null>(null);
   const [defaultRoom, setDefaultRoom] = useState<string | undefined>();
@@ -74,15 +71,6 @@ export function CalendarPage() {
       setView("agenda");
     }
   }, []);
-
-  useEffect(() => {
-    if (!user || user.role !== "student") return;
-    if (rooms.length === 0) return;
-    if (roomFilter !== "") return;
-    if (rooms.length === 1) {
-      setRoomFilter(rooms[0].id);
-    }
-  }, [user, rooms, roomFilter]);
 
   const weekdayLabels = useMemo(() => {
     const fmt = new Intl.DateTimeFormat(locale, { weekday: "short" });
@@ -118,40 +106,28 @@ export function CalendarPage() {
     return `${new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(a)} – ${new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", year: "numeric" }).format(b)}`;
   }, [view, cursor, locale]);
 
-  const fetchSessions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params: Record<string, string> = {
-        from: range.from.toISOString(),
-        to: range.to.toISOString(),
-        limit: "500",
-      };
-      if (roomFilter) params.room_id = roomFilter;
-      const { data } = await api.get<Paginated<SessionPublic>>("sessions", { params });
-      setSessions(data.items);
-    } catch {
-      setSessions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [range.from, range.to, roomFilter]);
+  const sessionsRangeISO = useMemo(
+    () => ({ from: range.from.toISOString(), to: range.to.toISOString() }),
+    [range.from, range.to],
+  );
+
+  const sessionsQuery = useCalendarSessions(sessionsRangeISO.from, sessionsRangeISO.to, roomFilter, true);
+
+  const sessions = sessionsQuery.data ?? [];
+  const loading = sessionsQuery.isPending && !sessionsQuery.isPlaceholderData;
+
+  const roomsQuery = useRoomsList("calendar-room-filter", undefined, { staleTime: 5 * 60_000 });
+
+  const rooms = roomsQuery.data ?? [];
 
   useEffect(() => {
-    void fetchSessions();
-  }, [fetchSessions]);
-
-  useCancellableEffect(
-    async (signal) => {
-      try {
-        const { data } = await api.get<Paginated<Room>>("rooms", { signal });
-        setRooms(data.items);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setRooms([]);
-      }
-    },
-    [],
-  );
+    if (!user || user.role !== "student") return;
+    if (rooms.length === 0) return;
+    if (roomFilter !== "") return;
+    if (rooms.length === 1) {
+      setRoomFilter(rooms[0].id);
+    }
+  }, [user, rooms, roomFilter]);
 
   const byDay = useMemo(() => groupByDay(sessions), [sessions]);
 
@@ -534,7 +510,9 @@ export function CalendarPage() {
           setFormOpen(false);
           setPrefillDate(null);
         }}
-        onSaved={() => void fetchSessions()}
+        onSaved={() => {
+          // No-op: SessionFormModal invalidates sessionKeys.calendars() itself.
+        }}
       />
     </PageShell>
   );

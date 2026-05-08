@@ -3,12 +3,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
 import { getSurahAyahCount, getSurahNameWithArabic, isValidAyahRange } from "../../lib/quranService";
 import type { QuranRiwaya, RecitationGrade, RecitationPublic, TurnType } from "../../types";
 import { Button } from "../ui/Button";
 import { SurahPicker } from "../recitations/SurahPicker";
 import { AyahRangeAudioButton } from "../recitations/AyahRangeAudioButton";
+import { useSaveRecitationTurn } from "../../data/recitations";
 
 interface RecitationTurnTabProps {
   turnType: TurnType;
@@ -40,7 +40,6 @@ export function RecitationTurnTab({
   const [notes, setNotes] = useState(existing?.teacher_notes ?? "");
   const [starRating, setStarRating] = useState<number>(existing?.star_rating ?? 0);
   const [grade, setGrade] = useState<RecitationGrade | "">(existing?.grade ?? "");
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
@@ -77,35 +76,32 @@ export function RecitationTurnTab({
     if (ayahEnd < ayahStart) setAyahEnd(ayahStart);
   }, [ayahStart, ayahEnd]);
 
-  const handleSave = async () => {
-    setSaving(true);
+  const turnTabMutation = useSaveRecitationTurn(
+    sessionId,
+    studentId,
+    () => {
+      setSuccess(true);
+      onSaved();
+    },
+    (message) => setError(message),
+  );
+
+  const saving = turnTabMutation.isPending;
+
+  const handleSave = () => {
     setError(null);
     setSuccess(false);
 
     if (!isValidAyahRange(surah, ayahStart, ayahEnd, riwaya)) {
       setError(t("recitations.invalidRange"));
-      setSaving(false);
       return;
     }
 
-    const body = {
-      student_id: studentId,
-      room_id: roomId,
-      session_id: sessionId,
-      surah,
-      ayah_start: ayahStart,
-      ayah_end: ayahEnd,
-      turn_type: turnType,
-      pages_count: pagesCount ? parseFloat(pagesCount) : null,
-      star_rating: starRating > 0 ? starRating : null,
-      grade: grade || null,
-      teacher_notes: notes.trim() || null,
-      riwaya,
-    };
-
-    try {
-      if (isEdit && existing) {
-        await api.put(`/recitations/${existing.id}`, {
+    if (isEdit && existing) {
+      turnTabMutation.mutate({
+        kind: "update",
+        id: existing.id,
+        body: {
           surah,
           ayah_start: ayahStart,
           ayah_end: ayahEnd,
@@ -114,16 +110,26 @@ export function RecitationTurnTab({
           star_rating: starRating > 0 ? starRating : null,
           grade: grade || null,
           teacher_notes: notes.trim() || null,
-        });
-      } else {
-        await api.post("/recitations", body);
-      }
-      setSuccess(true);
-      onSaved();
-    } catch (e) {
-      setError(userFacingApiError(e));
-    } finally {
-      setSaving(false);
+        },
+      });
+    } else {
+      turnTabMutation.mutate({
+        kind: "create",
+        body: {
+          student_id: studentId,
+          room_id: roomId,
+          session_id: sessionId,
+          surah,
+          ayah_start: ayahStart,
+          ayah_end: ayahEnd,
+          turn_type: turnType,
+          pages_count: pagesCount ? parseFloat(pagesCount) : null,
+          star_rating: starRating > 0 ? starRating : null,
+          grade: grade || null,
+          teacher_notes: notes.trim() || null,
+          riwaya,
+        },
+      });
     }
   };
 

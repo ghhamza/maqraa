@@ -2,23 +2,13 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useMemo, useState } from "react";
-import { useCancellableEffect } from "../hooks/useCancellableEffect";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BookMarked, Plus } from "lucide-react";
-import { api } from "../lib/api";
 import { useAuthStore } from "../stores/authStore";
 import type {
-  Paginated,
-  RecitationPublic,
-  RecitationStats,
-  Room,
-  RoomStats,
   SessionPublic,
-  SessionStats,
-  StudentProgress,
   User,
-  UserStats,
 } from "../types";
 import { Button } from "../components/ui/Button";
 import { UpcomingSessionsWidget, sessionCountdownLabel } from "../components/sessions/UpcomingSessionsWidget";
@@ -39,7 +29,11 @@ import { StudentEmptyHero } from "../components/home/StudentEmptyHero";
 import { TeacherEmptyHero } from "../components/home/TeacherEmptyHero";
 import { RoomFormModal } from "../components/rooms/RoomFormModal";
 import { sessionNavigatePath } from "../lib/sessionNav";
-import { useQfStreak } from "../hooks/useQfStreak";
+import { useQfStreak } from "../data/qf";
+import { useStudentProgress, useStudentRecitations, useUsersStats } from "../data/users";
+import { useRecitationsFeed, useRecitationsStats } from "../data/recitations";
+import { useRoomsList, useRoomsStats } from "../data/rooms";
+import { useSessionStats, useUpcomingSessions } from "../data/sessions";
 
 function isSameLocalDay(iso: string, ref: Date): boolean {
   const d = new Date(iso);
@@ -97,24 +91,10 @@ export function HomePage() {
 
 function AdminDashboard({ homeGreeting }: { homeGreeting: string }) {
   const { t } = useTranslation();
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [loading, setLoading] = useState(false);
+  const statsQuery = useUsersStats();
 
-  useCancellableEffect(
-    async (signal) => {
-      setLoading(true);
-      try {
-        const { data } = await api.get<UserStats>("users/stats", { signal });
-        setStats(data);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setStats(null);
-      } finally {
-        if (!signal.aborted) setLoading(false);
-      }
-    },
-    [],
-  );
+  const stats = statsQuery.data ?? null;
+  const loading = statsQuery.isPending;
 
   return (
     <PageShell
@@ -166,49 +146,37 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
   const dateLine = useTodayDateLine();
   const { mediumTime } = useLocaleDate();
 
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [roomStats, setRoomStats] = useState<RoomStats | null>(null);
-  const [recStats, setRecStats] = useState<RecitationStats | null>(null);
-  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
-  const [recentRecs, setRecentRecs] = useState<RecitationPublic[]>([]);
-  const [upcoming, setUpcoming] = useState<SessionPublic[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshToken, setRefreshToken] = useState(0);
   const [roomFormOpen, setRoomFormOpen] = useState(false);
 
-  useCancellableEffect(
-    async (signal) => {
-      setLoading(true);
-      try {
-        const [roomsRes, roomStatsRes, recStatsRes, recentRecsRes, upcomingRes, sessionStatsRes] =
-          await Promise.all([
-            api.get<Paginated<Room>>("rooms", { signal }),
-            api.get<RoomStats>("rooms/stats", { signal }),
-            api.get<RecitationStats>("recitations/stats", { signal }),
-            api.get<Paginated<RecitationPublic>>("recitations", { params: { limit: 5 }, signal }),
-            api.get<SessionPublic[]>("sessions/upcoming", { signal }),
-            api.get<SessionStats>("sessions/stats", { signal }),
-          ]);
-        setRooms(roomsRes.data.items.filter((r) => r.teacher_id === user.id));
-        setRoomStats(roomStatsRes.data);
-        setRecStats(recStatsRes.data);
-        setSessionStats(sessionStatsRes.data);
-        setRecentRecs(recentRecsRes.data.items);
-        setUpcoming(upcomingRes.data);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setRooms([]);
-        setRoomStats(null);
-        setRecStats(null);
-        setSessionStats(null);
-        setRecentRecs([]);
-        setUpcoming([]);
-      } finally {
-        if (!signal.aborted) setLoading(false);
-      }
-    },
-    [user.id, refreshToken],
-  );
+  const roomsQuery = useRoomsList("teacher-home", undefined, {
+    select: (items) => items.filter((r) => r.teacher_id === user.id),
+    staleTime: 60_000,
+  });
+
+  const roomStatsQuery = useRoomsStats(true);
+
+  const recStatsQuery = useRecitationsStats();
+
+  const recentRecsQuery = useRecitationsFeed("teacher-home-recent", { limit: 5, staleTime: 30_000 });
+
+  const upcomingQuery = useUpcomingSessions(true);
+
+  const sessionStatsQuery = useSessionStats(true);
+
+  const rooms = roomsQuery.data ?? [];
+  const roomStats = roomStatsQuery.data ?? null;
+  const recStats = recStatsQuery.data ?? null;
+  const sessionStats = sessionStatsQuery.data ?? null;
+  const recentRecs = recentRecsQuery.data ?? [];
+  const upcoming = upcomingQuery.data ?? [];
+
+  const loading =
+    roomsQuery.isPending ||
+    roomStatsQuery.isPending ||
+    recStatsQuery.isPending ||
+    recentRecsQuery.isPending ||
+    upcomingQuery.isPending ||
+    sessionStatsQuery.isPending;
 
   const myStudents = useMemo(() => rooms.reduce((a, r) => a + r.enrolled_count, 0), [rooms]);
   const todaySession = useMemo(() => findFirstSessionToday(upcoming), [upcoming]);
@@ -232,7 +200,6 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
       isAdmin={false}
       onClose={() => setRoomFormOpen(false)}
       onSaved={() => {
-        setRefreshToken((n) => n + 1);
         setRoomFormOpen(false);
       }}
     />
@@ -409,54 +376,39 @@ function StudentDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
   const dateLine = useTodayDateLine();
   const { mediumTime } = useLocaleDate();
 
-  const [progress, setProgress] = useState<StudentProgress | null>(null);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [recentRecs, setRecentRecs] = useState<RecitationPublic[]>([]);
-  const [upcoming, setUpcoming] = useState<SessionPublic[]>([]);
-  const [publicRooms, setPublicRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
+  const progressQuery = useStudentProgress(user?.id, !!user?.id);
 
-  useCancellableEffect(
-    async (signal) => {
-      if (!user?.id) {
-        setProgress(null);
-        setRooms([]);
-        setRecentRecs([]);
-        setUpcoming([]);
-        setPublicRooms([]);
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      try {
-        const [progressRes, roomsRes, recentRecsRes, upcomingRes, publicRoomsRes] = await Promise.all([
-          api.get<StudentProgress>(`students/${user.id}/progress`, { signal }),
-          api.get<Paginated<Room>>("rooms", { signal }),
-          api.get<Paginated<RecitationPublic>>("recitations", { params: { limit: 3 }, signal }),
-          api.get<SessionPublic[]>("sessions/upcoming", { signal }),
-          api.get<Paginated<Room>>("rooms", {
-            params: { is_public: true, my_status: "none", limit: 4 },
-            signal,
-          }),
-        ]);
-        setProgress(progressRes.data);
-        setRooms(roomsRes.data.items);
-        setRecentRecs(recentRecsRes.data.items);
-        setUpcoming(upcomingRes.data);
-        setPublicRooms(publicRoomsRes.data.items);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setProgress(null);
-        setRooms([]);
-        setRecentRecs([]);
-        setUpcoming([]);
-        setPublicRooms([]);
-      } finally {
-        if (!signal.aborted) setLoading(false);
-      }
+  const enrolledRoomsQuery = useRoomsList("student-home-enrolled", undefined, {
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  });
+
+  const recentRecsQuery = useStudentRecitations(user?.id, { enabled: !!user?.id, limit: 3 });
+
+  const upcomingQuery = useUpcomingSessions(!!user?.id);
+
+  const publicRoomsQuery = useRoomsList(
+    "student-home-public-discovery",
+    { is_public: true, my_status: "none", limit: 4 },
+    {
+      enabled: !!user?.id,
+      staleTime: 5 * 60_000,
     },
-    [user.id],
   );
+
+  const progress = progressQuery.data ?? null;
+  const rooms = enrolledRoomsQuery.data ?? [];
+  const recentRecs = recentRecsQuery.data ?? [];
+  const upcoming = upcomingQuery.data ?? [];
+  const publicRooms = publicRoomsQuery.data ?? [];
+
+  const loading =
+    !!user?.id &&
+    (progressQuery.isPending ||
+      enrolledRoomsQuery.isPending ||
+      recentRecsQuery.isPending ||
+      upcomingQuery.isPending ||
+      publicRoomsQuery.isPending);
 
   const nextSession = upcoming[0] ?? null;
   const hasNoRecitations = (progress?.total_recitations ?? 0) === 0;

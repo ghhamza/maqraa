@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useMemo, useState } from "react";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -17,9 +16,7 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { api } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
-import type { RoomStats } from "../../types";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { LanguageSwitcher } from "../ui/LanguageSwitcher";
@@ -49,6 +46,7 @@ import {
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { LiveSessionBanner } from "./LiveSessionBanner";
 import { LiveSessionsErrorToast } from "./LiveSessionsErrorToast";
+import { useRoomsStats } from "../../data/rooms";
 
 /** Up to two letters: first + last word, or first two chars of a single name. */
 function nameToInitials(name: string): string {
@@ -113,8 +111,11 @@ export function AppLayout() {
   const location = useLocation();
   const isMushafRoute = location.pathname.startsWith("/mushaf");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [roomCount, setRoomCount] = useState<number | null>(null);
-  const [pendingTotal, setPendingTotal] = useState<number | null>(null);
+
+  const roomStatsQuery = useRoomsStats(!!user);
+
+  const roomCount = roomStatsQuery.data?.total ?? null;
+  const pendingTotal = roomStatsQuery.data?.pending_count_total ?? null;
 
   const localeBase = (i18n.language || "ar").split("-")[0] ?? "ar";
   const isRtl = localeBase === "ar";
@@ -140,25 +141,8 @@ export function AppLayout() {
   }, [location.pathname]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- close drawer on route change (incl. back/forward)
     setMobileNavOpen(false);
   }, [location.pathname]);
-
-  useCancellableEffect(
-    async (signal) => {
-      if (!user) return;
-      try {
-        const { data } = await api.get<RoomStats>("rooms/stats", { signal });
-        setRoomCount(data.total);
-        setPendingTotal(data.pending_count_total);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setRoomCount(null);
-        setPendingTotal(null);
-      }
-    },
-    [user],
-  );
 
   const sheetSide = isRtl ? "right" : "left";
 

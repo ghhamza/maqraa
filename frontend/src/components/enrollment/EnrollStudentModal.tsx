@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
 import type { StudentOption } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
+import { useAvailableStudentsForRoom, useEnrollStudent } from "../../data/rooms";
 
 interface EnrollStudentModalProps {
   open: boolean;
@@ -28,35 +27,22 @@ export function EnrollStudentModal({
   onEnrolled,
 }: EnrollStudentModalProps) {
   const { t } = useTranslation();
-  const [students, setStudents] = useState<StudentOption[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const full = currentCount >= maxStudents;
 
-  useCancellableEffect(
-    async (signal) => {
-      if (!open) return;
+  useEffect(() => {
+    if (open) {
       setSearch("");
       setError(null);
-      setLoading(true);
-      try {
-        const { data } = await api.get<StudentOption[]>("students", {
-          params: { exclude_room_id: roomId },
-          signal,
-        });
-        setStudents(data);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setStudents([]);
-      } finally {
-        if (!signal.aborted) setLoading(false);
-      }
-    },
-    [open, roomId],
-  );
+    }
+  }, [open]);
+
+  const studentsQuery = useAvailableStudentsForRoom(roomId, open);
+
+  const students = studentsQuery.data ?? [];
+  const loading = studentsQuery.isPending && open;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -66,19 +52,21 @@ export function EnrollStudentModal({
     );
   }, [students, search]);
 
-  async function enroll(s: StudentOption) {
-    if (full || submitting) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await api.post(`rooms/${roomId}/enrollments`, { student_id: s.id });
+  const enrollMutation = useEnrollStudent(
+    roomId,
+    () => {
       onEnrolled();
       onClose();
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+    (message) => setError(message),
+  );
+
+  const submitting = enrollMutation.isPending;
+
+  function enroll(s: StudentOption) {
+    if (full || submitting) return;
+    setError(null);
+    enrollMutation.mutate(s);
   }
 
   return (

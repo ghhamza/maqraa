@@ -3,22 +3,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
-import { useFormSubmit } from "../../hooks/useFormSubmit";
 import {
   getAvailableRiwayat,
   getSurahAyahCount,
   isValidAyahRange,
 } from "../../lib/quranService";
 import type {
-  Paginated,
   QuranRiwaya,
   RecitationGrade,
   RecitationPublic,
-  Room,
-  SessionPublic,
-  StudentOption,
 } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../ui/Button";
@@ -27,6 +20,8 @@ import { FormSelect } from "../ui/select";
 import { SurahPicker } from "./SurahPicker";
 import { AyahRangeAudioButton } from "./AyahRangeAudioButton";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
+import { useRoomSessionsList, useRoomsList, useTeacherScopedStudents } from "../../data/rooms";
+import { useCreateRecitationFromForm, useUpdateRecitationFromForm } from "../../data/recitations";
 
 interface RecitationFormModalProps {
   open: boolean;
@@ -64,10 +59,6 @@ export function RecitationFormModal({
   const { t, i18n } = useTranslation();
   const intlLocale = intlLocaleForAppLanguage(i18n.language);
   const user = useAuthStore((s) => s.user);
-
-  const [students, setStudents] = useState<StudentOption[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [sessions, setSessions] = useState<SessionPublic[]>([]);
   const [studentId, setStudentId] = useState("");
   const [roomId, setRoomId] = useState<string>("");
   const [sessionId, setSessionId] = useState<string>("");
@@ -77,7 +68,7 @@ export function RecitationFormModal({
   const [grade, setGrade] = useState<RecitationGrade | "">("");
   const [notes, setNotes] = useState("");
   const [riwaya, setRiwaya] = useState<QuranRiwaya>("hafs");
-  const { loading, error, setError, submit, reset: resetSubmit } = useFormSubmit();
+  const [error, setError] = useState<string | null>(null);
 
   const maxAyah = getSurahAyahCount(surah, riwaya);
 
@@ -93,7 +84,7 @@ export function RecitationFormModal({
 
   useEffect(() => {
     if (!open) return;
-    resetSubmit();
+    setError(null);
     if (mode === "edit" && recitation) {
       setStudentId(recitation.student_id ?? "");
       setRoomId(recitation.room_id ?? "");
@@ -115,13 +106,7 @@ export function RecitationFormModal({
       setNotes("");
       setRiwaya("hafs");
     }
-  }, [open, mode, recitation, defaultStudentId, defaultRoomId, defaultSessionId, resetSubmit]);
-
-  useEffect(() => {
-    if (!roomId) return;
-    const r = rooms.find((x) => x.id === roomId);
-    if (r) setRiwaya(r.riwaya);
-  }, [roomId, rooms]);
+  }, [open, mode, recitation, defaultStudentId, defaultRoomId, defaultSessionId]);
 
   useEffect(() => {
     setAyahStart((a) => Math.min(Math.max(1, a), maxAyah));
@@ -132,110 +117,82 @@ export function RecitationFormModal({
     setAyahEnd((e) => Math.max(ayahStart, Math.min(e, maxAyah)));
   }, [ayahStart, maxAyah]);
 
-  useCancellableEffect(
-    async (signal) => {
-      if (!open || !user) return;
-      try {
-        const { data: roomsPage } = await api.get<Paginated<Room>>("rooms", { signal });
-        const roomList = roomsPage.items;
-        const mine =
-          user.role === "admin"
-            ? roomList
-            : roomList.filter((r) => r.teacher_id === user.id);
-        setRooms(mine);
+  const roomsQuery = useRoomsList(user?.role === "admin" ? "admin-all" : `teacher:${user?.id ?? ""}`, undefined, {
+    enabled: open && !!user,
+    select: (items) => (user?.role === "admin" ? items : items.filter((r) => r.teacher_id === user?.id)),
+  });
 
-        if (user.role === "admin") {
-          const { data: studs } = await api.get<StudentOption[]>("students", { signal });
-          setStudents(studs);
-        } else if (user.role === "teacher") {
-          const teachersRooms = roomList.filter((r) => r.teacher_id === user.id);
-          const map = new Map<string, StudentOption>();
-          for (const r of teachersRooms) {
-            try {
-              const { data: ens } = await api.get<
-                { student_id: string; student_name: string; student_email: string }[]
-              >(`rooms/${r.id}/enrollments`, { signal });
-              for (const e of ens) {
-                if (!map.has(e.student_id)) {
-                  map.set(e.student_id, {
-                    id: e.student_id,
-                    name: e.student_name,
-                    email: e.student_email,
-                  });
-                }
-              }
-            } catch (err) {
-              // Per-room enrollment failures are non-fatal; aborts bubble up.
-              if ((err as { name?: string })?.name === "CanceledError") throw err;
-            }
-          }
-          setStudents([...map.values()].sort((a, b) => a.name.localeCompare(b.name)));
-        }
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setRooms([]);
-        setStudents([]);
-      }
-    },
-    [open, user],
+  const rooms = roomsQuery.data ?? [];
+
+  useEffect(() => {
+    if (!roomId) return;
+    const r = rooms.find((x) => x.id === roomId);
+    if (r) setRiwaya(r.riwaya);
+  }, [roomId, rooms]);
+
+  const studentsQuery = useTeacherScopedStudents(user, open);
+
+  const students = studentsQuery.data ?? [];
+
+  const sessionsQuery = useRoomSessionsList(roomId || "", open && !!roomId);
+
+  const sessions = (sessionsQuery.data ?? []).filter(
+    (s) =>
+      s.status === "scheduled" ||
+      s.status === "in_progress" ||
+      s.status === "completed" ||
+      (defaultSessionId != null && s.id === defaultSessionId),
   );
 
-  useCancellableEffect(
-    async (signal) => {
-      if (!open || !roomId) {
-        setSessions([]);
-        return;
-      }
-      try {
-        const { data } = await api.get<SessionPublic[]>(`rooms/${roomId}/sessions`, { signal });
-        const ok = data.filter(
-          (s) =>
-            s.status === "scheduled" ||
-            s.status === "in_progress" ||
-            s.status === "completed" ||
-            (defaultSessionId && s.id === defaultSessionId),
-        );
-        setSessions(ok);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setSessions([]);
-      }
+  const createMutation = useCreateRecitationFromForm(
+    () => {
+      onSaved();
+      onClose();
     },
-    [open, roomId, defaultSessionId],
+    (message) => setError(message),
   );
 
-  async function handleSubmit(e: React.FormEvent) {
+  const updateMutation = useUpdateRecitationFromForm(
+    () => {
+      onSaved();
+      onClose();
+    },
+    (message) => setError(message),
+  );
+
+  const loading = createMutation.isPending || updateMutation.isPending;
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (loading) return;
     if (!isValidAyahRange(surah, ayahStart, ayahEnd, riwaya)) {
       setError(t("errors.badRequest"));
       return;
     }
-    await submit(async () => {
-      if (mode === "create") {
-        await api.post<RecitationPublic>("recitations", {
-          student_id: studentId,
-          room_id: roomId || null,
-          session_id: sessionId || null,
-          surah,
-          ayah_start: ayahStart,
-          ayah_end: ayahEnd,
-          grade: null,
-          teacher_notes: null,
-          riwaya,
-        });
-      } else if (recitation) {
-        await api.put(`recitations/${recitation.id}`, {
-          surah,
-          ayah_start: ayahStart,
-          ayah_end: ayahEnd,
-          grade: grade || null,
-          teacher_notes: notes.trim() || null,
-        });
-      }
-      onSaved();
-      onClose();
-    });
+    setError(null);
+    if (mode === "create") {
+      createMutation.mutate({
+        student_id: studentId,
+        room_id: roomId || null,
+        session_id: sessionId || null,
+        surah,
+        ayah_start: ayahStart,
+        ayah_end: ayahEnd,
+        grade: null,
+        teacher_notes: null,
+        riwaya,
+      });
+    } else if (recitation) {
+      updateMutation.mutate({
+        id: recitation.id,
+        surah,
+        ayah_start: ayahStart,
+        ayah_end: ayahEnd,
+        grade: grade || null,
+        teacher_notes: notes.trim() || null,
+        studentId: recitation.student_id,
+      });
+    }
   }
 
   const studentLocked = mode === "edit" || !!defaultStudentId;

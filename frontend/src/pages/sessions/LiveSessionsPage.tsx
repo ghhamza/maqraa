@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
-import type { JoinResult, SessionLivePublicItem, SessionPublic } from "../../types";
+import type { SessionLivePublicItem, SessionPublic } from "../../types";
 import { PageShell } from "../../components/layout/PageShell";
 import { PageCard } from "../../components/layout/PageCard";
 import { Button } from "../../components/ui/Button";
@@ -14,6 +13,8 @@ import { Badge } from "../../components/ui/Badge";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { liveSessionPath, sessionNavigatePath } from "../../lib/sessionNav";
 import { cn } from "@/lib/utils";
+import { useJoinRoom } from "../../data/rooms";
+import { useLivePublicSessions, useUpcomingSessions } from "../../data/sessions";
 
 function canEnterLiveSession(
   item: SessionLivePublicItem,
@@ -31,33 +32,17 @@ export function LiveSessionsPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const { mediumTime, full } = useLocaleDate();
-  const [live, setLive] = useState<SessionLivePublicItem[]>([]);
-  const [upcoming, setUpcoming] = useState<SessionPublic[]>([]);
-  const [loading, setLoading] = useState(true);
   const [joinRoomId, setJoinRoomId] = useState<string | null>(null);
-  const [joinRoomError, setJoinRoomError] = useState<{ roomId: string; message: string } | null>(null);
+  const [joinRoomError, setJoinRoomError] = useState<
+    { roomId: string; message: string } | null
+  >(null);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setJoinRoomError(null);
-    try {
-      const [liveRes, upRes] = await Promise.all([
-        api.get<SessionLivePublicItem[]>("sessions/live-public"),
-        api.get<SessionPublic[]>("sessions/upcoming"),
-      ]);
-      setLive(liveRes.data);
-      setUpcoming(upRes.data);
-    } catch {
-      setLive([]);
-      setUpcoming([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const liveQuery = useLivePublicSessions(true);
+  const upcomingQuery = useUpcomingSessions(true);
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const live = liveQuery.data ?? [];
+  const upcoming = upcomingQuery.data ?? [];
+  const loading = liveQuery.isPending || upcomingQuery.isPending;
 
   const titleOf = (s: SessionPublic) => s.title?.trim() || t("sessions.untitledTitle");
 
@@ -79,17 +64,19 @@ export function LiveSessionsPage() {
 
   const showImminentCard = Boolean(myImminentSession && !imminentAlreadyLive);
 
-  async function handleJoinRoom(item: SessionLivePublicItem) {
+  const joinMutation = useJoinRoom(
+    () => {},
+    (message) => {
+      if (joinRoomId) setJoinRoomError({ roomId: joinRoomId, message });
+    },
+  );
+
+  function handleJoinRoom(item: SessionLivePublicItem) {
     setJoinRoomId(item.room_id);
     setJoinRoomError(null);
-    try {
-      await api.post<JoinResult>(`rooms/${item.room_id}/join`);
-      await reload();
-    } catch (e) {
-      setJoinRoomError({ roomId: item.room_id, message: userFacingApiError(e) });
-    } finally {
-      setJoinRoomId(null);
-    }
+    joinMutation.mutate(item.room_id, {
+      onSettled: () => setJoinRoomId(null),
+    });
   }
 
   function renderLiveActions(item: SessionLivePublicItem) {
