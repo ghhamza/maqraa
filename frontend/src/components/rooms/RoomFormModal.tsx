@@ -17,7 +17,8 @@ interface RoomFormModalProps {
   room: Room | null;
   isAdmin: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  /** On create, receives the new room; on edit, called with no argument. */
+  onSaved: (createdRoom?: Room) => void;
 }
 
 export function RoomFormModal({
@@ -102,8 +103,8 @@ export function RoomFormModal({
   }, [open, isAdmin, mode, teachers]);
 
   const createMutation = useCreateRoom(
-    () => {
-      onSaved();
+    (created) => {
+      onSaved(created);
       onClose();
     },
     (message) => setError(message),

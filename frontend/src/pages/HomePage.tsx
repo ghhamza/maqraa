@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { BookMarked, Plus, TrendingUp, Users } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import type {
+  Room,
   SessionPublic,
   User,
 } from "../types";
@@ -199,8 +200,9 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
       room={null}
       isAdmin={false}
       onClose={() => setRoomFormOpen(false)}
-      onSaved={() => {
+      onSaved={(created?: Room) => {
         setRoomFormOpen(false);
+        if (created) void navigate(`/rooms/${created.id}`);
       }}
     />
   );

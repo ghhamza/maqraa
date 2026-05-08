@@ -256,11 +256,18 @@ export function useTeacherScopedStudents(user: User | null, enabled = true) {
   });
 }
 
-export function useCreateRoom(onSuccess?: () => void, onError?: (message: string) => void) {
-  return useApiMutation({
-    mutationFn: (input: unknown) => api.request({ method: "post", url: "rooms", data: input }),
+export function useCreateRoom(onSuccess?: (room: Room) => void, onError?: (message: string) => void) {
+  const qc = useQueryClient();
+  return useApiMutation<Room, unknown>({
+    mutationFn: async (input: unknown) => {
+      const { data } = await api.request<Room>({ method: "post", url: "rooms", data: input });
+      return data;
+    },
     invalidates: [roomKeys.lists(), roomKeys.stats()],
-    onSuccess: () => onSuccess?.(),
+    onSuccess: async (data) => {
+      await qc.invalidateQueries({ queryKey: roomKeys.detail(data.id) });
+      onSuccess?.(data);
+    },
     onError: (message) => onError?.(message),
   });
 }

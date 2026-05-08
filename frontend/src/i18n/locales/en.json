@@ -245,6 +245,21 @@
     "noMatchesTitle": "No users match your search",
     "noMatchesDescription": "Try adjusting your search or filters."
   },
+  "room": {
+    "gettingStarted": {
+      "title": "Set up your halaqah",
+      "subtitle": "Two steps to get your halaqah running",
+      "step1Title": "Enroll your first student",
+      "step1Desc": "Invite students so they can recite",
+      "step1Cta": "Enroll student",
+      "step2Title": "Schedule your first session",
+      "step2Desc": "Pick the time of your first meeting on the calendar",
+      "step2Cta": "Add session",
+      "skip": "Skip and finish later",
+      "dismissAria": "Dismiss getting started",
+      "stepDone": "Done"
+    }
+  },
   "rooms": {
     "title": "Halaqat",
     "addRoom": "Add halaqah",

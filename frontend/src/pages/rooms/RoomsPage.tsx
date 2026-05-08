@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plus, DoorOpen } from "lucide-react";
 import { userFacingApiError } from "../../lib/api";
@@ -34,6 +34,7 @@ function canAddRoom(user: { role: string } | null): boolean {
 
 export function RoomsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === "admin";
@@ -448,7 +449,10 @@ export function RoomsPage() {
         room={editingRoom}
         isAdmin={isAdmin}
         onClose={() => setFormOpen(false)}
-        onSaved={() => void refreshAll()}
+        onSaved={(created) => {
+          void refreshAll();
+          if (created) void navigate(`/rooms/${created.id}`);
+        }}
       />
 
       <ArchiveRoomModal
