@@ -3,7 +3,7 @@
 
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { scheduleKeys, sessionKeys } from "../lib/queryKeys";
+import { roomKeys, scheduleKeys, sessionKeys } from "../lib/queryKeys";
 import { useApiMutation } from "../lib/useApiMutation";
 import {
   fetchSessionsInRecurrenceGroup,
@@ -129,6 +129,7 @@ export function useScheduleList(roomId: string, enabled = true) {
 }
 
 export function useCreateSession(onSuccess?: (data: CreateSessionsResponse) => void, onError?: (m: string) => void) {
+  const qc = useQueryClient();
   return useApiMutation<CreateSessionsResponse, Record<string, unknown>>({
     mutationFn: async (payload) => {
       const { data } = await api.request<CreateSessionsResponse>({
@@ -139,7 +140,13 @@ export function useCreateSession(onSuccess?: (data: CreateSessionsResponse) => v
       return data;
     },
     invalidates: [sessionKeys.calendars(), sessionKeys.upcoming(), sessionKeys.details()],
-    onSuccess: (data) => onSuccess?.(data),
+    onSuccess: async (data, variables) => {
+      const roomId = variables?.room_id;
+      if (typeof roomId === "string" && roomId.length > 0) {
+        await qc.invalidateQueries({ queryKey: roomKeys.detail(roomId) });
+      }
+      onSuccess?.(data);
+    },
     onError: (m) => onError?.(m),
   });
 }

@@ -326,6 +326,7 @@ pub async fn list_rooms(
                 "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
                  r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
                  COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+                 COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id), 0) AS sessions_count, \
                  r.is_public, r.enrollment_open, r.requires_approval, \
                  COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
                  e_my.status AS my_status, \
@@ -342,6 +343,7 @@ pub async fn list_rooms(
             "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
              r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+             COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id), 0) AS sessions_count, \
              r.is_public, r.enrollment_open, r.requires_approval, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
              CAST(NULL AS TEXT) AS my_status, \
@@ -383,6 +385,7 @@ pub async fn get_room(
             "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
              r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+             COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id), 0) AS sessions_count, \
              r.is_public, r.enrollment_open, r.requires_approval, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
              (SELECT e.status FROM enrollments e WHERE e.room_id = r.id AND e.student_id = $2 LIMIT 1) AS my_status, \
@@ -400,6 +403,7 @@ pub async fn get_room(
             "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
              r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+             COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id), 0) AS sessions_count, \
              r.is_public, r.enrollment_open, r.requires_approval, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
              CAST(NULL AS TEXT) AS my_status, \
@@ -516,6 +520,7 @@ pub async fn create_room(
         "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
          r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+         COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id), 0) AS sessions_count, \
          r.is_public, r.enrollment_open, r.requires_approval, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
          CAST(NULL AS TEXT) AS my_status, \
@@ -542,6 +547,7 @@ pub async fn update_room(
         "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
          r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+         COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id), 0) AS sessions_count, \
          r.is_public, r.enrollment_open, r.requires_approval, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
          CAST(NULL AS TEXT) AS my_status, \
@@ -637,6 +643,7 @@ pub async fn update_room(
         "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
          r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+         COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id), 0) AS sessions_count, \
          r.is_public, r.enrollment_open, r.requires_approval, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
          CAST(NULL AS TEXT) AS my_status, \

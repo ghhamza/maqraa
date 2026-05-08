@@ -65,6 +65,8 @@ pub struct RoomPublic {
     pub riwaya: String,
     pub halaqah_type: String,
     pub enrolled_count: i64,
+    /// Total sessions rows for this room (all statuses).
+    pub sessions_count: i64,
     pub is_public: bool,
     pub enrollment_open: bool,
     pub requires_approval: bool,

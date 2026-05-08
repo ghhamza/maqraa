@@ -245,6 +245,21 @@
     "noMatchesTitle": "Aucun utilisateur ne correspond à la recherche",
     "noMatchesDescription": "Essayez d'ajuster votre recherche ou vos filtres."
   },
+  "room": {
+    "gettingStarted": {
+      "title": "Lancez votre halaqah",
+      "subtitle": "Deux étapes pour démarrer votre halaqah",
+      "step1Title": "Inscrivez votre premier élève",
+      "step1Desc": "Invitez vos élèves pour qu'ils puissent réciter",
+      "step1Cta": "Inscrire un élève",
+      "step2Title": "Planifiez votre première séance",
+      "step2Desc": "Choisissez l'horaire de votre premier rendez-vous",
+      "step2Cta": "Ajouter une séance",
+      "skip": "Passer et terminer plus tard",
+      "dismissAria": "Fermer le guide",
+      "stepDone": "Fait"
+    }
+  },
   "rooms": {
     "title": "Halaqat",
     "addRoom": "Ajouter une halaqah",

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Archive, Pencil, RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -31,6 +32,8 @@ import {
   endOfMonth,
   startOfMonth,
 } from "../../lib/calendarUtils";
+import { GettingStartedBanner } from "../../components/room/GettingStartedBanner";
+import { roomKeys } from "../../lib/queryKeys";
 import { RoomOverviewSection } from "./sections/RoomOverviewSection";
 import { RoomStudentsSection } from "./sections/RoomStudentsSection";
 import { RoomSessionsSection, type RoomSessionsViewMode } from "./sections/RoomSessionsSection";
@@ -60,6 +63,7 @@ function capitalize(s: string): string {
 export function RoomDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === "admin";
@@ -160,6 +164,7 @@ export function RoomDetailPage() {
   const showActions = room ? canManage(user, room) : false;
   const enrolledCount = room?.enrolled_count ?? 0;
   const isArchived = room ? !room.is_active : false;
+  const isRoomTeacher = user?.role === "teacher" && !!room && user.id === room.teacher_id;
 
   const showStudentsSection =
     showActions || (user?.role === "student" && room?.my_status === "approved");
@@ -255,6 +260,20 @@ export function RoomDetailPage() {
         </div>
       ) : null}
 
+      {isRoomTeacher && !isArchived ? (
+        <GettingStartedBanner
+          roomId={room.id}
+          hasStudents={enrolledCount > 0}
+          hasSessions={(room?.sessions_count ?? 0) > 0 || sessions.length > 0}
+          onAddStudent={() => setEnrollOpen(true)}
+          onAddSession={() => {
+            setSessionPrefillDate(null);
+            setSessionPresetMorning(false);
+            setSessionFormOpen(true);
+          }}
+        />
+      ) : null}
+
       <div className="space-y-6">
         <RoomOverviewSection
           room={room}
@@ -333,6 +352,7 @@ export function RoomDetailPage() {
         }}
         onSaved={() => {
           void invalidateRoomSessions();
+          void queryClient.invalidateQueries({ queryKey: roomKeys.detail(room.id) });
         }}
       />
 

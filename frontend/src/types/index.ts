@@ -70,6 +70,8 @@ export interface Room {
   riwaya: QuranRiwaya;
   halaqah_type: HalaqahType;
   enrolled_count: number;
+  /** Total session rows for this room (from API). */
+  sessions_count?: number;
   is_public: boolean;
   enrollment_open: boolean;
   requires_approval: boolean;
