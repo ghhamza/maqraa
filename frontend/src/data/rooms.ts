@@ -320,7 +320,12 @@ export function useJoinRoom(onSuccess?: (result: JoinResult) => void, onError?: 
 export function useWithdrawRoom(roomId: string, onSuccess?: () => void, onError?: (message: string) => void) {
   return useApiMutation({
     mutationFn: () => api.request({ method: "delete", url: `rooms/${roomId}/my-enrollment` }),
-    invalidates: [roomKeys.detail(roomId), roomKeys.enrollments(roomId), roomKeys.lists(), roomKeys.stats()],
+    invalidates: [
+      roomKeys.detail(roomId),
+      roomKeys.enrollments(roomId),
+      roomKeys.lists(),
+      roomKeys.stats(),
+    ],
     onSuccess: () => onSuccess?.(),
     onError: (message) => onError?.(message),
   });
@@ -350,7 +355,11 @@ export function useRemoveEnrolledStudent(
   return useApiMutation({
     mutationFn: (enrollmentId: string) =>
       api.request({ method: "delete", url: `rooms/${roomId}/enrollments/${enrollmentId}` }),
-    invalidates: [roomKeys.enrollments(roomId), roomKeys.detail(roomId), roomKeys.pending(roomId)],
+    invalidates: [
+      roomKeys.enrollments(roomId),
+      roomKeys.detail(roomId),
+      roomKeys.pending(roomId),
+    ],
     onSuccess: () => onSuccess?.(),
     onError: (message) => onError?.(message),
   });
@@ -364,7 +373,11 @@ export function useApprovePendingEnrollment(
   return useApiMutation({
     mutationFn: (enrollmentId: string) =>
       api.request({ method: "put", url: `rooms/${roomId}/enrollments/${enrollmentId}/approve` }),
-    invalidates: [roomKeys.pending(roomId), roomKeys.enrollments(roomId), roomKeys.detail(roomId)],
+    invalidates: [
+      roomKeys.pending(roomId),
+      roomKeys.enrollments(roomId),
+      roomKeys.detail(roomId),
+    ],
     onSuccess: () => onSuccess?.(),
     onError: (message) => onError?.(message),
   });
@@ -378,7 +391,11 @@ export function useRejectPendingEnrollment(
   return useApiMutation({
     mutationFn: (enrollmentId: string) =>
       api.request({ method: "put", url: `rooms/${roomId}/enrollments/${enrollmentId}/reject` }),
-    invalidates: [roomKeys.pending(roomId), roomKeys.enrollments(roomId), roomKeys.detail(roomId)],
+    invalidates: [
+      roomKeys.pending(roomId),
+      roomKeys.enrollments(roomId),
+      roomKeys.detail(roomId),
+    ],
     onSuccess: () => onSuccess?.(),
     onError: (message) => onError?.(message),
   });

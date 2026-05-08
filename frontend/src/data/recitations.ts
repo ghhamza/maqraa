@@ -198,7 +198,12 @@ export function useSaveRecitationTurn(sessionId: string, studentId: string, onSu
       }
       return api.request({ method: "put", url: `/recitations/${input.id}`, data: input.body });
     },
-    invalidates: [recitationKeys.lists(), recitationKeys.stats(), recitationKeys.list({ session: sessionId }), sessionKeys.detail(sessionId)],
+    invalidates: [
+      recitationKeys.lists(),
+      recitationKeys.stats(),
+      recitationKeys.list({ session: sessionId }),
+      sessionKeys.detail(sessionId),
+    ],
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: userKeys.studentRecitations(studentId) }),
@@ -226,6 +231,7 @@ export function useCompletePlanRecitation(
       });
       return data;
     },
+    invalidates: [recitationKeys.stats()],
     onSuccess: async (data) => {
       qc.setQueryData<RecitationPublic[]>(recitationKeys.list({ session: sessionId }), (prev = []) => {
         const rest = prev.filter((r) => r.id !== data.id);
@@ -265,6 +271,7 @@ export function useCreateAndGradeRecitation(
       const { data } = await api.request<RecitationPublic>({ method: "post", url: "recitations", data: input });
       return data;
     },
+    invalidates: [recitationKeys.lists(), recitationKeys.stats()],
     onSuccess: async (data) => {
       qc.setQueryData<RecitationPublic[]>(recitationKeys.list({ session: sessionId }), (prev = []) => [data, ...prev]);
       if (data.student_id) {
@@ -299,6 +306,7 @@ export function useCreateRecitation(
       const { data } = await api.request<RecitationPublic>({ method: "post", url: "recitations", data: input });
       return data;
     },
+    invalidates: [recitationKeys.lists(), recitationKeys.stats()],
     onSuccess: (data) => {
       qc.setQueryData<RecitationPublic[]>(recitationKeys.list({ session: sessionId }), (prev = []) => [data, ...prev]);
       onSuccess?.(data);

@@ -114,14 +114,12 @@ export function AppLayout() {
 
   const roomStatsQuery = useRoomsStats(!!user);
 
-  const roomCount = roomStatsQuery.data?.total ?? null;
   const pendingTotal = roomStatsQuery.data?.pending_count_total ?? null;
 
   const localeBase = (i18n.language || "ar").split("-")[0] ?? "ar";
   const isRtl = localeBase === "ar";
   const logoSrc = localeBase === "ar" ? "/logo-ar.svg" : "/logo.svg";
   const isAdmin = user?.role === "admin";
-  const roomsBadgeCount = user ? roomCount : null;
   const showPendingDot =
     (user?.role === "teacher" || user?.role === "admin") && (pendingTotal ?? 0) > 0;
 
@@ -148,21 +146,6 @@ export function AppLayout() {
 
   /** Centered reading width on large viewports; mushaf stays edge-to-edge for the book layout. */
   const contentShell = "mx-auto w-full min-w-0 max-w-7xl";
-
-  const roomsLabel = (
-    <span className="inline-flex items-center gap-2">
-      <DoorOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-      <span>{t("nav.rooms")}</span>
-      {roomsBadgeCount !== null ? (
-        <span
-          className="min-w-[1.25rem] rounded-full bg-primary/15 px-1.5 py-0.5 text-center text-xs font-semibold text-primary"
-          aria-label={`${t("nav.rooms")}: ${roomsBadgeCount}`}
-        >
-          {roomsBadgeCount > 99 ? "99+" : roomsBadgeCount}
-        </span>
-      ) : null}
-    </span>
-  );
 
   function renderNavLinks(orientation: "row" | "column") {
     const stack = orientation === "column" ? "flex flex-col gap-1" : "";
@@ -198,7 +181,10 @@ export function AppLayout() {
           className={cn(navLinkClassName(navActive.rooms), linkWrap)}
           onClick={() => setMobileNavOpen(false)}
         >
-          {roomsLabel}
+          <span className="inline-flex items-center gap-2">
+            <DoorOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+            {t("nav.rooms")}
+          </span>
         </NavLink>
         <NavLink
           to="/calendar"
@@ -336,7 +322,10 @@ export function AppLayout() {
               <NavigationMenuItem>
                 <NavigationMenuLink asChild>
                   <NavLink to="/rooms" className={navLinkClassName(navActive.rooms)}>
-                    {roomsLabel}
+                    <span className="inline-flex items-center gap-2">
+                      <DoorOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+                      {t("nav.rooms")}
+                    </span>
                   </NavLink>
                 </NavigationMenuLink>
               </NavigationMenuItem>
