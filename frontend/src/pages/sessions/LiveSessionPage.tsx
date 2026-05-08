@@ -386,7 +386,7 @@ function LiveSessionPageInner() {
     },
     onAnotherTab: () => setAnotherTab(true),
     onJoinRejected: (message) => {
-      if (message === "Room is full") {
+      if (message === "Room is full" || message === "Halaqah is full") {
         navigate(`/sessions/${id}`, {
           replace: true,
           state: { liveSessionError: t("liveSession.roomFull") },
