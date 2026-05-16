@@ -1,10 +1,10 @@
-# Miqraa Infrastructure
+# Maqraa Infrastructure
 
 Docker-compose services that run alongside the Rust backend in development.
 
 ## LiveKit (media server)
 
-LiveKit handles all WebRTC media (audio + video SFU) for Miqraa live sessions. The Rust backend is the source of truth for rooms, auth, and non-media events; it mints LiveKit access tokens and delegates media to LiveKit.
+LiveKit handles all WebRTC media (audio + video SFU) for Maqraa live sessions. The Rust backend is the source of truth for rooms, auth, and non-media events; it mints LiveKit access tokens and delegates media to LiveKit.
 
 ### Start LiveKit
 
@@ -56,7 +56,7 @@ curl -i http://localhost:7880
 docker compose ps
 ```
 
-Expect `curl` to return a response (even an error body is fine - the point is that something is listening). `docker compose ps` should show `miqraa-livekit` as `running`.
+Expect `curl` to return a response (even an error body is fine - the point is that something is listening). `docker compose ps` should show `maqraa-livekit` as `running`.
 
 ### What's NOT here yet
 

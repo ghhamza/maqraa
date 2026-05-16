@@ -184,8 +184,8 @@ rustc --version && node --version && psql --version && nginx -v
 
 ```bash
 cd ~
-git clone https://github.com/ghhamza/miqraa.git
-cd miqraa
+git clone https://github.com/ghhamza/maqraa.git
+cd maqraa
 ```
 
 ### 3.3 PostgreSQL
@@ -218,12 +218,12 @@ JWT=$(openssl rand -hex 64)
 LKKEY="maqraa_$(openssl rand -hex 6)"
 LKSECRET=$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9')
 
-cat > ~/miqraa/backend/.env <<EOF
+cat > ~/maqraa/backend/.env <<EOF
 DATABASE_URL=postgres://maqraa:<DB_PASSWORD>@localhost:5432/maqraa
 JWT_SECRET=$JWT
 HOST=127.0.0.1
 PORT=3000
-RECORDINGS_PATH=/home/deploy/miqraa/backend/data/recordings
+RECORDINGS_PATH=/home/deploy/maqraa/backend/data/recordings
 QF_ENV=prelive
 QF_CLIENT_ID=<YOUR_QF_CLIENT_ID>
 QF_CLIENT_SECRET=<YOUR_QF_CLIENT_SECRET>
@@ -238,7 +238,7 @@ APP_LIVEKIT_API_SECRET=$LKSECRET
 RUST_LOG=info
 EOF
 
-chmod 600 ~/miqraa/backend/.env
+chmod 600 ~/maqraa/backend/.env
 echo "SAVE THESE FOR THE MEDIA SERVER:"
 echo "APP_LIVEKIT_API_KEY=$LKKEY"
 echo "APP_LIVEKIT_API_SECRET=$LKSECRET"
@@ -260,7 +260,7 @@ Notes:
 ### 3.5 Build the backend
 
 ```bash
-cd ~/miqraa/backend
+cd ~/maqraa/backend
 source $HOME/.cargo/env
 cargo build --release
 ```
@@ -295,16 +295,16 @@ Wants=postgresql.service
 [Service]
 Type=simple
 User=deploy
-WorkingDirectory=/home/deploy/miqraa/backend
-EnvironmentFile=/home/deploy/miqraa/backend/.env
-ExecStart=/home/deploy/miqraa/backend/target/release/miqraa-backend
+WorkingDirectory=/home/deploy/maqraa/backend
+EnvironmentFile=/home/deploy/maqraa/backend/.env
+ExecStart=/home/deploy/maqraa/backend/target/release/miqraa-backend
 Restart=always
 RestartSec=5
 LimitNOFILE=65536
 NoNewPrivileges=true
 ProtectSystem=full
 ProtectHome=read-only
-ReadWritePaths=/home/deploy/miqraa/backend/data
+ReadWritePaths=/home/deploy/maqraa/backend/data
 PrivateTmp=true
 
 [Install]
@@ -324,7 +324,7 @@ In production the frontend is served as static files by Nginx and talks to the
 backend same-origin via `/api` (so `VITE_API_BASE_URL` is left unset).
 
 ```bash
-cd ~/miqraa/frontend
+cd ~/maqraa/frontend
 pnpm install --frozen-lockfile
 pnpm build
 ```
@@ -338,7 +338,7 @@ sudo tee /etc/nginx/sites-available/maqraa > /dev/null <<'EOF'
 server {
     listen 80;
     server_name <APP_DOMAIN>;
-    root /home/deploy/miqraa/frontend/dist;
+    root /home/deploy/maqraa/frontend/dist;
     index index.html;
 
     location /api/ {
@@ -582,7 +582,7 @@ On the app server only:
 
 ```bash
 # Secrets are not world-readable
-stat -c '%a %U' ~/miqraa/backend/.env
+stat -c '%a %U' ~/maqraa/backend/.env
 # Expect: 600 deploy
 ```
 
@@ -603,7 +603,7 @@ Expected: connection refused or timeout.
 App server:
 
 ```bash
-cd ~/miqraa
+cd ~/maqraa
 git pull
 # Backend
 cd backend

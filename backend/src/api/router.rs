@@ -21,7 +21,7 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route(
             "/health",
-            get(|| async { "بسم الله — Al-Miqraa is running" }),
+            get(|| async { "بسم الله — Al-Maqraa is running" }),
         )
         .route("/api/auth/register", post(handlers::auth::register))
         .route("/api/auth/login", post(handlers::auth::login))

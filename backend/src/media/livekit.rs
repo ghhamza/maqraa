@@ -38,7 +38,7 @@ impl LivekitClient {
         })
     }
 
-    /// Stable room name for a Miqraa session.
+    /// Stable room name for a Maqraa session.
     pub fn room_name_for_session(session_id: Uuid) -> String {
         format!("session-{session_id}")
     }

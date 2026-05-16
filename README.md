@@ -1,10 +1,10 @@
-# Miqraa
+# Maqraa
 
-Miqraa is an open-source Quran education platform licensed under AGPL-3.0. It focuses on live Tajweed recitation classrooms where one reciter reads at a time while the teacher corrects in real time. The platform also includes scheduled sessions, attendance, recitation history, streaks, and a Mushaf whiteboard with error annotations.
+Maqraa is an open-source Quran education platform licensed under AGPL-3.0. It focuses on live Tajweed recitation classrooms where one reciter reads at a time while the teacher corrects in real time. The platform also includes scheduled sessions, attendance, recitation history, streaks, and a Mushaf whiteboard with error annotations.
 
 ## Architecture
 
-Miqraa is built around three services:
+Maqraa is built around three services:
 
 - **Rust backend (Axum)**: REST API, auth, rooms/sessions/recitations, WebSocket signaling for non-media events, and LiveKit token minting.
 - **LiveKit server (external)**: all WebRTC media transport (audio and optional teacher video), TURN/STUN, and track routing.
@@ -49,8 +49,8 @@ Non-media classroom events (ayah sync, annotations, reciter turn, grading) conti
 ### 1) Clone and install
 
 ```bash
-git clone https://github.com/ghhamza/miqraa.git
-cd miqraa
+git clone https://github.com/ghhamza/maqraa.git
+cd maqraa
 ```
 
 ### 2) Start LiveKit
@@ -63,7 +63,7 @@ cd ..
 
 ### 3) Setup PostgreSQL
 
-Create a local `miqraa` database and user, then ensure your backend `DATABASE_URL` points to it.
+Create a local `maqraa` database and user, then ensure your backend `DATABASE_URL` points to it.
 
 ### 4) Backend
 
@@ -96,7 +96,7 @@ Open [http://localhost:5173](http://localhost:5173), then log in with the admin 
 ## Project structure
 
 ```text
-miqraa/
+maqraa/
 ├── backend/         # Rust (Axum) — API + WebSocket signaling + LiveKit token minter
 ├── frontend/        # React + Vite — UI, QCF V2 Mushaf, livekit-client
 ├── infra/           # Docker Compose for LiveKit (dev media server)
@@ -143,4 +143,4 @@ AGPL-3.0.
 
 ## Contributing
 
-Issues and pull requests are welcome. The project is in active development, so check open issues before starting large changes.
+Issues and pull requests are welcome on [github.com/ghhamza/maqraa](https://github.com/ghhamza/maqraa). The project is in active development, so check open issues before starting large changes.

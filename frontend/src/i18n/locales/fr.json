@@ -14,7 +14,7 @@
     "inactive": "Inactif",
     "actions": "Actions",
     "comingSoon": "Bientôt disponible",
-    "appName": "Al-Miqraa",
+    "appName": "Al-Maqraa",
     "closeMenu": "Fermer le menu",
     "openMenu": "Menu",
     "close": "Fermer",
@@ -72,7 +72,7 @@
       "alreadyLinked": "Ce compte est déjà lié à un autre utilisateur"
     },
     "roleSelection": {
-      "title": "Choisissez votre rôle dans Miqraa",
+      "title": "Choisissez votre rôle dans Maqraa",
       "subtitle": "Vous pourrez modifier ce choix plus tard depuis vos paramètres",
       "student": "Étudiant",
       "studentDesc": "Apprendre le Coran et suivre les cours des enseignants",
@@ -107,8 +107,8 @@
     "recitationsEmptyDescriptionStudent": "Vos récitations apparaîtront ici une fois évaluées par votre enseignant."
   },
   "livePage": {
-    "subtitle": "Séances publiques en direct sur Miqraa en ce moment. Trouvez une halaqah pour écouter ou rejoindre.",
-    "publicHeaderTitle": "Séances publiques sur Miqraa",
+    "subtitle": "Séances publiques en direct sur Maqraa en ce moment. Trouvez une halaqah pour écouter ou rejoindre.",
+    "publicHeaderTitle": "Séances publiques sur Maqraa",
     "publicHeaderDescription": "Ce sont des séances de halaqat publiques. Pour rejoindre, vous devrez peut-être vous inscrire — ou simplement écouter.",
     "imminentBadge": "Votre séance commence bientôt",
     "startNow": "Démarrer",
@@ -165,7 +165,7 @@
     "quranMapDescription": "114 sourates. Chaque case se remplit lorsque vous achevez la sourate avec votre enseignant.",
     "studentStartingTitle": "Vous êtes prêt",
     "studentStartingDescription": "Vos récitations et progrès apparaîtront ici dès que votre enseignant aura enregistré la première.",
-    "teacherEmptyTitle": "Bienvenue sur Miqraa",
+    "teacherEmptyTitle": "Bienvenue sur Maqraa",
     "teacherEmptyDescription": "Créez votre première halaqah pour commencer à enseigner.",
     "teacherEmptyCta": "Créer ma première halaqah",
     "studentEmptyTitle": "Trouvez votre première halaqah",
@@ -178,7 +178,7 @@
     "moreStats": "Plus de statistiques",
     "createHalaqah": "Créer une halaqah",
     "streakTitle": "Série",
-    "miqraaStreak": "Miqraa",
+    "maqraaStreak": "Maqraa",
     "teacherDashboard": "Tableau de bord enseignant",
     "myRooms": "Mes halaqat",
     "myStudents": "Mes étudiants",

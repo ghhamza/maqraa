@@ -536,7 +536,7 @@ function StudentDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
               </div>
             </div>
             <CombinedStreakCard
-              miqraaStreakDays={progress.streak_days}
+              maqraaStreakDays={progress.streak_days}
               qfLinked={user.qf_linked}
               qfStreak={qfStreak}
               qfLoading={qfStreakLoading}

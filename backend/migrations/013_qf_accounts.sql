@@ -1,4 +1,4 @@
--- Link a Miqraa user to their Quran Foundation account.
+-- Link a Maqraa user to their Quran Foundation account.
 CREATE TABLE IF NOT EXISTS qf_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,

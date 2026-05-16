@@ -14,7 +14,7 @@
     "inactive": "Inactive",
     "actions": "Actions",
     "comingSoon": "Coming soon",
-    "appName": "Al-Miqraa",
+    "appName": "Al-Maqraa",
     "closeMenu": "Close menu",
     "openMenu": "Menu",
     "close": "Close",
@@ -72,7 +72,7 @@
       "alreadyLinked": "This account is already linked to another user"
     },
     "roleSelection": {
-      "title": "Choose your role in Miqraa",
+      "title": "Choose your role in Maqraa",
       "subtitle": "You can change this later from your account settings",
       "student": "Student",
       "studentDesc": "Learn Quran and take lessons from teachers",
@@ -107,8 +107,8 @@
     "recitationsEmptyDescriptionStudent": "Your recitations will appear here once your teacher grades them."
   },
   "livePage": {
-    "subtitle": "Public live sessions happening across Miqraa right now. Find a halaqah to listen in or join.",
-    "publicHeaderTitle": "Public sessions across Miqraa",
+    "subtitle": "Public live sessions happening across Maqraa right now. Find a halaqah to listen in or join.",
+    "publicHeaderTitle": "Public sessions across Maqraa",
     "publicHeaderDescription": "These are sessions in public halaqat. To join, you may need to enroll first — or just listen.",
     "imminentBadge": "Your session is starting soon",
     "startNow": "Start now",
@@ -165,7 +165,7 @@
     "quranMapDescription": "114 surahs. Each square fills in as you cover the surah with your teacher.",
     "studentStartingTitle": "You're all set up",
     "studentStartingDescription": "Your recitations and progress will appear here once your teacher logs your first one.",
-    "teacherEmptyTitle": "Welcome to Miqraa",
+    "teacherEmptyTitle": "Welcome to Maqraa",
     "teacherEmptyDescription": "Create your first halaqah to start teaching students.",
     "teacherEmptyCta": "Create your first halaqah",
     "studentEmptyTitle": "Find your first halaqah",
@@ -178,7 +178,7 @@
     "moreStats": "More stats",
     "createHalaqah": "Create halaqah",
     "streakTitle": "Streak",
-    "miqraaStreak": "Miqraa",
+    "maqraaStreak": "Maqraa",
     "teacherDashboard": "Teacher dashboard",
     "myRooms": "My halaqat",
     "myStudents": "My students",

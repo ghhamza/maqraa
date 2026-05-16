@@ -1,7 +1,7 @@
-# مقرأ — Miqraa Project Context
+# مقرأ — Maqraa Project Context
 
 
-## What Miqraa Does
+## What Maqraa Does
 
 Teachers (معلّمون) run virtual Quran recitation classrooms. Students recite one at a time while the teacher and other students listen. The teacher corrects Tajweed in real-time via live audio/video sessions. Sessions are scheduled, attendance is auto-tracked, and each student's recitation history (which surahs, which ayahs, what grade) builds a progress profile. Teachers grade recitations live during sessions with instant student notifications.
 
@@ -22,13 +22,13 @@ Teachers (معلّمون) run virtual Quran recitation classrooms. Students reci
 | **Auth** | JWT + Argon2 | Secure authentication |
 | **Storage** | Local filesystem (`./data/recordings`) | Recitation recordings (future) |
 
-**Development environment**: macOS native, no Docker. `createdb miqraa` for the database.
+**Development environment**: macOS native, no Docker. `createdb maqraa` for the database.
 
 ## Run
 
 ```bash
 # 1. Database
-createdb miqraa
+createdb maqraa
 
 # 2. Backend
 cd backend
@@ -57,7 +57,7 @@ curl http://localhost:3000/health
 ## Project Structure
 
 ```
-miqraa/
+maqraa/
 ├── backend/
 │   ├── src/
 │   │   ├── api/          # Router, handlers (auth, users, rooms, enrollments, sessions, recitations)

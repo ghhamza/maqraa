@@ -2,9 +2,9 @@
 name = "miqraa-backend"
 version = "0.1.0"
 edition = "2021"
-description = "Al-Miqraa (المقرأ) — Open-source Quran education platform backend"
+description = "Al-Maqraa (المقرأ) — Open-source Quran education platform backend"
 license = "AGPL-3.0-or-later"
-repository = "https://github.com/hamza-ghandouri/miqraa"
+repository = "https://github.com/ghhamza/maqraa"
 homepage = "https://miqraa.org"
 
 [dependencies]

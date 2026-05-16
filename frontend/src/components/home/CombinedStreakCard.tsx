@@ -7,13 +7,13 @@ import type { QfStreak } from "../../data/qf";
 import { cn } from "@/lib/utils";
 
 export interface CombinedStreakCardProps {
-  miqraaStreakDays: number;
+  maqraaStreakDays: number;
   qfLinked: boolean;
   qfStreak: QfStreak | null;
   qfLoading: boolean;
 }
 
-export function CombinedStreakCard({ miqraaStreakDays, qfLinked, qfStreak, qfLoading }: CombinedStreakCardProps) {
+export function CombinedStreakCard({ maqraaStreakDays, qfLinked, qfStreak, qfLoading }: CombinedStreakCardProps) {
   const { t } = useTranslation();
   return (
     <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
@@ -25,12 +25,12 @@ export function CombinedStreakCard({ miqraaStreakDays, qfLinked, qfStreak, qfLoa
         )}
       >
         <div className="min-w-0">
-          <p className="text-xs font-medium text-[var(--color-text-muted)]">{t("home.miqraaStreak")}</p>
+          <p className="text-xs font-medium text-[var(--color-text-muted)]">{t("home.maqraaStreak")}</p>
           <div className="mt-1 flex items-center gap-2">
             <Flame className="h-8 w-8 shrink-0 text-orange-500" aria-hidden />
-            {miqraaStreakDays > 0 ? (
+            {maqraaStreakDays > 0 ? (
               <p className="text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
-                {t("home.dayStreak", { days: miqraaStreakDays })}
+                {t("home.dayStreak", { days: maqraaStreakDays })}
               </p>
             ) : (
               <p className="text-sm font-medium text-[var(--color-text)]">{t("home.startStreak")}</p>

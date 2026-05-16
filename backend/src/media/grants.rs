@@ -14,7 +14,7 @@ pub enum SessionRole {
 }
 
 impl SessionRole {
-    /// Miqraa's classroom model: teacher + active reciter can publish,
+    /// Maqraa's classroom model: teacher + active reciter can publish,
     /// everyone else listens.
     pub fn to_video_grants(self, room: &str) -> VideoGrants {
         let can_publish = matches!(self, Self::Teacher | Self::ActiveReciter);

@@ -94,7 +94,7 @@ async fn run_server() -> Result<()> {
     init_tracing()?;
 
     tracing::info!("بسم الله الرحمن الرحيم");
-    tracing::info!("Starting Al-Miqraa server...");
+    tracing::info!("Starting Al-Maqraa server...");
 
     let config = config::AppConfig::load()?;
     tracing::debug!(recordings_path = %config.recordings_path);
@@ -171,7 +171,7 @@ async fn run_server() -> Result<()> {
 
     let addr = format!("{}:{}", config.host, config.port);
     tracing::info!(
-        "Al-Miqraa listening on {} (set HOST=127.0.0.1 to block LAN; default 0.0.0.0 accepts all interfaces)",
+        "Al-Maqraa listening on {} (set HOST=127.0.0.1 to block LAN; default 0.0.0.0 accepts all interfaces)",
         addr
     );
     let listener = tokio::net::TcpListener::bind(&addr).await?;
