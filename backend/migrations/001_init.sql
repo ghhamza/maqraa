@@ -1,4 +1,4 @@
--- Maqraa initial schema
+-- Miqraa initial schema
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
