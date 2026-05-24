@@ -22,7 +22,8 @@
     "archive": "Archive",
     "restore": "Restore",
     "continue": "Continue",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "preLaunchBanner": "Al-Maqraa is in pre-launch — we'll notify you when we officially open, inshaAllah"
   },
   "empty": {
     "genericTitle": "Nothing here yet",

@@ -36,6 +36,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { queryClient } from "./lib/queryClient";
 import { LiveSessionsProvider } from "./contexts/LiveSessionsContext";
+import { PreLaunchBanner } from "./components/layout/PreLaunchBanner";
 import { setFontLoadFailureHandler } from "./lib/mushafFontLoader";
 
 /** Radix `useDirection()` defaults to LTR unless this provider is set; it does not read `document.dir`. */
@@ -151,6 +152,7 @@ export default function App() {
           <ErrorBoundary scope="app">
             <LiveSessionsProvider>
               <div className="flex min-h-[100dvh] w-full min-w-0 flex-1 flex-col">
+                <PreLaunchBanner />
                 <RouterWithAuth />
               </div>
             </LiveSessionsProvider>
