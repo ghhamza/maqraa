@@ -221,7 +221,7 @@ export function AppLayout() {
 
   return (
     <div className="flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col bg-[var(--color-bg)]">
-      <header className="sticky top-0 z-40 w-full min-w-0 border-b border-border bg-[var(--color-surface)] shadow-sm">
+      <header className="sticky top-[var(--pre-launch-banner-height)] z-40 w-full min-w-0 border-b border-border bg-[var(--color-surface)] shadow-sm">
         <div
           className={cn(
             "flex min-w-0 flex-wrap items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 md:gap-4 md:px-6 lg:px-8",

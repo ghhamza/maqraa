@@ -10,9 +10,9 @@ export function PreLaunchBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="w-full bg-[#1B5E20] text-white text-[13px] sm:text-sm py-2 px-4 flex items-center justify-center gap-2 text-center leading-snug"
+      className="sticky top-0 z-[45] w-full min-h-[var(--pre-launch-banner-height)] shrink-0 bg-[#1B5E20] text-white text-[19px] sm:text-[21px] py-3 px-6 flex items-center justify-center gap-3 text-center leading-snug"
     >
-      <Sparkles className="w-4 h-4 text-[#D4A843] shrink-0" aria-hidden />
+      <Sparkles className="w-6 h-6 text-[#D4A843] shrink-0" aria-hidden />
       <span>{t("common.preLaunchBanner")}</span>
     </div>
   );

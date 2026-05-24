@@ -22,7 +22,7 @@ export function LiveSessionsErrorToast() {
   return (
     <div
       role="alert"
-      className="sticky top-16 z-[31] flex w-full min-w-0 items-start gap-2 border-b border-amber-500/35 bg-amber-500/15 px-3 py-2 text-start shadow-sm sm:px-4 md:px-6"
+      className="sticky top-[calc(var(--pre-launch-banner-height)+4rem)] z-[31] flex w-full min-w-0 items-start gap-2 border-b border-amber-500/35 bg-amber-500/15 px-3 py-2 text-start shadow-sm sm:px-4 md:px-6"
     >
       <AlertTriangle
         className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400"
