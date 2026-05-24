@@ -25,6 +25,22 @@
     "dismiss": "إخفاء",
     "preLaunchBanner": "المقرأة في مرحلة ما قبل الإطلاق — سنخبرك عند الإطلاق الرسمي إن شاء الله"
   },
+  "wizard": {
+    "createHalaqaTitle": "أنشئ حلقة جديدة",
+    "stepHalaqa": "الحلقة",
+    "stepSession": "الحصة",
+    "stepStudents": "الطلاب",
+    "next": "التالي",
+    "back": "رجوع",
+    "skip": "تخطّي",
+    "finish": "إنهاء",
+    "skipSessionHint": "يمكنك جدولة الحصص لاحقًا من صفحة الحلقة",
+    "skipStudentsHint": "يمكنك دعوة الطلاب لاحقًا من صفحة الحلقة",
+    "addAnotherStudent": "إضافة طالب آخر",
+    "stepHalaqaDone": "تم إنشاء الحلقة",
+    "stepSessionDone": "تمت جدولة الحصة الأولى",
+    "stepStudentsDone": "تم تسجيل الطلاب"
+  },
   "empty": {
     "genericTitle": "لا يوجد شيء هنا بعد",
     "genericDescription": "سيظهر المحتوى هنا عند توفّره."

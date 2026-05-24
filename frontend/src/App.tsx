@@ -19,6 +19,7 @@ import { UserDetailPage } from "./pages/users/UserDetailPage";
 import { RoomsPage } from "./pages/rooms/RoomsPage";
 import { ArchivedRoomsPage } from "./pages/rooms/ArchivedRoomsPage";
 import { RoomDetailPage } from "./pages/rooms/RoomDetailPage";
+import { CreateHalaqaPage } from "./pages/rooms/CreateHalaqaPage";
 import { CalendarPage } from "./pages/sessions/CalendarPage";
 import { SessionDetailPage } from "./pages/sessions/SessionDetailPage";
 import { StudentRecitationPage } from "./pages/sessions/StudentRecitationPage";
@@ -97,6 +98,7 @@ const router = createBrowserRouter([
         ),
       },
       { path: "rooms", element: <RoomsPage /> },
+      { path: "rooms/new", element: <CreateHalaqaPage /> },
       {
         path: "rooms/archived",
         element: (

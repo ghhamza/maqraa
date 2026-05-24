@@ -48,7 +48,6 @@ export function RoomsPage() {
   const [showRejected, setShowRejected] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
-  const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
 
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -116,13 +115,10 @@ export function RoomsPage() {
   }
 
   function openCreate() {
-    setFormMode("create");
-    setEditingRoom(null);
-    setFormOpen(true);
+    navigate("/rooms/new");
   }
 
   function openEdit(r: Room) {
-    setFormMode("edit");
     setEditingRoom(r);
     setFormOpen(true);
   }
@@ -445,13 +441,12 @@ export function RoomsPage() {
 
       <RoomFormModal
         open={formOpen}
-        mode={formMode}
+        mode="edit"
         room={editingRoom}
         isAdmin={isAdmin}
         onClose={() => setFormOpen(false)}
-        onSaved={(created) => {
+        onSaved={() => {
           void refreshAll();
-          if (created) void navigate(`/rooms/${created.id}`);
         }}
       />
 

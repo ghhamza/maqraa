@@ -25,6 +25,22 @@
     "dismiss": "Dismiss",
     "preLaunchBanner": "Al-Maqraa is in pre-launch — we'll notify you when we officially open, inshaAllah"
   },
+  "wizard": {
+    "createHalaqaTitle": "Create a new halaqa",
+    "stepHalaqa": "Halaqa",
+    "stepSession": "Session",
+    "stepStudents": "Students",
+    "next": "Next",
+    "back": "Back",
+    "skip": "Skip",
+    "finish": "Finish",
+    "skipSessionHint": "You can schedule sessions later from the halaqa page",
+    "skipStudentsHint": "You can invite students later from the halaqa page",
+    "addAnotherStudent": "Add another student",
+    "stepHalaqaDone": "Halaqa created",
+    "stepSessionDone": "First session scheduled",
+    "stepStudentsDone": "Students enrolled"
+  },
   "empty": {
     "genericTitle": "Nothing here yet",
     "genericDescription": "Content will appear here once available."

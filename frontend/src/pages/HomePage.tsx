@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BookMarked, Plus, TrendingUp, Users } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import type {
-  Room,
   SessionPublic,
   User,
 } from "../types";
@@ -28,7 +27,6 @@ import { CombinedStreakCard } from "../components/home/CombinedStreakCard";
 import { GettingStartedChecklist } from "../components/home/GettingStartedChecklist";
 import { StudentEmptyHero } from "../components/home/StudentEmptyHero";
 import { TeacherEmptyHero } from "../components/home/TeacherEmptyHero";
-import { RoomFormModal } from "../components/rooms/RoomFormModal";
 import { sessionNavigatePath } from "../lib/sessionNav";
 import { useQfStreak } from "../data/qf";
 import { useStudentProgress, useStudentRecitations, useUsersStats } from "../data/users";
@@ -147,8 +145,6 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
   const dateLine = useTodayDateLine();
   const { mediumTime } = useLocaleDate();
 
-  const [roomFormOpen, setRoomFormOpen] = useState(false);
-
   const roomsQuery = useRoomsList("teacher-home", undefined, {
     select: (items) => items.filter((r) => r.teacher_id === user.id),
     staleTime: 60_000,
@@ -185,26 +181,12 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
   const isEmptyTeacher = (roomStats?.total ?? -1) === 0;
 
   const headerActions = (
-    <Button type="button" variant="primary" onClick={() => setRoomFormOpen(true)}>
+    <Button type="button" variant="primary" onClick={() => void navigate("/rooms/new")}>
       <span className="inline-flex items-center gap-2">
         <Plus className="h-4 w-4" />
         {t("home.createHalaqah")}
       </span>
     </Button>
-  );
-
-  const roomModal = (
-    <RoomFormModal
-      open={roomFormOpen}
-      mode="create"
-      room={null}
-      isAdmin={false}
-      onClose={() => setRoomFormOpen(false)}
-      onSaved={(created?: Room) => {
-        setRoomFormOpen(false);
-        if (created) void navigate(`/rooms/${created.id}`);
-      }}
-    />
   );
 
   if (loading) {
@@ -227,14 +209,13 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
       >
         <WhatsNewStrip role="teacher" />
         <LiveNowDashboardCard />
-        <TeacherEmptyHero onCreateClick={() => setRoomFormOpen(true)} />
+        <TeacherEmptyHero onCreateClick={() => void navigate("/rooms/new")} />
         <GettingStartedChecklist
           roomTotal={roomStats?.total ?? 0}
           sessionTotal={sessionStats?.total ?? 0}
           hasEnrolledStudent={rooms.some((r) => r.enrolled_count > 0)}
           firstRoomId={rooms[0]?.id ?? null}
         />
-        {roomModal}
       </PageShell>
     );
   }
@@ -335,7 +316,6 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
         showViewCalendarLink
         excludeIds={todaySession ? [todaySession.id] : []}
       />
-      {roomModal}
     </PageShell>
   );
 }
