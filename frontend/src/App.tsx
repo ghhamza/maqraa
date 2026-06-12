@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, Outlet, RouterProvider } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Direction } from "radix-ui";
 import { LoginPage } from "./pages/auth/LoginPage";
@@ -37,7 +37,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { queryClient } from "./lib/queryClient";
 import { LiveSessionsProvider } from "./contexts/LiveSessionsContext";
-import { PreLaunchBanner } from "./components/layout/PreLaunchBanner";
+import { PreLaunchBannerGate } from "./components/layout/PreLaunchBannerGate";
 import { setFontLoadFailureHandler } from "./lib/mushafFontLoader";
 
 /** Radix `useDirection()` defaults to LTR unless this provider is set; it does not read `document.dir`. */
@@ -48,7 +48,19 @@ function RadixDirectionProvider({ children }: { children: ReactNode }) {
   return <Direction.Provider dir={dir}>{children}</Direction.Provider>;
 }
 
+function AppRootLayout() {
+  return (
+    <div className="flex min-h-[100dvh] w-full min-w-0 flex-1 flex-col">
+      <PreLaunchBannerGate />
+      <Outlet />
+    </div>
+  );
+}
+
 const router = createBrowserRouter([
+  {
+    element: <AppRootLayout />,
+    children: [
   { path: "/login", element: <LoginPage /> },
   { path: "/register", element: <RegisterPage /> },
   { path: "/auth/qf/callback", element: <QfCallbackPage /> },
@@ -123,6 +135,8 @@ const router = createBrowserRouter([
       { path: "mushaf/:page", element: <MushafPage /> },
     ],
   },
+    ],
+  },
 ]);
 
 function RouterWithAuth() {
@@ -153,10 +167,7 @@ export default function App() {
         <TooltipProvider delayDuration={300} skipDelayDuration={200}>
           <ErrorBoundary scope="app">
             <LiveSessionsProvider>
-              <div className="flex min-h-[100dvh] w-full min-w-0 flex-1 flex-col">
-                <PreLaunchBanner />
-                <RouterWithAuth />
-              </div>
+              <RouterWithAuth />
             </LiveSessionsProvider>
           </ErrorBoundary>
         </TooltipProvider>
