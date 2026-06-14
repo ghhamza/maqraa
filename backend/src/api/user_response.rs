@@ -22,13 +22,15 @@ struct UserProfileRow {
     phone: Option<String>,
     spoken_languages: Vec<String>,
     qiraat_taught: Vec<String>,
+    email_verified_at: Option<DateTime<Utc>>,
+    preferred_language: String,
 }
 
 pub async fn load_user_response(db: &PgPool, user_id: Uuid) -> Result<UserResponse, sqlx::Error> {
     let row = sqlx::query_as::<_, UserProfileRow>(
         "SELECT u.id, u.name, u.email, u.role::text, qa.qf_email, u.role_selection_pending, \
          u.profile_completion_pending, u.gender, u.date_of_birth, u.country, u.phone, \
-         u.spoken_languages, u.qiraat_taught \
+         u.spoken_languages, u.qiraat_taught, u.email_verified_at, u.preferred_language \
          FROM users u \
          LEFT JOIN qf_accounts qa ON qa.user_id = u.id \
          WHERE u.id = $1",
@@ -52,6 +54,8 @@ pub async fn load_user_response(db: &PgPool, user_id: Uuid) -> Result<UserRespon
         phone: row.phone,
         spoken_languages: row.spoken_languages,
         qiraat_taught: row.qiraat_taught,
+        email_verified: row.email_verified_at.is_some(),
+        preferred_language: row.preferred_language,
     })
 }
 

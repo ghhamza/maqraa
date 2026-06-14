@@ -70,6 +70,8 @@ export function normalizeUserFromApi(data: User): User {
     phone: data.phone ?? null,
     spoken_languages: data.spoken_languages ?? [],
     qiraat_taught: data.qiraat_taught ?? [],
+    email_verified: Boolean(data.email_verified),
+    preferred_language: data.preferred_language ?? "ar",
   };
 }
 

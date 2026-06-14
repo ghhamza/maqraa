@@ -1,9 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
+use std::path::Path;
+
 use anyhow::Result;
 
 use crate::media::{LivekitConfig, MediaBackend};
+
+fn load_dotenv() {
+    let manifest_env = Path::new(env!("CARGO_MANIFEST_DIR")).join(".env");
+    if let Err(e) = dotenvy::from_path_override(&manifest_env) {
+        tracing::warn!(
+            path = %manifest_env.display(),
+            error = %e,
+            "failed to parse backend/.env — quote values that contain spaces (e.g. QF_SCOPES)"
+        );
+        dotenvy::dotenv().ok();
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct AppConfig {
@@ -23,6 +37,12 @@ pub struct AppConfig {
     #[allow(dead_code)]
     pub media_backend: MediaBackend,
     pub livekit: LivekitConfig,
+    pub email_provider: String,
+    pub resend_api_key: String,
+    pub email_from_email: String,
+    pub email_from_name: String,
+    pub app_base_url: String,
+    pub notifications_enabled: bool,
 }
 
 impl AppConfig {
@@ -43,7 +63,7 @@ impl AppConfig {
     }
 
     pub fn load() -> Result<Self> {
-        dotenvy::dotenv().ok();
+        load_dotenv();
 
         Ok(Self {
             host: std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into()),
@@ -74,6 +94,34 @@ impl AppConfig {
                 api_secret: std::env::var("APP_LIVEKIT_API_SECRET")
                     .unwrap_or_else(|_| "secret".into()),
             },
+            email_provider: std::env::var("EMAIL_PROVIDER")
+                .unwrap_or_else(|_| "resend".into()),
+            resend_api_key: std::env::var("RESEND_API_KEY").unwrap_or_default(),
+            email_from_email: std::env::var("EMAIL_FROM_EMAIL")
+                .unwrap_or_else(|_| "no-reply@maqraa.org".into()),
+            email_from_name: std::env::var("EMAIL_FROM_NAME")
+                .unwrap_or_else(|_| "المقرأة".into()),
+            app_base_url: std::env::var("APP_BASE_URL")
+                .unwrap_or_else(|_| "http://localhost:5173".into()),
+            notifications_enabled: std::env::var("NOTIFICATIONS_ENABLED")
+                .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
+                .unwrap_or(false),
         })
+    }
+}
+
+#[cfg(test)]
+mod config_tests {
+    use std::path::Path;
+
+    #[test]
+    fn dotenv_loads_notifications_enabled() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(".env");
+        dotenvy::from_path_override(&path)
+            .unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()));
+        assert_eq!(
+            std::env::var("NOTIFICATIONS_ENABLED").unwrap_or_default(),
+            "true"
+        );
     }
 }

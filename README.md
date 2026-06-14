@@ -137,6 +137,12 @@ maqraa/
 - `cd infra && docker compose up -d livekit` — start LiveKit
 - `cd infra && docker compose logs -f livekit` — view LiveKit logs
 
+## Email / notifications
+
+Transactional email (welcome/verify, password reset, enrollment approved/rejected) uses a Postgres-backed queue and a pluggable provider. The default build ships [Resend](https://resend.com) via `EMAIL_PROVIDER=resend`. See [`backend/src/notifications/README.md`](backend/src/notifications/README.md) for swapping in SMTP or another relay.
+
+Set `NOTIFICATIONS_ENABLED=true` and configure `RESEND_API_KEY` in production. Leave disabled locally (`NOTIFICATIONS_ENABLED=false`) so registration works without mail credentials.
+
 ## License
 
 AGPL-3.0.

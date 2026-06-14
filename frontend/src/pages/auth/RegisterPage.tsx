@@ -14,7 +14,7 @@ import { Input } from "../../components/ui/Input";
 import { LanguageSwitcher } from "../../components/ui/LanguageSwitcher";
 
 export function RegisterPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
   const [name, setName] = useState("");
@@ -72,6 +72,7 @@ export function RegisterPage() {
           email: email.trim(),
           password,
           role,
+          locale: (i18n.language || "ar").split("-")[0],
         },
       });
       login(data.token, data.user);
@@ -188,7 +189,7 @@ export function RegisterPage() {
         <p className="mt-6 text-center text-sm text-[var(--color-text-muted)]">
           {t("auth.hasAccount")}{" "}
           <Link to="/login" className="font-semibold text-[var(--color-primary)] hover:underline">
-            {t("auth.login")}
+            {t("auth.login.label")}
           </Link>
         </p>
       </div>

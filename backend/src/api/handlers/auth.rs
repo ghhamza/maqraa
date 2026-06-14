@@ -10,7 +10,12 @@ use crate::api::extractors::AuthenticatedUser;
 use crate::api::types::UserResponse;
 use crate::api::user_response::load_user_response;
 use crate::api::AppState;
-use crate::auth::{jwt, password};
+use crate::auth::{
+    create_reset_token, create_verification_token, consume_reset_token, consume_verification_token,
+    invalidate_reset_tokens, invalidate_verification_tokens, recent_verification_token_exists,
+    jwt, password,
+};
+use crate::notifications::{enqueue, TemplateVars};
 
 #[derive(Serialize)]
 pub struct ApiMessage {
@@ -24,6 +29,19 @@ pub struct RegisterRequest {
     pub email: String,
     pub password: String,
     pub role: String,
+    #[serde(default = "default_locale")]
+    pub locale: String,
+}
+
+fn default_locale() -> String {
+    "ar".to_string()
+}
+
+fn normalize_locale(locale: &str) -> &str {
+    match locale {
+        "ar" | "en" | "fr" => locale,
+        _ => "ar",
+    }
 }
 
 #[derive(Deserialize)]
@@ -52,20 +70,52 @@ pub async fn register(
         return Err(StatusCode::BAD_REQUEST);
     }
 
+    if req.password.len() < 8 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
     let hash = password::hash_password(&req.password).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let user_id = Uuid::new_v4();
+    let locale = normalize_locale(&req.locale);
 
     sqlx::query(
-        "INSERT INTO users (id, name, email, password_hash, role) VALUES ($1, $2, $3, $4, $5::user_role)",
+        "INSERT INTO users (id, name, email, password_hash, role, preferred_language) \
+         VALUES ($1, $2, $3, $4, $5::user_role, $6)",
     )
     .bind(user_id)
     .bind(&req.name)
     .bind(&email)
     .bind(&hash)
     .bind(role)
+    .bind(locale)
     .execute(&state.db)
     .await
     .map_err(|_| StatusCode::CONFLICT)?;
+
+    let verify_token = create_verification_token(&state.db, user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let verify_url = format!(
+        "{}/verify-email/{verify_token}",
+        state.config.app_base_url.trim_end_matches('/')
+    );
+    let vars = TemplateVars::new()
+        .with("name", req.name.trim())
+        .with("verify_url", verify_url);
+    if let Err(e) = enqueue(
+        &state.db,
+        &state.config,
+        "welcome_verify",
+        locale,
+        &email,
+        Some(user_id),
+        vars,
+    )
+    .await
+    {
+        tracing::error!(error = %e, user_id = %user_id, "failed to enqueue welcome email");
+    }
 
     let token = jwt::create_token(user_id, role, &state.config.jwt_secret)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -420,4 +470,252 @@ pub async fn change_password(
         })?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Serialize)]
+pub struct OkResponse {
+    pub ok: bool,
+}
+
+#[derive(Serialize)]
+pub struct ResendVerificationResponse {
+    pub ok: bool,
+    /// True when a new verification email was queued (false if already verified or rate-limited).
+    pub queued: bool,
+}
+
+#[derive(Deserialize)]
+pub struct VerifyEmailRequest {
+    pub token: String,
+}
+
+pub async fn verify_email(
+    State(state): State<AppState>,
+    Json(req): Json<VerifyEmailRequest>,
+) -> Result<Json<OkResponse>, StatusCode> {
+    let token = req.token.trim();
+    if token.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let user_id = consume_verification_token(&state.db, token)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let Some(user_id) = user_id else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    sqlx::query("UPDATE users SET email_verified_at = NOW() WHERE id = $1")
+        .bind(user_id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(OkResponse { ok: true }))
+}
+
+pub async fn resend_verification(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> Result<Json<ResendVerificationResponse>, StatusCode> {
+    let row: (Option<DateTime<Utc>>, String, String) = sqlx::query_as(
+        "SELECT email_verified_at, email, preferred_language FROM users WHERE id = $1",
+    )
+    .bind(auth.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if row.0.is_some() {
+        return Ok(Json(ResendVerificationResponse { ok: true, queued: false }));
+    }
+
+    if recent_verification_token_exists(&state.db, auth.id, 60)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        return Ok(Json(ResendVerificationResponse { ok: true, queued: false }));
+    }
+
+    invalidate_verification_tokens(&state.db, auth.id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let verify_token = create_verification_token(&state.db, auth.id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let verify_url = format!(
+        "{}/verify-email/{verify_token}",
+        state.config.app_base_url.trim_end_matches('/')
+    );
+    let vars = TemplateVars::new()
+        .with("name", auth.name.clone())
+        .with("verify_url", verify_url);
+    if let Err(e) = enqueue(
+        &state.db,
+        &state.config,
+        "welcome_verify",
+        &row.2,
+        &row.1,
+        Some(auth.id),
+        vars,
+    )
+    .await
+    {
+        tracing::error!(error = %e, user_id = %auth.id, "failed to enqueue verification email");
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    Ok(Json(ResendVerificationResponse { ok: true, queued: true }))
+}
+
+#[derive(Deserialize)]
+pub struct ForgotPasswordRequest {
+    pub email: String,
+    #[serde(default = "default_locale")]
+    pub locale: String,
+}
+
+#[derive(Serialize)]
+pub struct ForgotPasswordResponse {
+    pub message: &'static str,
+}
+
+pub async fn forgot_password(
+    State(state): State<AppState>,
+    Json(req): Json<ForgotPasswordRequest>,
+) -> Json<ForgotPasswordResponse> {
+    let email = req.email.trim().to_lowercase();
+    let locale = normalize_locale(&req.locale);
+
+    if !email.is_empty() {
+        let user: Option<(Uuid, String)> = sqlx::query_as(
+            "SELECT id, name FROM users WHERE lower(trim(email)) = $1 AND password_hash IS NOT NULL",
+        )
+        .bind(&email)
+        .fetch_optional(&state.db)
+        .await
+        .unwrap_or(None);
+
+        if let Some((user_id, name)) = user {
+            if let Ok(reset_token) = create_reset_token(&state.db, user_id).await {
+                let reset_url = format!(
+                    "{}/reset-password/{reset_token}",
+                    state.config.app_base_url.trim_end_matches('/')
+                );
+                let vars = TemplateVars::new()
+                    .with("name", name)
+                    .with("reset_url", reset_url);
+                let _ = enqueue(
+                    &state.db,
+                    &state.config,
+                    "password_reset",
+                    locale,
+                    &email,
+                    Some(user_id),
+                    vars,
+                )
+                .await;
+            }
+        }
+    }
+
+    Json(ForgotPasswordResponse {
+        message: "If an account exists for that email, a reset link has been sent.",
+    })
+}
+
+#[derive(Deserialize)]
+pub struct ResetPasswordRequest {
+    pub token: String,
+    pub new_password: String,
+}
+
+pub async fn reset_password(
+    State(state): State<AppState>,
+    Json(req): Json<ResetPasswordRequest>,
+) -> Result<Json<OkResponse>, (StatusCode, Json<ApiMessage>)> {
+    if req.new_password.len() < 8 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiMessage {
+                message: "كلمة المرور قصيرة",
+                code: "weak_password",
+            }),
+        ));
+    }
+
+    let token = req.token.trim();
+    if token.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiMessage {
+                message: "Invalid token",
+                code: "invalid_token",
+            }),
+        ));
+    }
+
+    let user_id = consume_reset_token(&state.db, token)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiMessage {
+                    message: "خطأ في الخادم",
+                    code: "server_error",
+                }),
+            )
+        })?;
+
+    let Some(user_id) = user_id else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiMessage {
+                message: "Invalid or expired token",
+                code: "invalid_token",
+            }),
+        ));
+    };
+
+    let new_hash = password::hash_password(&req.new_password).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiMessage {
+                message: "خطأ في الخادم",
+                code: "server_error",
+            }),
+        )
+    })?;
+
+    sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+        .bind(&new_hash)
+        .bind(user_id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiMessage {
+                    message: "خطأ في الخادم",
+                    code: "server_error",
+                }),
+            )
+        })?;
+
+    invalidate_reset_tokens(&state.db, user_id)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiMessage {
+                    message: "خطأ في الخادم",
+                    code: "server_error",
+                }),
+            )
+        })?;
+
+    Ok(Json(OkResponse { ok: true }))
 }

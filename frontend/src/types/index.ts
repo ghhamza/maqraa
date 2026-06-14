@@ -16,6 +16,8 @@ export interface User {
   phone: string | null;
   spoken_languages: string[];
   qiraat_taught: string[];
+  email_verified: boolean;
+  preferred_language: string;
 }
 
 /** Full user row from admin APIs */

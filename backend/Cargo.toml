@@ -45,6 +45,9 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-feature
 livekit-api = "0.4"
 livekit-protocol = "0.6"
 
+# Email
+resend-rs = "0.25.1"
+
 # Config
 figment = { version = "0.10", features = ["toml", "env"] }
 

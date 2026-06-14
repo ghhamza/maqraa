@@ -25,6 +25,13 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/api/auth/register", post(handlers::auth::register))
         .route("/api/auth/login", post(handlers::auth::login))
+        .route("/api/auth/verify-email", post(handlers::auth::verify_email))
+        .route(
+            "/api/auth/resend-verification",
+            post(handlers::auth::resend_verification),
+        )
+        .route("/api/auth/password/forgot", post(handlers::auth::forgot_password))
+        .route("/api/auth/password/reset", post(handlers::auth::reset_password))
         .route(
             "/api/auth/me",
             get(handlers::auth::me).put(handlers::auth::update_profile),

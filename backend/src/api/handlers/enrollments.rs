@@ -15,6 +15,7 @@ use crate::api::types::{
     EnrollmentCountResponse, EnrollmentPublic, EnrollmentWithStatus, JoinResult, MyEnrollmentStatus, StudentOption,
 };
 use crate::api::AppState;
+use crate::notifications::{enqueue, TemplateVars};
 
 #[derive(Deserialize)]
 pub struct ListStudentsQuery {
@@ -744,6 +745,37 @@ pub async fn approve_enrollment(
     .execute(&state.db)
     .await;
 
+    if let Ok(Some((student_name, student_email, preferred_language, room_name, teacher_name))) =
+        sqlx::query_as::<_, (String, String, String, String, String)>(
+            "SELECT u.name, u.email, u.preferred_language, r.name, t.name \
+             FROM enrollments e \
+             JOIN users u ON u.id = e.student_id \
+             JOIN rooms r ON r.id = e.room_id \
+             JOIN users t ON t.id = r.teacher_id \
+             WHERE e.id = $1",
+        )
+        .bind(enrollment_id)
+        .fetch_optional(&state.db)
+        .await
+    {
+        let app_url = state.config.app_base_url.trim_end_matches('/').to_string();
+        let vars = TemplateVars::new()
+            .with("name", student_name)
+            .with("room_name", room_name)
+            .with("teacher_name", teacher_name)
+            .with("app_url", app_url);
+        let _ = enqueue(
+            &state.db,
+            &state.config,
+            "enrollment_approved",
+            &preferred_language,
+            &student_email,
+            Some(student_id),
+            vars,
+        )
+        .await;
+    }
+
     let row = sqlx::query_as::<_, EnrollmentPublic>(
         "SELECT e.id, e.student_id, u.name AS student_name, u.email AS student_email, e.enrolled_at \
          FROM enrollments e INNER JOIN users u ON u.id = e.student_id WHERE e.id = $1",
@@ -821,6 +853,35 @@ pub async fn reject_enrollment(
         .execute(&state.db)
         .await
         .map_err(|_| server_error_msg())?;
+
+    if let Ok(Some((student_id, student_name, student_email, preferred_language, room_name))) =
+        sqlx::query_as::<_, (Uuid, String, String, String, String)>(
+            "SELECT u.id, u.name, u.email, u.preferred_language, r.name \
+             FROM enrollments e \
+             JOIN users u ON u.id = e.student_id \
+             JOIN rooms r ON r.id = e.room_id \
+             WHERE e.id = $1",
+        )
+        .bind(enrollment_id)
+        .fetch_optional(&state.db)
+        .await
+    {
+        let app_url = state.config.app_base_url.trim_end_matches('/').to_string();
+        let vars = TemplateVars::new()
+            .with("name", student_name)
+            .with("room_name", room_name)
+            .with("app_url", app_url);
+        let _ = enqueue(
+            &state.db,
+            &state.config,
+            "enrollment_rejected",
+            &preferred_language,
+            &student_email,
+            Some(student_id),
+            vars,
+        )
+        .await;
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }

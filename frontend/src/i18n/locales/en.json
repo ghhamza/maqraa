@@ -52,7 +52,10 @@
     "breadcrumbNav": "Breadcrumb"
   },
   "auth": {
-    "login": "Log in",
+    "login": {
+      "label": "Log in",
+      "forgotLink": "Forgot password?"
+    },
     "register": "Register",
     "logout": "Log out",
     "email": "Email",
@@ -76,6 +79,33 @@
     "accountType": "Account type",
     "createAccount": "Create account",
     "newAccountSubtitle": "Create a new account",
+    "forgotPassword": {
+      "title": "Forgot password",
+      "emailLabel": "Email",
+      "submit": "Send reset link",
+      "success": "If an account exists for that email, we've sent a reset link."
+    },
+    "resetPassword": {
+      "title": "Reset password",
+      "newPassword": "New password",
+      "confirmPassword": "Confirm password",
+      "submit": "Set password",
+      "success": "Password updated. You can log in now.",
+      "invalidToken": "Invalid or expired link."
+    },
+    "verifyEmail": {
+      "verifying": "Verifying your email...",
+      "success": "Your email is verified",
+      "failed": "Could not verify — link invalid or expired.",
+      "resend": "Resend"
+    },
+    "verifyBanner": {
+      "text": "Verify your email",
+      "resend": "Resend",
+      "resent": "Verification email sent",
+      "rateLimited": "Please wait a minute before resending",
+      "failed": "Could not send verification email"
+    },
     "or": "or",
     "continueWithQuranFoundation": "Continue with Quran.Foundation",
     "qfCallback": {

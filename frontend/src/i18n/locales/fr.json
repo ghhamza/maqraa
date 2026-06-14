@@ -52,7 +52,10 @@
     "breadcrumbNav": "Fil d'Ariane"
   },
   "auth": {
-    "login": "Connexion",
+    "login": {
+      "label": "Connexion",
+      "forgotLink": "Mot de passe oublié ?"
+    },
     "register": "Créer un compte",
     "logout": "Déconnexion",
     "email": "E-mail",
@@ -76,6 +79,33 @@
     "accountType": "Type de compte",
     "createAccount": "Créer un compte",
     "newAccountSubtitle": "Créer un nouveau compte",
+    "forgotPassword": {
+      "title": "Mot de passe oublié",
+      "emailLabel": "E-mail",
+      "submit": "Envoyer le lien",
+      "success": "Si un compte existe pour cet e-mail, nous avons envoyé un lien de réinitialisation."
+    },
+    "resetPassword": {
+      "title": "Réinitialiser le mot de passe",
+      "newPassword": "Nouveau mot de passe",
+      "confirmPassword": "Confirmer le mot de passe",
+      "submit": "Définir le mot de passe",
+      "success": "Mot de passe mis à jour. Vous pouvez vous connecter.",
+      "invalidToken": "Lien invalide ou expiré."
+    },
+    "verifyEmail": {
+      "verifying": "Vérification de votre e-mail...",
+      "success": "Votre e-mail est vérifié",
+      "failed": "Échec de la vérification — lien invalide ou expiré.",
+      "resend": "Renvoyer"
+    },
+    "verifyBanner": {
+      "text": "Vérifiez votre e-mail",
+      "resend": "Renvoyer",
+      "resent": "E-mail de vérification envoyé",
+      "rateLimited": "Veuillez attendre une minute avant de renvoyer",
+      "failed": "Impossible d'envoyer l'e-mail de vérification"
+    },
     "or": "ou",
     "continueWithQuranFoundation": "Continuer avec Quran.Foundation",
     "qfCallback": {

@@ -34,6 +34,7 @@ import {
 import { ProfileMenu } from "./ProfileMenu";
 import { LiveSessionBanner } from "./LiveSessionBanner";
 import { LiveSessionsErrorToast } from "./LiveSessionsErrorToast";
+import { VerifyEmailBanner } from "../VerifyEmailBanner";
 import { useRoomsStats } from "../../data/rooms";
 
 function roleBadgeVariant(role: string): "green" | "blue" | "gold" {
@@ -351,6 +352,7 @@ export function AppLayout() {
       </header>
 
       <LiveSessionsErrorToast />
+      <VerifyEmailBanner />
       <LiveSessionBanner />
 
       <main

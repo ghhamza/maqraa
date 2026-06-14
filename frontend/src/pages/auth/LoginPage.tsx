@@ -100,6 +100,11 @@ export function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+          <p className="-mt-2 text-end text-sm">
+            <Link to="/forgot-password" className="font-medium text-[var(--color-primary)] hover:underline">
+              {t("auth.login.forgotLink")}
+            </Link>
+          </p>
 
           {formError ? (
             <p className="text-center text-sm text-red-600" role="alert">

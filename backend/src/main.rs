@@ -12,6 +12,7 @@ mod config;
 mod db;
 mod models;
 mod media;
+mod notifications;
 mod qf;
 mod quran_ayah_counts;
 mod riwaya;
@@ -97,6 +98,12 @@ async fn run_server() -> Result<()> {
     tracing::info!("Starting Al-Maqraa server...");
 
     let config = config::AppConfig::load()?;
+    tracing::info!(
+        notifications_enabled = config.notifications_enabled,
+        email_provider = %config.email_provider,
+        app_base_url = %config.app_base_url,
+        "Loaded configuration"
+    );
     tracing::debug!(recordings_path = %config.recordings_path);
 
     std::fs::create_dir_all(&config.recordings_path)?;
@@ -104,6 +111,18 @@ async fn run_server() -> Result<()> {
     let db_pool = db::create_pool(&config.database_url).await?;
 
     sqlx::migrate!("./migrations").run(&db_pool).await?;
+
+    if config.notifications_enabled {
+        let provider = notifications::build_provider(&config)?;
+        notifications::spawn_worker(db_pool.clone(), provider, config.clone());
+    } else {
+        if !config.resend_api_key.is_empty() {
+            tracing::warn!(
+                "NOTIFICATIONS_ENABLED=false but RESEND_API_KEY is set — no emails will be sent until enabled"
+            );
+        }
+        tracing::info!("notifications disabled (NOTIFICATIONS_ENABLED=false)");
+    }
 
     let storage = services::storage::StorageService::new(&config.recordings_path);
 

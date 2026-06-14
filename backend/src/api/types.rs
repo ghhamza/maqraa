@@ -22,6 +22,8 @@ pub struct UserResponse {
     pub phone: Option<String>,
     pub spoken_languages: Vec<String>,
     pub qiraat_taught: Vec<String>,
+    pub email_verified: bool,
+    pub preferred_language: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

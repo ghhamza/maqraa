@@ -7,6 +7,9 @@ import { useTranslation } from "react-i18next";
 import { Direction } from "radix-ui";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { RegisterPage } from "./pages/auth/RegisterPage";
+import { ForgotPasswordPage } from "./pages/auth/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/auth/ResetPasswordPage";
+import { VerifyEmailPage } from "./pages/auth/VerifyEmailPage";
 import { QfCallbackPage } from "./pages/auth/QfCallbackPage";
 import { RoleSelectionPage } from "./pages/auth/RoleSelectionPage";
 import { ProtectedRoute } from "./components/ui/ProtectedRoute";
@@ -63,6 +66,11 @@ const router = createBrowserRouter([
     children: [
   { path: "/login", element: <LoginPage /> },
   { path: "/register", element: <RegisterPage /> },
+  { path: "/forgot-password", element: <ForgotPasswordPage /> },
+  { path: "/reset-password/:token", element: <ResetPasswordPage /> },
+  { path: "/reset-password", element: <ResetPasswordPage /> },
+  { path: "/verify-email/:token", element: <VerifyEmailPage /> },
+  { path: "/verify-email", element: <VerifyEmailPage /> },
   { path: "/auth/qf/callback", element: <QfCallbackPage /> },
   {
     path: "/auth/role-selection",

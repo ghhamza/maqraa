@@ -334,8 +334,8 @@ pub async fn exchange(
                 )
             })?;
             sqlx::query(
-                "INSERT INTO users (id, name, email, password_hash, role, role_selection_pending)
-                 VALUES ($1,$2,$3,$4,'student'::user_role, TRUE)",
+                "INSERT INTO users (id, name, email, password_hash, role, role_selection_pending, email_verified_at)
+                 VALUES ($1,$2,$3,$4,'student'::user_role, TRUE, NOW())",
             )
             .bind(id)
             .bind(&name)
@@ -380,6 +380,13 @@ pub async fn exchange(
     .execute(&state.db)
     .await
     .map_err(|_| qf_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error", "failed to upsert qf account"))?;
+
+    let _ = sqlx::query(
+        "UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = $1",
+    )
+    .bind(user_row.0)
+    .execute(&state.db)
+    .await;
 
     let jwt_token =
         jwt::create_token(user_row.0, &user_row.3, &state.config.jwt_secret).map_err(|_| {
