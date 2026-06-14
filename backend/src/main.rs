@@ -115,6 +115,7 @@ async fn run_server() -> Result<()> {
     if config.notifications_enabled {
         let provider = notifications::build_provider(&config)?;
         notifications::spawn_worker(db_pool.clone(), provider, config.clone());
+        notifications::spawn_scheduler(db_pool.clone(), config.clone());
     } else {
         if !config.resend_api_key.is_empty() {
             tracing::warn!(

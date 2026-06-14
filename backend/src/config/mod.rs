@@ -42,6 +42,10 @@ pub struct AppConfig {
     pub email_from_email: String,
     pub email_from_name: String,
     pub app_base_url: String,
+    /// IANA timezone for formatting session times in emails (e.g. Asia/Riyadh).
+    pub app_display_tz: String,
+    /// Local hour (0–23 in APP_DISPLAY_TZ) when the daily new-signup digest may send.
+    pub digest_send_hour: u32,
     pub notifications_enabled: bool,
 }
 
@@ -103,6 +107,13 @@ impl AppConfig {
                 .unwrap_or_else(|_| "المقرأة".into()),
             app_base_url: std::env::var("APP_BASE_URL")
                 .unwrap_or_else(|_| "http://localhost:5173".into()),
+            app_display_tz: std::env::var("APP_DISPLAY_TZ")
+                .unwrap_or_else(|_| "Asia/Riyadh".into()),
+            digest_send_hour: std::env::var("DIGEST_SEND_HOUR")
+                .unwrap_or_else(|_| "6".into())
+                .parse()
+                .unwrap_or(6)
+                .min(23),
             notifications_enabled: std::env::var("NOTIFICATIONS_ENABLED")
                 .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
                 .unwrap_or(false),

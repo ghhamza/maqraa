@@ -53,3 +53,4 @@ figment = { version = "0.10", features = ["toml", "env"] }
 
 # CLI
 clap = { version = "4", features = ["derive"] }
+chrono-tz = "0.10"

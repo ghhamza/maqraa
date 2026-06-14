@@ -21,6 +21,7 @@ use crate::api::types::{
     SessionLivePublicItem, SessionPublic, SessionStatsResponse,
 };
 use crate::api::AppState;
+use crate::notifications::{enqueue, format_session_time, TemplateVars};
 
 #[derive(FromRow)]
 struct SessionLivePublicRow {
@@ -875,6 +876,8 @@ pub async fn update_session(
             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?
             .ok_or((StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
 
+        notify_session_update(&state, &session, &updated).await;
+
         if matches!(updated.status.as_str(), "completed" | "cancelled") {
             crate::api::ws::signaling::on_session_ended(&state, id).await;
         }
@@ -903,6 +906,8 @@ pub async fn update_session(
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?
         .ok_or((StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
+
+    notify_session_update(&state, &session, &updated).await;
 
     if matches!(
         updated.status.as_str(),
@@ -985,4 +990,95 @@ pub async fn update_attendance(
     .await
     .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
     Ok(Json(attendance))
+}
+
+#[derive(sqlx::FromRow)]
+struct SessionNotifyEnrollee {
+    id: Uuid,
+    email: String,
+    preferred_language: String,
+}
+
+async fn notify_session_update(
+    state: &AppState,
+    before: &SessionPublic,
+    after: &SessionPublic,
+) {
+    let cancelled = after.status == "cancelled" && before.status != "cancelled";
+    let rescheduled = after.status == "scheduled"
+        && before.status == "scheduled"
+        && after.scheduled_at != before.scheduled_at;
+
+    if !cancelled && !rescheduled {
+        return;
+    }
+
+    let enrollees: Vec<SessionNotifyEnrollee> = match sqlx::query_as(
+        "SELECT u.id, u.email, u.preferred_language \
+         FROM enrollments e \
+         JOIN users u ON u.id = e.student_id \
+         WHERE e.room_id = $1 AND e.status = 'approved'",
+    )
+    .bind(after.room_id)
+    .fetch_all(&state.db)
+    .await
+    {
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::error!(
+                error = %e,
+                session_id = %after.id,
+                "failed to fetch enrollees for session notification"
+            );
+            return;
+        }
+    };
+
+    let base = state.config.app_base_url.trim_end_matches('/');
+    let session_title = after.title.clone().unwrap_or_else(|| "Session".to_string());
+    let template_key = if cancelled {
+        "session_cancelled"
+    } else {
+        "session_rescheduled"
+    };
+
+    for enrollee in enrollees {
+        let session_time = format_session_time(
+            after.scheduled_at,
+            &enrollee.preferred_language,
+            &state.config.app_display_tz,
+        );
+        let vars = if cancelled {
+            TemplateVars::new()
+                .with("session_title", session_title.clone())
+                .with("room_name", after.room_name.clone())
+                .with("session_time", session_time)
+                .with("app_url", format!("{base}/rooms/{}", after.room_id))
+        } else {
+            TemplateVars::new()
+                .with("session_title", session_title.clone())
+                .with("room_name", after.room_name.clone())
+                .with("session_time", session_time)
+                .with("session_url", format!("{base}/sessions/{}", after.id))
+        };
+        if let Err(e) = enqueue(
+            &state.db,
+            &state.config,
+            template_key,
+            &enrollee.preferred_language,
+            &enrollee.email,
+            Some(enrollee.id),
+            vars,
+        )
+        .await
+        {
+            tracing::error!(
+                error = %e,
+                session_id = %after.id,
+                user_id = %enrollee.id,
+                template_key,
+                "failed to enqueue session notification"
+            );
+        }
+    }
 }

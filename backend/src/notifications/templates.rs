@@ -6,6 +6,8 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Default)]
 pub struct TemplateVars {
     pub values: HashMap<String, String>,
+    /// Extra body paragraphs appended after the intro (e.g. digest signup lines).
+    pub list_lines: Vec<String>,
 }
 
 impl TemplateVars {
@@ -15,6 +17,11 @@ impl TemplateVars {
 
     pub fn with(mut self, key: &str, value: impl Into<String>) -> Self {
         self.values.insert(key.to_string(), value.into());
+        self
+    }
+
+    pub fn with_list_lines(mut self, lines: Vec<String>) -> Self {
+        self.list_lines = lines;
         self
     }
 }
@@ -297,6 +304,292 @@ pub fn render(template_key: &str, locale: &str, vars: &TemplateVars) -> Rendered
                 locale,
                 &sub(heading),
                 &[sub(p1), sub(p2)],
+                Some((cta_label, &app_url)),
+            );
+            RenderedEmail {
+                subject: sub(subject),
+                html,
+                text,
+            }
+        }
+        "enrollment_requested" => {
+            let (subject, heading, p1, p2, cta_label) = match locale {
+                "ar" => (
+                    "طلب انضمام جديد إلى حلقة {{room_name}}",
+                    "مرحبًا {{name}}",
+                    "قدّم الطالب {{student_name}} طلبًا للانضمام إلى حلقتك «{{room_name}}».",
+                    "يمكنك قبول الطلب أو رفضه من صفحة الحلقة.",
+                    "مراجعة الطلب",
+                ),
+                "fr" => (
+                    "Nouvelle demande pour {{room_name}}",
+                    "Bonjour {{name}}",
+                    "{{student_name}} a demandé à rejoindre votre halaqah « {{room_name}} ».",
+                    "Vous pouvez accepter ou refuser depuis la page de la halaqah.",
+                    "Examiner la demande",
+                ),
+                _ => (
+                    "New join request for {{room_name}}",
+                    "Hello {{name}}",
+                    "{{student_name}} has requested to join your halaqah \"{{room_name}}\".",
+                    "You can approve or reject the request from the halaqah page.",
+                    "Review request",
+                ),
+            };
+            let app_url = vars.values.get("app_url").cloned().unwrap_or_default();
+            let (html, text) = email_layout(
+                locale,
+                &sub(heading),
+                &[sub(p1), sub(p2)],
+                Some((cta_label, &app_url)),
+            );
+            RenderedEmail {
+                subject: sub(subject),
+                html,
+                text,
+            }
+        }
+        "session_reminder" => {
+            let (subject, heading, p1, p2, cta_label) = match locale {
+                "ar" => (
+                    "تذكير: جلسة {{session_title}} قريبًا",
+                    "تذكير بالجلسة",
+                    "لديك جلسة «{{session_title}}» في حلقة «{{room_name}}» بتاريخ {{session_time}}.",
+                    "نراك هناك إن شاء الله.",
+                    "الذهاب إلى الجلسة",
+                ),
+                "fr" => (
+                    "Rappel : {{session_title}} approche",
+                    "Rappel de séance",
+                    "Vous avez une séance « {{session_title}} » dans « {{room_name}} » le {{session_time}}.",
+                    "À bientôt.",
+                    "Aller à la séance",
+                ),
+                _ => (
+                    "Reminder: {{session_title}} is coming up",
+                    "Session reminder",
+                    "You have a session \"{{session_title}}\" in \"{{room_name}}\" on {{session_time}}.",
+                    "See you there.",
+                    "Go to session",
+                ),
+            };
+            let session_url = vars.values.get("session_url").cloned().unwrap_or_default();
+            let (html, text) = email_layout(
+                locale,
+                &sub(heading),
+                &[sub(p1), sub(p2)],
+                Some((cta_label, &session_url)),
+            );
+            RenderedEmail {
+                subject: sub(subject),
+                html,
+                text,
+            }
+        }
+        "session_cancelled" => {
+            let (subject, heading, p1, cta_label) = match locale {
+                "ar" => (
+                    "إلغاء جلسة {{session_title}}",
+                    "إلغاء جلسة",
+                    "نأسف لإبلاغك بأن جلسة «{{session_title}}» في حلقة «{{room_name}}» المقرّرة بتاريخ {{session_time}} قد أُلغيت.",
+                    "الذهاب إلى الحلقة",
+                ),
+                "fr" => (
+                    "{{session_title}} a été annulée",
+                    "Séance annulée",
+                    "Nous vous informons que « {{session_title}} » dans « {{room_name}} » prévue le {{session_time}} a été annulée.",
+                    "Voir la halaqah",
+                ),
+                _ => (
+                    "{{session_title}} has been cancelled",
+                    "Session cancelled",
+                    "We're sorry to let you know that \"{{session_title}}\" in \"{{room_name}}\" scheduled for {{session_time}} has been cancelled.",
+                    "View halaqah",
+                ),
+            };
+            let app_url = vars.values.get("app_url").cloned().unwrap_or_default();
+            let (html, text) = email_layout(
+                locale,
+                &sub(heading),
+                &[sub(p1)],
+                Some((cta_label, &app_url)),
+            );
+            RenderedEmail {
+                subject: sub(subject),
+                html,
+                text,
+            }
+        }
+        "session_rescheduled" => {
+            let (subject, heading, p1, cta_label) = match locale {
+                "ar" => (
+                    "تغيير موعد جلسة {{session_title}}",
+                    "تغيير موعد الجلسة",
+                    "تم تغيير موعد جلسة «{{session_title}}» في حلقة «{{room_name}}» إلى {{session_time}}.",
+                    "الذهاب إلى الجلسة",
+                ),
+                "fr" => (
+                    "{{session_title}} a été reprogrammée",
+                    "Séance reprogrammée",
+                    "« {{session_title}} » dans « {{room_name}} » a été déplacée au {{session_time}}.",
+                    "Aller à la séance",
+                ),
+                _ => (
+                    "{{session_title}} has been rescheduled",
+                    "Session rescheduled",
+                    "\"{{session_title}}\" in \"{{room_name}}\" has been moved to {{session_time}}.",
+                    "Go to session",
+                ),
+            };
+            let session_url = vars.values.get("session_url").cloned().unwrap_or_default();
+            let (html, text) = email_layout(
+                locale,
+                &sub(heading),
+                &[sub(p1)],
+                Some((cta_label, &session_url)),
+            );
+            RenderedEmail {
+                subject: sub(subject),
+                html,
+                text,
+            }
+        }
+        "recitation_feedback" => {
+            let (subject, heading, p1, p2, cta_label) = match locale {
+                "ar" => (
+                    "ملاحظات جديدة على تلاوتك",
+                    "مرحبًا {{name}}",
+                    "سجّل معلّمك تقييمًا جديدًا لتلاوتك ({{recitation_ref}}) بتقدير: {{grade_label}}.",
+                    "يمكنك الاطلاع على التفاصيل والملاحظات في حسابك.",
+                    "عرض التلاوة",
+                ),
+                "fr" => (
+                    "Nouveau retour sur votre récitation",
+                    "Bonjour {{name}}",
+                    "Votre enseignant a ajouté un retour sur votre récitation ({{recitation_ref}}), note : {{grade_label}}.",
+                    "Consultez les détails et les remarques dans votre compte.",
+                    "Voir la récitation",
+                ),
+                _ => (
+                    "New feedback on your recitation",
+                    "Hello {{name}}",
+                    "Your teacher logged new feedback on your recitation ({{recitation_ref}}), graded {{grade_label}}.",
+                    "You can review the details and notes in your account.",
+                    "View recitation",
+                ),
+            };
+            let app_url = vars.values.get("app_url").cloned().unwrap_or_default();
+            let (html, text) = email_layout(
+                locale,
+                &sub(heading),
+                &[sub(p1), sub(p2)],
+                Some((cta_label, &app_url)),
+            );
+            RenderedEmail {
+                subject: subject.to_string(),
+                html,
+                text,
+            }
+        }
+        "profile_completion_reminder" => {
+            let (subject, heading, p1, cta_label) = match locale {
+                "ar" => (
+                    "أكمل ملفك الشخصي في المقرأة",
+                    "مرحبًا {{name}}",
+                    "لم تُكمل بيانات ملفك الشخصي بعد. إكمالها يستغرق أقل من دقيقة ويساعدنا على تحسين تجربتك.",
+                    "إكمال الملف",
+                ),
+                "fr" => (
+                    "Complétez votre profil Al-Maqraa",
+                    "Bonjour {{name}}",
+                    "Vous n'avez pas encore terminé votre profil. Cela prend moins d'une minute et améliore votre expérience.",
+                    "Compléter le profil",
+                ),
+                _ => (
+                    "Complete your Al-Maqraa profile",
+                    "Hello {{name}}",
+                    "You haven't finished setting up your profile yet. It takes less than a minute and helps us improve your experience.",
+                    "Complete profile",
+                ),
+            };
+            let app_url = vars.values.get("app_url").cloned().unwrap_or_default();
+            let (html, text) = email_layout(
+                locale,
+                &sub(heading),
+                &[sub(p1)],
+                Some((cta_label, &app_url)),
+            );
+            RenderedEmail {
+                subject: subject.to_string(),
+                html,
+                text,
+            }
+        }
+        "enrollment_removed" => {
+            let (subject, heading, p1, p2, cta_label) = match locale {
+                "ar" => (
+                    "انتهاء اشتراكك في حلقة {{room_name}}",
+                    "مرحبًا {{name}}",
+                    "نودّ إعلامك بأنه تم إنهاء اشتراكك في حلقة «{{room_name}}».",
+                    "إن كان لديك أي استفسار يمكنك التواصل مع معلّم الحلقة، كما يمكنك تصفّح حلقات أخرى والانضمام إليها في أي وقت.",
+                    "تصفّح الحلقات",
+                ),
+                "fr" => (
+                    "Votre inscription à {{room_name}} a pris fin",
+                    "Bonjour {{name}}",
+                    "Nous vous informons que votre inscription à « {{room_name}} » a pris fin.",
+                    "Pour toute question, contactez l'enseignant de la halaqah. Vous pouvez parcourir et rejoindre d'autres halaqat à tout moment.",
+                    "Parcourir les halaqat",
+                ),
+                _ => (
+                    "Your enrollment in {{room_name}} has ended",
+                    "Hello {{name}}",
+                    "We're letting you know that your enrollment in \"{{room_name}}\" has ended.",
+                    "If you have any questions, reach out to the halaqah's teacher. You're welcome to browse and join other halaqat anytime.",
+                    "Browse halaqat",
+                ),
+            };
+            let app_url = vars.values.get("app_url").cloned().unwrap_or_default();
+            let (html, text) = email_layout(
+                locale,
+                &sub(heading),
+                &[sub(p1), sub(p2)],
+                Some((cta_label, &app_url)),
+            );
+            RenderedEmail {
+                subject: sub(subject),
+                html,
+                text,
+            }
+        }
+        "new_signup_digest" => {
+            let (subject, heading, intro, cta_label) = match locale {
+                "ar" => (
+                    "ملخص التسجيلات الجديدة — {{count}} مستخدم",
+                    "تسجيلات آخر ٢٤ ساعة",
+                    "انضم {{count}} مستخدم جديد خلال آخر ٢٤ ساعة:",
+                    "إدارة المستخدمين",
+                ),
+                "fr" => (
+                    "Nouvelles inscriptions — {{count}} utilisateurs",
+                    "Inscriptions des dernières 24 h",
+                    "{{count}} nouveaux utilisateurs ont rejoint au cours des dernières 24 h :",
+                    "Gérer les utilisateurs",
+                ),
+                _ => (
+                    "New signups — {{count}} new users",
+                    "Signups in the last 24 hours",
+                    "{{count}} new users joined in the last 24 hours:",
+                    "Manage users",
+                ),
+            };
+            let app_url = vars.values.get("app_url").cloned().unwrap_or_default();
+            let mut paragraphs = vec![sub(intro)];
+            paragraphs.extend(vars.list_lines.iter().cloned());
+            let (html, text) = email_layout(
+                locale,
+                heading,
+                &paragraphs,
                 Some((cta_label, &app_url)),
             );
             RenderedEmail {

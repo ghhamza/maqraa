@@ -21,6 +21,7 @@ use crate::api::types::{
     SurahCount,
 };
 use crate::api::AppState;
+use crate::notifications::{enqueue, grade_label, recitation_ref, TemplateVars};
 
 #[derive(Deserialize)]
 pub struct ListRecitationsQuery {
@@ -446,6 +447,38 @@ pub async fn create_recitation(
     let rec = fetch_recitation_public(&state.db, id)
         .await?
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if let Some(grade) = grade_sql {
+        if let Ok(Some((student_name, student_email, preferred_language))) =
+            sqlx::query_as::<_, (String, String, String)>(
+                "SELECT name, email, preferred_language FROM users WHERE id = $1",
+            )
+            .bind(req.student_id)
+            .fetch_optional(&state.db)
+            .await
+        {
+            let locale = preferred_language.as_str();
+            let ref_str = recitation_ref(req.surah, req.ayah_start, req.ayah_end, locale);
+            let label = grade_label(grade, locale);
+            let base = state.config.app_base_url.trim_end_matches('/');
+            let vars = TemplateVars::new()
+                .with("name", student_name)
+                .with("recitation_ref", ref_str)
+                .with("grade_label", label)
+                .with("app_url", format!("{base}/recitations"));
+            let _ = enqueue(
+                &state.db,
+                &state.config,
+                "recitation_feedback",
+                locale,
+                &student_email,
+                Some(req.student_id),
+                vars,
+            )
+            .await;
+        }
+    }
+
     let user_api = state.user_api.clone();
     let rec_id = rec.id;
     let student_id = req.student_id;

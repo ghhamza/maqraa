@@ -344,8 +344,12 @@ pub async fn delete_enrollment(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let enrolled_student: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT student_id FROM enrollments WHERE id = $1 AND room_id = $2 AND status = 'approved'",
+    let enrolled: Option<(Uuid, String, String, String, String)> = sqlx::query_as(
+        "SELECT e.student_id, u.name, u.email, u.preferred_language, r.name \
+         FROM enrollments e \
+         JOIN users u ON u.id = e.student_id \
+         JOIN rooms r ON r.id = e.room_id \
+         WHERE e.id = $1 AND e.room_id = $2 AND e.status = 'approved'",
     )
     .bind(enrollment_id)
     .bind(room_id)
@@ -353,7 +357,8 @@ pub async fn delete_enrollment(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let Some((student_id,)) = enrolled_student else {
+    let Some((student_id, student_name, student_email, preferred_language, room_name)) = enrolled
+    else {
         return Err(StatusCode::NOT_FOUND);
     };
 
@@ -380,6 +385,24 @@ pub async fn delete_enrollment(
     .bind(room_id)
     .execute(&state.db)
     .await;
+
+    if auth.id != student_id {
+        let base = state.config.app_base_url.trim_end_matches('/');
+        let vars = TemplateVars::new()
+            .with("name", student_name)
+            .with("room_name", room_name)
+            .with("app_url", format!("{base}/rooms"));
+        let _ = enqueue(
+            &state.db,
+            &state.config,
+            "enrollment_removed",
+            &preferred_language,
+            &student_email,
+            Some(student_id),
+            vars,
+        )
+        .await;
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -594,6 +617,39 @@ pub async fn join_room(
     }
 
     tx.commit().await.map_err(|_| server_error_msg())?;
+
+    if status == "pending" {
+        if let Ok(Some((teacher_id, teacher_name, teacher_email, preferred_language, room_name, student_name))) =
+            sqlx::query_as::<_, (Uuid, String, String, String, String, String)>(
+                "SELECT t.id, t.name, t.email, t.preferred_language, r.name, u.name \
+                 FROM rooms r \
+                 JOIN users t ON t.id = r.teacher_id \
+                 JOIN users u ON u.id = $1 \
+                 WHERE r.id = $2",
+            )
+            .bind(auth.id)
+            .bind(room_id)
+            .fetch_optional(&state.db)
+            .await
+        {
+            let base = state.config.app_base_url.trim_end_matches('/');
+            let vars = TemplateVars::new()
+                .with("name", teacher_name)
+                .with("student_name", student_name)
+                .with("room_name", room_name)
+                .with("app_url", format!("{base}/rooms/{room_id}"));
+            let _ = enqueue(
+                &state.db,
+                &state.config,
+                "enrollment_requested",
+                &preferred_language,
+                &teacher_email,
+                Some(teacher_id),
+                vars,
+            )
+            .await;
+        }
+    }
 
     let message = if status == "pending" {
         "تم إرسال طلب التحاق وبانتظار موافقة المعلّم".to_string()
