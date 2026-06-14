@@ -14,7 +14,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
-use crate::api::types::UserResponse;
+use crate::api::user_response::load_user_response;
 use crate::api::AppState;
 use crate::auth::{jwt, password};
 use crate::qf::content::{DEFAULT_RECITATION_ID, QF_CHAPTER_AUDIO_NOT_FOUND};
@@ -397,15 +397,15 @@ pub async fn exchange(
     .execute(&state.db)
     .await;
 
-    let user = UserResponse {
-        id: user_row.0,
-        name: user_row.1,
-        email: user_row.2,
-        role: user_row.3,
-        qf_linked: true,
-        qf_email: claims.email,
-        role_selection_pending: user_row.4,
-    };
+    let user = load_user_response(&state.db, user_row.0)
+        .await
+        .map_err(|_| {
+        qf_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "server_error",
+            "failed to load user",
+        )
+    })?;
     let post_login_redirect = if created_new_user || user_row.4 {
         "/auth/role-selection".to_string()
     } else {

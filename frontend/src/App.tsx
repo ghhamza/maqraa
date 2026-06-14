@@ -11,6 +11,7 @@ import { QfCallbackPage } from "./pages/auth/QfCallbackPage";
 import { RoleSelectionPage } from "./pages/auth/RoleSelectionPage";
 import { ProtectedRoute } from "./components/ui/ProtectedRoute";
 import { RoleSelectionGuard } from "./components/auth/RoleSelectionGuard";
+import { ProfileCompletionGuard } from "./components/auth/ProfileCompletionGuard";
 import { AdminRoute } from "./components/ui/AdminRoute";
 import { AppLayout } from "./components/layout/AppLayout";
 import { HomePage } from "./pages/HomePage";
@@ -28,6 +29,7 @@ import { LiveSessionsPage } from "./pages/sessions/LiveSessionsPage";
 import { RecitationsPage } from "./pages/recitations/RecitationsPage";
 import { StudentProgressPage } from "./pages/recitations/StudentProgressPage";
 import { ProfilePage } from "./pages/profile/ProfilePage";
+import { ProfileCompletePage } from "./pages/profile/ProfileCompletePage";
 import { AccountLinksPage } from "./pages/settings/AccountLinksPage";
 import { MushafPage } from "./pages/mushaf/MushafPage";
 import { useAuthStore } from "./stores/authStore";
@@ -37,7 +39,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { queryClient } from "./lib/queryClient";
 import { LiveSessionsProvider } from "./contexts/LiveSessionsContext";
-import { PreLaunchBannerGate } from "./components/layout/PreLaunchBannerGate";
 import { setFontLoadFailureHandler } from "./lib/mushafFontLoader";
 
 /** Radix `useDirection()` defaults to LTR unless this provider is set; it does not read `document.dir`. */
@@ -51,7 +52,6 @@ function RadixDirectionProvider({ children }: { children: ReactNode }) {
 function AppRootLayout() {
   return (
     <div className="flex min-h-[100dvh] w-full min-w-0 flex-1 flex-col">
-      <PreLaunchBannerGate />
       <Outlet />
     </div>
   );
@@ -73,11 +73,23 @@ const router = createBrowserRouter([
     ),
   },
   {
+    path: "/profile/complete",
+    element: (
+      <ProtectedRoute>
+        <RoleSelectionGuard>
+          <ProfileCompletePage />
+        </RoleSelectionGuard>
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: "/sessions/:id/live",
     element: (
       <ProtectedRoute>
         <RoleSelectionGuard>
-          <LiveSessionPage />
+          <ProfileCompletionGuard>
+            <LiveSessionPage />
+          </ProfileCompletionGuard>
         </RoleSelectionGuard>
       </ProtectedRoute>
     ),
@@ -87,7 +99,9 @@ const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <RoleSelectionGuard>
-          <AppLayout />
+          <ProfileCompletionGuard>
+            <AppLayout />
+          </ProfileCompletionGuard>
         </RoleSelectionGuard>
       </ProtectedRoute>
     ),

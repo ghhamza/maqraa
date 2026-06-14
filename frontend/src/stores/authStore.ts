@@ -4,6 +4,7 @@
 import { create } from "zustand";
 import { getApiBaseUrl } from "../lib/api";
 import type { User } from "../types";
+import { normalizeUserFromApi } from "../lib/profileDetails";
 
 interface AuthState {
   user: User | null;
@@ -46,12 +47,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         throw new Error("unauthorized");
       }
       const data = (await res.json()) as User;
-      const normalized: User = {
-        ...data,
-        qf_linked: Boolean(data.qf_linked),
-        qf_email: data.qf_email ?? null,
-        role_selection_pending: Boolean(data.role_selection_pending),
-      };
+      const normalized = normalizeUserFromApi(data);
       // Ignore stale responses if login() replaced the token while this fetch was in flight
       if (localStorage.getItem("miqraa_token") !== tokenForThisRequest) {
         set({ isLoading: false });

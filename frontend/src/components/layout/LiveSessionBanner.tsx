@@ -33,7 +33,7 @@ export function LiveSessionBanner() {
   return (
     <div
       role="status"
-      className="sticky top-[calc(var(--pre-launch-banner-height)+4rem)] z-30 flex h-12 w-full min-w-0 items-center gap-3 border-b border-border bg-background px-3 shadow-sm sm:px-4 md:px-6"
+      className="sticky top-16 z-30 flex h-12 w-full min-w-0 items-center gap-3 border-b border-border bg-background px-3 shadow-sm sm:px-4 md:px-6"
     >
       <div className="min-w-0 flex-1 text-start">
         <p className="truncate text-xs font-semibold text-foreground sm:text-sm">

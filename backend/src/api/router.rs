@@ -35,6 +35,7 @@ pub fn build_router(state: AppState) -> Router {
             "/api/auth/role-selection",
             post(handlers::auth::role_selection),
         )
+        .route("/api/profile", put(handlers::profile::complete_profile))
         .route("/api/auth/qf/start", get(handlers::qf::start))
         .route("/api/auth/qf/exchange", post(handlers::qf::exchange))
         .route("/api/auth/qf/unlink", post(handlers::qf::unlink))

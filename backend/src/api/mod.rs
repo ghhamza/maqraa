@@ -3,8 +3,10 @@
 
 pub mod extractors;
 pub mod handlers;
+pub mod profile_constants;
 pub mod router;
 pub mod types;
+pub mod user_response;
 pub mod ws;
 
 use crate::config::AppConfig;

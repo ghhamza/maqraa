@@ -5,15 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  Bell,
   BookOpen,
   Calendar,
   DoorOpen,
   Home,
-  Link as LinkIcon,
-  LogOut,
   Menu,
-  User,
   Users,
 } from "lucide-react";
 import { useAuthStore } from "../../stores/authStore";
@@ -29,39 +25,16 @@ import {
   NavigationMenuList,
 } from "../ui/navigation-menu";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
-import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from "../ui/sheet";
-import { Avatar, AvatarFallback } from "../ui/avatar";
+import { ProfileMenu } from "./ProfileMenu";
 import { LiveSessionBanner } from "./LiveSessionBanner";
 import { LiveSessionsErrorToast } from "./LiveSessionsErrorToast";
 import { useRoomsStats } from "../../data/rooms";
-
-/** Up to two letters: first + last word, or first two chars of a single name. */
-function nameToInitials(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed) return "?";
-  const parts = trimmed.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    const a = parts[0]?.[0] ?? "";
-    const b = parts[parts.length - 1]?.[0] ?? "";
-    return (a + b).toUpperCase();
-  }
-  const w = parts[0] ?? trimmed;
-  if (w.length <= 2) return w.toUpperCase();
-  return w.slice(0, 2).toUpperCase();
-}
 
 function roleBadgeVariant(role: string): "green" | "blue" | "gold" {
   if (role === "teacher") return "blue";
@@ -221,7 +194,7 @@ export function AppLayout() {
 
   return (
     <div className="flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col bg-[var(--color-bg)]">
-      <header className="sticky top-[var(--pre-launch-banner-height)] z-40 w-full min-w-0 border-b border-border bg-[var(--color-surface)] shadow-sm">
+      <header className="sticky top-0 z-50 w-full min-w-0 overflow-visible border-b border-border bg-[var(--color-surface)] shadow-sm">
         <div
           className={cn(
             "flex min-w-0 flex-wrap items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 md:gap-4 md:px-6 lg:px-8",
@@ -295,8 +268,11 @@ export function AppLayout() {
             </NavLink>
           </div>
 
-          <NavigationMenu viewport={false} className="hidden max-w-none flex-1 justify-center md:flex">
-            <NavigationMenuList className="flex flex-wrap items-center justify-center gap-0.5">
+          <NavigationMenu
+            viewport={false}
+            className="pointer-events-none hidden max-w-none flex-1 justify-center md:flex"
+          >
+            <NavigationMenuList className="pointer-events-auto flex flex-wrap items-center justify-center gap-0.5">
               <NavigationMenuItem>
                 <NavigationMenuLink asChild>
                   <NavLink to="/" end className={navLinkClassName(navActive.home)}>
@@ -362,87 +338,14 @@ export function AppLayout() {
             </NavigationMenuList>
           </NavigationMenu>
 
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="relative z-50 flex shrink-0 items-center gap-2 sm:gap-3">
             <LanguageSwitcher className="shrink-0" />
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    "relative rounded-full outline-none ring-offset-background transition-opacity hover:opacity-95",
-                    "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  )}
-                  aria-label={
-                    showPendingDot
-                      ? `${user?.name ?? t("common.appName")}. ${t("nav.pendingIndicator")}`
-                      : (user?.name ?? t("common.appName"))
-                  }
-                >
-                  {showPendingDot ? (
-                    <span
-                      className="absolute end-0 top-0 z-10 size-2.5 rounded-full bg-destructive ring-2 ring-[var(--color-surface)]"
-                      aria-hidden
-                    />
-                  ) : null}
-                  <Avatar className="size-9 border border-border">
-                    <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
-                      {user?.name ? nameToInitials(user.name) : "?"}
-                    </AvatarFallback>
-                  </Avatar>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-56" sideOffset={6}>
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col gap-1.5 py-0.5">
-                    <span className="text-sm font-semibold text-foreground">{user?.name}</span>
-                    {user ? (
-                      <Badge variant={roleBadgeVariant(user.role)} className="w-fit">
-                        {t(roleTranslationKey(user.role))}
-                      </Badge>
-                    ) : null}
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {showPendingDot ? (
-                  <>
-                    <DropdownMenuItem
-                      className="cursor-pointer gap-2"
-                      onClick={() => navigate("/rooms?pending=1")}
-                    >
-                      <Bell className="h-4 w-4 shrink-0" aria-hidden />
-                      {t("nav.pendingRequests")}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                ) : null}
-                <DropdownMenuItem
-                  className="cursor-pointer gap-2"
-                  onClick={() => navigate("/profile")}
-                >
-                  <User className="h-4 w-4" />
-                  {t("nav.profile")}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="cursor-pointer gap-2"
-                  onClick={() => navigate("/settings")}
-                >
-                  <LinkIcon className="h-4 w-4" />
-                  {t("settings.qf.title")}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  className="cursor-pointer gap-2"
-                  onClick={() => {
-                    logout();
-                    navigate("/login", { replace: true });
-                  }}
-                >
-                  <LogOut className="h-4 w-4" />
-                  {t("auth.logout")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <ProfileMenu
+              user={user}
+              showPendingDot={showPendingDot}
+              onLogout={logout}
+            />
           </div>
         </div>
       </header>

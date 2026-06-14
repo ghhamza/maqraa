@@ -11,6 +11,12 @@ import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
+import {
+  ProfileDetailsForm,
+  useProfileDetailsState,
+  useProfileDetailsValidation,
+} from "../../components/profile/ProfileDetailsForm";
+import { normalizeUserFromApi, profileDetailsPayload } from "../../lib/profileDetails";
 
 export function ProfilePage() {
   const { t } = useTranslation();
@@ -23,11 +29,19 @@ export function ProfilePage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [profileLoading, setProfileLoading] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState(false);
+  const [detailsSuccess, setDetailsSuccess] = useState(false);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [detailsFieldErrors, setDetailsFieldErrors] = useState<Record<string, string>>({});
+
+  const [detailsValues, setDetailsValues] = useProfileDetailsState(user);
+  const { validate: validateDetails, isTeacher } = useProfileDetailsValidation(user, detailsValues);
+
   const updatePasswordMutation = useUpdatePassword(
     () => {
       setCurrentPassword("");
@@ -61,13 +75,39 @@ export function ProfilePage() {
           email: email.trim(),
         },
       });
-      setUser(data);
+      setUser(normalizeUserFromApi(data));
       setProfileSuccess(true);
       window.setTimeout(() => setProfileSuccess(false), 4000);
     } catch (err) {
       setProfileError(userFacingApiError(err));
     } finally {
       setProfileLoading(false);
+    }
+  }
+
+  async function handleDetails(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user || detailsLoading) return;
+    const nextErrors = validateDetails();
+    setDetailsFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    setDetailsError(null);
+    setDetailsSuccess(false);
+    setDetailsLoading(true);
+    try {
+      const { data } = await api.request<User>({
+        method: "put",
+        url: "profile",
+        data: profileDetailsPayload(detailsValues, isTeacher),
+      });
+      setUser(normalizeUserFromApi(data));
+      setDetailsSuccess(true);
+      window.setTimeout(() => setDetailsSuccess(false), 4000);
+    } catch (err) {
+      setDetailsError(userFacingApiError(err, "profile.errRequired"));
+    } finally {
+      setDetailsLoading(false);
     }
   }
 
@@ -140,6 +180,31 @@ export function ProfilePage() {
           ) : null}
           <Button type="submit" variant="primary" disabled={profileLoading}>
             {profileLoading ? t("common.loading") : t("profile.saveProfile")}
+          </Button>
+        </form>
+      </PageCard>
+
+      <PageCard>
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("profile.detailsSection")}</h2>
+        <form onSubmit={(e) => void handleDetails(e)} className="space-y-4">
+          <ProfileDetailsForm
+            user={user}
+            fieldErrors={detailsFieldErrors}
+            values={detailsValues}
+            onChange={setDetailsValues}
+          />
+          {detailsError ? (
+            <p className="text-sm text-red-600" role="alert">
+              {detailsError}
+            </p>
+          ) : null}
+          {detailsSuccess ? (
+            <p className="text-sm text-[var(--color-primary)]" role="status">
+              {t("profile.detailsSaved")}
+            </p>
+          ) : null}
+          <Button type="submit" variant="primary" disabled={detailsLoading}>
+            {detailsLoading ? t("common.loading") : t("profile.saveDetails")}
           </Button>
         </form>
       </PageCard>

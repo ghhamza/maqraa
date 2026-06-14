@@ -22,8 +22,7 @@
     "archive": "Archiver",
     "restore": "Restaurer",
     "continue": "Continuer",
-    "dismiss": "Fermer",
-    "preLaunchBanner": "Al-Maqraa est en pré-lancement — nous vous préviendrons à l'ouverture officielle, inshaAllah"
+    "dismiss": "Fermer"
   },
   "wizard": {
     "createHalaqaTitle": "Créer une nouvelle halaqa",
@@ -150,7 +149,32 @@
     "confirmPassword": "Confirmer le nouveau mot de passe",
     "changePassword": "Changer le mot de passe",
     "passwordChanged": "Mot de passe modifié.",
-    "passwordMismatch": "Les nouveaux mots de passe ne correspondent pas."
+    "passwordMismatch": "Les nouveaux mots de passe ne correspondent pas.",
+    "completeTitle": "Complétez votre profil",
+    "completeSubtitle": "Quelques informations avant de commencer",
+    "gender": "Genre",
+    "male": "Homme",
+    "female": "Femme",
+    "dateOfBirth": "Date de naissance",
+    "country": "Pays de résidence",
+    "phone": "Téléphone",
+    "languages": "Langues que vous parlez",
+    "qiraat": "Qira'at que vous enseignez",
+    "lang": {
+      "ar": "Arabe",
+      "en": "Anglais",
+      "fr": "Français",
+      "id": "Indonésien",
+      "ru": "Russe"
+    },
+    "submit": "Enregistrer et continuer",
+    "errRequired": "Ce champ est requis",
+    "errDob": "Date de naissance invalide",
+    "errLanguages": "Sélectionnez au moins une langue",
+    "errQiraat": "Sélectionnez au moins une qira'a",
+    "detailsSection": "Informations personnelles",
+    "saveDetails": "Enregistrer les informations",
+    "detailsSaved": "Vos informations ont été mises à jour."
   },
   "home": {
     "welcome": "Bienvenue {{name}}",

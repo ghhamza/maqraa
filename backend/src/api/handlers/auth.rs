@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
 use crate::api::types::UserResponse;
+use crate::api::user_response::load_user_response;
 use crate::api::AppState;
 use crate::auth::{jwt, password};
 
@@ -69,15 +70,9 @@ pub async fn register(
     let token = jwt::create_token(user_id, role, &state.config.jwt_secret)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let user = UserResponse {
-        id: user_id,
-        name: req.name,
-        email,
-        role: role.to_string(),
-        qf_linked: false,
-        qf_email: None,
-        role_selection_pending: false,
-    };
+    let user = load_user_response(&state.db, user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(AuthResponse { token, user }))
 }
@@ -114,15 +109,9 @@ pub async fn login(
     .execute(&state.db)
     .await;
 
-    let user = UserResponse {
-        id: row.0,
-        name: row.1,
-        email: row.2,
-        role: row.4,
-        qf_linked: false,
-        qf_email: None,
-        role_selection_pending: row.5,
-    };
+    let user = load_user_response(&state.db, row.0)
+        .await
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
     Ok(Json(AuthResponse { token, user }))
 }
@@ -231,25 +220,10 @@ pub async fn me(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
 ) -> Result<Json<UserResponse>, StatusCode> {
-    let row: (Option<String>, bool) = sqlx::query_as(
-        "SELECT qa.qf_email, u.role_selection_pending \
-         FROM users u \
-         LEFT JOIN qf_accounts qa ON qa.user_id = u.id \
-         WHERE u.id = $1",
-    )
-    .bind(auth.id)
-    .fetch_one(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(UserResponse {
-        id: auth.id,
-        name: auth.name,
-        email: auth.email,
-        role: auth.role,
-        qf_linked: row.0.is_some(),
-        qf_email: row.0,
-        role_selection_pending: row.1,
-    }))
+    load_user_response(&state.db, auth.id)
+        .await
+        .map(Json)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 #[derive(Deserialize)]
@@ -292,26 +266,10 @@ pub async fn update_profile(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let row: (Option<String>, bool) = sqlx::query_as(
-        "SELECT qa.qf_email, u.role_selection_pending \
-         FROM users u \
-         LEFT JOIN qf_accounts qa ON qa.user_id = u.id \
-         WHERE u.id = $1",
-    )
-    .bind(auth.id)
-    .fetch_one(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok(Json(UserResponse {
-        id: auth.id,
-        name: name.to_string(),
-        email,
-        role: auth.role,
-        qf_linked: row.0.is_some(),
-        qf_email: row.0,
-        role_selection_pending: row.1,
-    }))
+    load_user_response(&state.db, auth.id)
+        .await
+        .map(Json)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 #[derive(Deserialize)]
@@ -376,34 +334,18 @@ pub async fn role_selection(
             )
         })?;
 
-    let row: (String, String, String, Option<String>, bool) = sqlx::query_as(
-        "SELECT u.name, u.email, u.role::text, qa.qf_email, u.role_selection_pending \
-         FROM users u \
-         LEFT JOIN qf_accounts qa ON qa.user_id = u.id \
-         WHERE u.id = $1",
-    )
-    .bind(auth.id)
-    .fetch_one(&state.db)
-    .await
-    .map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiMessage {
-                message: "خطأ في الخادم",
-                code: "server_error",
-            }),
-        )
-    })?;
-
-    Ok(Json(UserResponse {
-        id: auth.id,
-        name: row.0,
-        email: row.1,
-        role: row.2,
-        qf_linked: row.3.is_some(),
-        qf_email: row.3,
-        role_selection_pending: row.4,
-    }))
+    load_user_response(&state.db, auth.id)
+        .await
+        .map(Json)
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiMessage {
+                    message: "خطأ في الخادم",
+                    code: "server_error",
+                }),
+            )
+        })
 }
 
 #[derive(Deserialize)]

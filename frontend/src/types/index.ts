@@ -9,6 +9,13 @@ export interface User {
   qf_linked: boolean;
   qf_email: string | null;
   role_selection_pending: boolean;
+  profile_completion_pending: boolean;
+  gender: "male" | "female" | null;
+  date_of_birth: string | null;
+  country: string | null;
+  phone: string | null;
+  spoken_languages: string[];
+  qiraat_taught: string[];
 }
 
 /** Full user row from admin APIs */

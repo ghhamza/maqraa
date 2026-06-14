@@ -34,7 +34,6 @@
   --mushaf-surah-title-color: #1a5276;
   /* App shell: viewports narrower than this get horizontal scroll (avoids unusably narrow layout) */
   --app-min-width: 360px;
-  --pre-launch-banner-height: 5rem;
   --color-bg: #FAFAF5;
   --color-surface: #FFFFFF;
   --color-text: #1A1A1A;

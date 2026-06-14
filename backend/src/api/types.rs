@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::Serialize;
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -15,6 +15,13 @@ pub struct UserResponse {
     pub qf_linked: bool,
     pub qf_email: Option<String>,
     pub role_selection_pending: bool,
+    pub profile_completion_pending: bool,
+    pub gender: Option<String>,
+    pub date_of_birth: Option<NaiveDate>,
+    pub country: Option<String>,
+    pub phone: Option<String>,
+    pub spoken_languages: Vec<String>,
+    pub qiraat_taught: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
