@@ -11,7 +11,8 @@ use sqlx::{Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
-use crate::api::types::{Paginated, UserPublic, UserStatsResponse};
+use crate::api::types::{Paginated, UserAdminDetail, UserPublic, UserStatsResponse};
+use crate::api::user_response::load_user_admin_detail;
 use crate::api::AppState;
 use crate::auth::password;
 
@@ -166,19 +167,16 @@ pub async fn get_user(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<UserPublic>, StatusCode> {
+) -> Result<Json<UserAdminDetail>, StatusCode> {
     require_admin(&auth)?;
 
-    let user = sqlx::query_as::<_, UserPublic>(
-        "SELECT id, name, email, role::text AS role, created_at FROM users WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .ok_or(StatusCode::NOT_FOUND)?;
-
-    Ok(Json(user))
+    load_user_admin_detail(&state.db, id)
+        .await
+        .map(Json)
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => StatusCode::NOT_FOUND,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        })
 }
 
 pub async fn create_user(

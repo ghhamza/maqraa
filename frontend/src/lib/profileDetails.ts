@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import type { User } from "../types";
+import type { User, UserPublic } from "../types";
 import type { QiraatSlug } from "../data/qiraat";
 import type { SpokenLanguageCode } from "../data/languages";
 import { normalizeCountryCode } from "../data/countries";
@@ -70,6 +70,13 @@ export function normalizeUserFromApi(data: User): User {
     phone: data.phone ?? null,
     spoken_languages: data.spoken_languages ?? [],
     qiraat_taught: data.qiraat_taught ?? [],
+  };
+}
+
+export function normalizeUserPublic(data: UserPublic): UserPublic {
+  return {
+    ...normalizeUserFromApi(data),
+    created_at: data.created_at,
   };
 }
 

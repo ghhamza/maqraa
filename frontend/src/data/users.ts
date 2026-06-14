@@ -4,6 +4,7 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { userKeys } from "../lib/queryKeys";
+import { normalizeUserPublic } from "../lib/profileDetails";
 import { useApiMutation } from "../lib/useApiMutation";
 import type { Paginated, RecitationPublic, StudentProgress, UserPublic, UserStats } from "../types";
 
@@ -46,7 +47,7 @@ export function useUser(id: string | undefined) {
     queryKey: userKeys.detail(id ?? ""),
     queryFn: async ({ signal }) => {
       const { data } = await api.get<UserPublic>(`users/${id}`, { signal });
-      return data;
+      return normalizeUserPublic(data);
     },
     enabled: !!id,
   });

@@ -34,6 +34,25 @@ pub struct UserPublic {
 }
 
 #[derive(Serialize)]
+pub struct UserAdminDetail {
+    pub id: Uuid,
+    pub name: String,
+    pub email: String,
+    pub role: String,
+    pub created_at: DateTime<Utc>,
+    pub qf_linked: bool,
+    pub qf_email: Option<String>,
+    pub role_selection_pending: bool,
+    pub profile_completion_pending: bool,
+    pub gender: Option<String>,
+    pub date_of_birth: Option<NaiveDate>,
+    pub country: Option<String>,
+    pub phone: Option<String>,
+    pub spoken_languages: Vec<String>,
+    pub qiraat_taught: Vec<String>,
+}
+
+#[derive(Serialize)]
 pub struct UserStatsResponse {
     pub total: i64,
     pub students: i64,

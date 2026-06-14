@@ -284,7 +284,15 @@
     "emptyTitle": "No users yet",
     "emptyDescription": "Users created in the system will appear here.",
     "noMatchesTitle": "No users match your search",
-    "noMatchesDescription": "Try adjusting your search or filters."
+    "noMatchesDescription": "Try adjusting your search or filters.",
+    "personalDetails": "Personal details",
+    "integrations": "Integrations",
+    "notProvided": "Not provided",
+    "profileStatus": "Profile status",
+    "profileComplete": "Complete",
+    "profileIncomplete": "Incomplete",
+    "qfLinked": "Linked to Quran.Foundation",
+    "qfNotLinked": "Not linked"
   },
   "room": {
     "gettingStarted": {

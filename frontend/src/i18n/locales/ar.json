@@ -284,7 +284,15 @@
     "emptyTitle": "لا يوجد مستخدمون بعد",
     "emptyDescription": "سيظهر هنا المستخدمون الذين تمّ إنشاؤهم في النظام.",
     "noMatchesTitle": "لا يوجد مستخدمون يطابقون البحث",
-    "noMatchesDescription": "حاول تعديل البحث أو المرشحات."
+    "noMatchesDescription": "حاول تعديل البحث أو المرشحات.",
+    "personalDetails": "البيانات الشخصية",
+    "integrations": "الربط والتكامل",
+    "notProvided": "غير متوفر",
+    "profileStatus": "حالة الملف",
+    "profileComplete": "مكتمل",
+    "profileIncomplete": "غير مكتمل",
+    "qfLinked": "مرتبط بمؤسسة القرآن",
+    "qfNotLinked": "غير مرتبط"
   },
   "room": {
     "gettingStarted": {

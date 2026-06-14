@@ -10,7 +10,9 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { UserFormModal } from "../../components/users/UserFormModal";
 import { DeleteConfirmModal } from "../../components/users/DeleteConfirmModal";
-import { BackLink } from "../../components/navigation/BackLink";
+import { PageCard } from "../../components/layout/PageCard";
+import { PageShell } from "../../components/layout/PageShell";
+import { ProfileDetailsSummary } from "../../components/profile/ProfileDetailsSummary";
 import { roleTranslationKey } from "../../lib/roleLabels";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { useUser } from "../../data/users";
@@ -46,47 +48,70 @@ export function UserDetailPage() {
 
   if (!user) {
     return (
-      <div className="rounded-2xl bg-[var(--color-surface)] p-8 text-center shadow-sm">
-        <p className="text-[var(--color-text-muted)]">{t("users.userNotFound")}</p>
-        <Link to="/users" className="mt-4 inline-block text-[var(--color-primary)]">
-          {t("users.backToList")}
-        </Link>
-      </div>
+      <PageShell title={t("users.userNotFound")}>
+        <PageCard className="text-center">
+          <p className="text-[var(--color-text-muted)]">{t("users.userNotFound")}</p>
+          <Link to="/users" className="mt-4 inline-block text-[var(--color-primary)]">
+            {t("users.backToList")}
+          </Link>
+        </PageCard>
+      </PageShell>
     );
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <BackLink to="/users">{t("users.backToList")}</BackLink>
+    <PageShell
+      backTo={{ to: "/users", label: t("users.backToList") }}
+      breadcrumb={[
+        { label: t("users.title"), to: "/users" },
+        { label: user.name },
+      ]}
+      title={user.name}
+      description={user.email}
+      titleAside={<Badge variant={badgeVariant(user.role)}>{t(roleTranslationKey(user.role))}</Badge>}
+      meta={`${t("users.registrationDate")}: ${full(user.created_at)}`}
+      actions={
+        <>
+          <Button type="button" variant="secondary" onClick={() => setFormOpen(true)}>
+            <span className="inline-flex items-center gap-2">
+              <Pencil className="h-4 w-4" />
+              {t("common.edit")}
+            </span>
+          </Button>
+          <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
+            <span className="inline-flex items-center gap-2">
+              <Trash2 className="h-4 w-4" />
+              {t("common.delete")}
+            </span>
+          </Button>
+        </>
+      }
+    >
+      <PageCard>
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("users.personalDetails")}</h2>
+        <ProfileDetailsSummary user={user} />
+      </PageCard>
 
-      <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--color-text)]">{user.name}</h1>
-            <p className="mt-1 text-[var(--color-text-muted)]">{user.email}</p>
-            <div className="mt-3">
-              <Badge variant={badgeVariant(user.role)}>{t(roleTranslationKey(user.role))}</Badge>
-            </div>
-            <p className="mt-4 text-sm text-[var(--color-text-muted)]">
-              {t("users.registrationDate")}: {full(user.created_at)}
-            </p>
+      <PageCard>
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("users.integrations")}</h2>
+        <dl className="space-y-3">
+          <div className="grid gap-1 sm:grid-cols-[minmax(0,11rem)_1fr] sm:gap-4">
+            <dt className="text-sm font-medium text-[var(--color-text-muted)]">{t("settings.qf.title")}</dt>
+            <dd className="text-sm text-[var(--color-text)]">
+              {user.qf_linked ? (
+                <span>
+                  {t("users.qfLinked")}
+                  {user.qf_email ? (
+                    <span className="mt-0.5 block text-[var(--color-text-muted)]">{user.qf_email}</span>
+                  ) : null}
+                </span>
+              ) : (
+                t("users.qfNotLinked")
+              )}
+            </dd>
           </div>
-          <div className="flex gap-2">
-            <Button type="button" variant="secondary" onClick={() => setFormOpen(true)}>
-              <span className="inline-flex items-center gap-2">
-                <Pencil className="h-4 w-4" />
-                {t("common.edit")}
-              </span>
-            </Button>
-            <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
-              <span className="inline-flex items-center gap-2">
-                <Trash2 className="h-4 w-4" />
-                {t("common.delete")}
-              </span>
-            </Button>
-          </div>
-        </div>
-      </div>
+        </dl>
+      </PageCard>
 
       <UserFormModal
         open={formOpen}
@@ -103,6 +128,6 @@ export function UserDetailPage() {
         onClose={() => setDeleteOpen(false)}
         onDeleted={() => navigate("/users", { replace: true })}
       />
-    </div>
+    </PageShell>
   );
 }
