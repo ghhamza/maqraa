@@ -117,6 +117,20 @@ export function RoomSessionsSection({
     onSessionFormOpen();
   }
 
+  const sessionsEmptyState = (
+    <EmptyState
+      size="large"
+      icon={<Calendar className="opacity-40" />}
+      title={t("roomDetail.sessionsEmptyTitle")}
+      description={t("roomDetail.sessionsEmptyDescription")}
+      primaryAction={
+        showActions && !isArchived
+          ? { label: t("roomDetail.sessionsEmptyCta"), onClick: () => openSessionFormDefault() }
+          : undefined
+      }
+    />
+  );
+
   return (
     <PageCard>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -215,6 +229,8 @@ export function RoomSessionsSection({
             <div className="flex justify-center py-10">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
             </div>
+          ) : sessions.length === 0 ? (
+            sessionsEmptyState
           ) : (
             <div className="overflow-x-auto">
               <div className="grid min-w-[640px] grid-cols-7 gap-1">
@@ -337,16 +353,7 @@ export function RoomSessionsSection({
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
             </div>
           ) : sessions.length === 0 ? (
-            <EmptyState
-              icon={<Calendar className="h-12 w-12" />}
-              title={t("roomDetail.sessionsEmptyTitle")}
-              description={t("roomDetail.sessionsEmptyDescription")}
-              primaryAction={
-                canManage(user, room) && !isArchived
-                  ? { label: t("sessions.addSession"), onClick: () => openSessionFormDefault() }
-                  : undefined
-              }
-            />
+            sessionsEmptyState
           ) : (
             <ul className="space-y-3">
               {sessions.map((s) => (

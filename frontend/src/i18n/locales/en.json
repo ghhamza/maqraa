@@ -148,6 +148,7 @@
     "studentsEmptyDescription": "Enroll your first student to start running this halaqah.",
     "sessionsEmptyTitle": "No sessions scheduled",
     "sessionsEmptyDescription": "Schedule the first session for this halaqah.",
+    "sessionsEmptyCta": "Create your first session",
     "recitationsEmptyTitle": "No recitations logged yet",
     "recitationsEmptyDescriptionTeacher": "Recitations you log will appear here.",
     "recitationsEmptyDescriptionStudent": "Your recitations will appear here once your teacher grades them."

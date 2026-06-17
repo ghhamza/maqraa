@@ -148,6 +148,7 @@
     "studentsEmptyDescription": "سجّل أوّل طالب لتبدأ تشغيل هذه الحلقة.",
     "sessionsEmptyTitle": "لا توجد حصص مجدولة",
     "sessionsEmptyDescription": "جدوِل الحصة الأولى لهذه الحلقة.",
+    "sessionsEmptyCta": "أنشئ حصتك الأولى",
     "recitationsEmptyTitle": "لم تُسجَّل أي تلاوة بعد",
     "recitationsEmptyDescriptionTeacher": "ستظهر هنا التلاوات التي تسجّلها.",
     "recitationsEmptyDescriptionStudent": "ستظهر تلاواتك هنا فور تقييمها من المعلّم."
