@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Pencil, Plus, Trash2, Users } from "lucide-react";
+import { Mail, Pencil, Plus, Trash2, Users } from "lucide-react";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import type { UserPublic } from "../../types";
@@ -15,10 +15,11 @@ import { Table, type TableColumn } from "../../components/ui/Table";
 import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
 import { UserFormModal } from "../../components/users/UserFormModal";
 import { DeleteConfirmModal } from "../../components/users/DeleteConfirmModal";
 import { roleTranslationKey } from "../../lib/roleLabels";
-import { useUsersList, useUsersStats } from "../../data/users";
+import { useSendSessionGuide, useUsersList, useUsersStats } from "../../data/users";
 
 type RoleFilter = "" | "student" | "teacher" | "admin";
 
@@ -42,6 +43,42 @@ export function UsersPage() {
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<UserPublic | null>(null);
+
+  const [guideToast, setGuideToast] = useState<"success" | "error" | null>(null);
+  const [sendingGuideId, setSendingGuideId] = useState<string | null>(null);
+  const [guideCooldown, setGuideCooldown] = useState<Set<string>>(() => new Set());
+
+  const sendGuideMutation = useSendSessionGuide(
+    () => setGuideToast("success"),
+    () => setGuideToast("error"),
+  );
+
+  useEffect(() => {
+    if (!guideToast) return;
+    const tm = window.setTimeout(() => setGuideToast(null), 5000);
+    return () => clearTimeout(tm);
+  }, [guideToast]);
+
+  const handleSendSessionGuide = useCallback(
+    (teacherId: string) => {
+      if (sendingGuideId || guideCooldown.has(teacherId)) return;
+      setSendingGuideId(teacherId);
+      sendGuideMutation.mutate(teacherId, {
+        onSuccess: () => {
+          setGuideCooldown((prev) => new Set(prev).add(teacherId));
+          window.setTimeout(() => {
+            setGuideCooldown((prev) => {
+              const next = new Set(prev);
+              next.delete(teacherId);
+              return next;
+            });
+          }, 30_000);
+        },
+        onSettled: () => setSendingGuideId(null),
+      });
+    },
+    [sendGuideMutation, sendingGuideId, guideCooldown],
+  );
 
   const usersQuery = useUsersList(debouncedSearch, roleFilter);
   const statsQuery = useUsersStats();
@@ -77,7 +114,8 @@ export function UsersPage() {
     setRoleFilter("");
   }, []);
 
-  const columns: TableColumn<UserPublic>[] = [
+  const columns: TableColumn<UserPublic>[] = useMemo(
+    () => [
       {
         key: "name",
         header: t("users.name"),
@@ -104,7 +142,29 @@ export function UsersPage() {
         key: "actions",
         header: t("common.actions"),
         render: (row) => (
-          <div className="flex flex-wrap gap-2 justify-end">
+          <div className="flex flex-wrap items-center gap-2 justify-end">
+            {row.role === "teacher" ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="rounded-lg p-2 text-[#D4A843] hover:bg-[#D4A843]/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={t("users.sessionGuide.button")}
+                    disabled={
+                      sendingGuideId === row.id ||
+                      guideCooldown.has(row.id) ||
+                      sendGuideMutation.isPending
+                    }
+                    onClick={() => handleSendSessionGuide(row.id)}
+                  >
+                    <Mail className="h-4 w-4" aria-hidden />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent sideOffset={6} className="max-w-xs text-start">
+                  {t("users.sessionGuide.description")}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
             <button
               type="button"
               className="rounded-lg p-2 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
@@ -124,7 +184,18 @@ export function UsersPage() {
           </div>
         ),
       },
-    ];
+    ],
+    [
+      t,
+      mediumTime,
+      openEdit,
+      openDelete,
+      handleSendSessionGuide,
+      sendingGuideId,
+      guideCooldown,
+      sendGuideMutation.isPending,
+    ],
+  );
 
   const statsRow = stats ? (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -241,6 +312,24 @@ export function UsersPage() {
           // No-op: DeleteConfirmModal's mutation invalidates userKeys.lists() / .stats()
         }}
       />
+
+      {guideToast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed left-4 right-4 top-[max(4.5rem,env(safe-area-inset-top))] z-[60] mx-auto max-w-md rounded-xl border-2 p-4 shadow-lg md:left-auto md:right-6 md:top-24 ${
+            guideToast === "success"
+              ? "border-[var(--color-primary)]/40 bg-[#E8F5E9] text-[var(--color-primary)]"
+              : "border-red-300 bg-red-50 text-red-800"
+          }`}
+        >
+          <p className="text-sm font-semibold">
+            {guideToast === "success"
+              ? t("users.sessionGuide.success")
+              : t("users.sessionGuide.error")}
+          </p>
+        </div>
+      ) : null}
     </PageShell>
   );
 }

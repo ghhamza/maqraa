@@ -146,6 +146,17 @@ export function useDeleteUser(onSuccess?: () => void, onError?: (message: string
   });
 }
 
+export function useSendSessionGuide(onSuccess?: () => void, onError?: (message: string) => void) {
+  return useApiMutation<{ queued: boolean }, string>({
+    mutationFn: async (userId) => {
+      const { data } = await api.post<{ queued: boolean }>(`users/${userId}/send-session-guide`);
+      return data;
+    },
+    onSuccess: () => onSuccess?.(),
+    onError: (message) => onError?.(message),
+  });
+}
+
 interface UpdatePasswordInput {
   current_password: string;
   new_password: string;

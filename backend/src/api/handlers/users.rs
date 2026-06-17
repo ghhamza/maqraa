@@ -15,6 +15,7 @@ use crate::api::types::{Paginated, UserAdminDetail, UserPublic, UserStatsRespons
 use crate::api::user_response::load_user_admin_detail;
 use crate::api::AppState;
 use crate::auth::password;
+use crate::notifications::{enqueue, TemplateVars};
 
 #[derive(Deserialize)]
 pub struct ListUsersQuery {
@@ -372,4 +373,51 @@ pub async fn delete_user(
     }
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Serialize)]
+pub struct SendSessionGuideResponse {
+    pub queued: bool,
+}
+
+pub async fn send_session_guide(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<SendSessionGuideResponse>, StatusCode> {
+    require_admin(&auth)?;
+
+    let target: Option<(String, String, String, String)> = sqlx::query_as(
+        "SELECT name, email, preferred_language, role::text FROM users WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let Some((name, email, preferred_language, role)) = target else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+
+    if role != "teacher" {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let vars = TemplateVars::new().with("name", name);
+    enqueue(
+        &state.db,
+        &state.config,
+        "first_session_guide",
+        &preferred_language,
+        &email,
+        Some(id),
+        vars,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, user_id = %id, "failed to enqueue first_session_guide");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    Ok(Json(SendSessionGuideResponse { queued: true }))
 }

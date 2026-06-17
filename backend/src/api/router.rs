@@ -68,6 +68,10 @@ pub fn build_router(state: AppState) -> Router {
                 .delete(handlers::users::delete_user),
         )
         .route(
+            "/api/users/{id}/send-session-guide",
+            post(handlers::users::send_session_guide),
+        )
+        .route(
             "/api/students/{student_id}/recitations",
             get(handlers::recitations::list_by_student),
         )

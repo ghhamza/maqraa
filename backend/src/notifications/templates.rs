@@ -525,6 +525,68 @@ pub fn render(template_key: &str, locale: &str, vars: &TemplateVars) -> Rendered
                 text,
             }
         }
+        "first_session_guide" => {
+            let (subject, heading, paragraphs) = match locale {
+                "ar" => (
+                    "إنشاء أول حصة في حلقتك",
+                    "إنشاء أول حصة في حلقتك",
+                    &[
+                        "السلام عليكم ورحمة الله وبركاته، {{name}}،",
+                        "فيما يلي توضيح سريع للفرق بين «الحلقة» و«الحصة»:",
+                        "• الحلقة: هي الفصل الدائم الذي ينتمي إليه الطلاب — لها اسمها ونوعها وقائمة طلابها، وتبقى موجودة باستمرار.",
+                        "• الحصة: هي اللقاء المُجدوَل داخل الحلقة في وقتٍ محدد — وفيها تجري التلاوة المباشرة والتصحيح. كل حلقة تحتوي على عدة حصص عبر الزمن.",
+                        "باختصار: الحلقة هي الإطار الدائم، والحصة هي الموعد الفعلي للدرس.",
+                        "خطوات إنشاء أول حصة:",
+                        "١. فتح الحلقة من قائمة الحلقات.",
+                        "٢. اختيار «إنشاء حصة» من داخل الحلقة.",
+                        "٣. تحديد العنوان والتاريخ والوقت والمدة، ثم الحفظ.",
+                        "وبذلك تصبح الحصة جاهزة، ويتمكن الطلاب من الانضمام في موعدها.",
+                        "ولأي مساعدة، نحن في الخدمة.",
+                    ][..],
+                ),
+                "fr" => (
+                    "Créez votre première session",
+                    "Créez votre première session",
+                    &[
+                        "Assalamou alaykoum {{name}},",
+                        "Pour vous aider à démarrer, voici une explication rapide de la différence entre une « halaqa » et une « session » :",
+                        "• La halaqa (room) : la classe permanente à laquelle vos élèves appartiennent — elle a un nom, un type et une liste d'élèves inscrits, et reste en place dans le temps.",
+                        "• La session : une rencontre planifiée qui a lieu à l'intérieur d'une halaqa à un moment précis — c'est là que se déroulent la récitation en direct et la correction. Chaque halaqa contient plusieurs sessions au fil du temps.",
+                        "En bref : la halaqa est le cadre permanent ; la session est le rendez-vous concret du cours.",
+                        "Pour créer votre première session :",
+                        "1. Ouvrez votre halaqa depuis la liste des halaqat.",
+                        "2. À l'intérieur de la halaqa, choisissez « Créer une session ».",
+                        "3. Renseignez le titre, la date, l'heure et la durée, puis enregistrez.",
+                        "Votre session est alors prête, et vos élèves pourront la rejoindre à l'heure prévue.",
+                        "Si vous avez besoin d'aide, je suis à votre disposition.",
+                    ][..],
+                ),
+                _ => (
+                    "Create your first session",
+                    "Create your first session",
+                    &[
+                        "Assalamu alaikum {{name}},",
+                        "To help you get started, here is a quick explanation of the difference between a \"halaqah\" and a \"session\":",
+                        "• Halaqah (room): the permanent class your students belong to — it has a name, a type, and an enrolled student list, and it stays in place over time.",
+                        "• Session: a scheduled meeting that happens inside a halaqah at a specific time — this is where live recitation and correction take place. Each halaqah holds many sessions over time.",
+                        "In short: the halaqah is the lasting frame; the session is the actual lesson appointment.",
+                        "To create your first session:",
+                        "1. Open your halaqah from the halaqat list.",
+                        "2. Inside the halaqah, choose \"Create session\".",
+                        "3. Set the title, date, time, and duration, then save.",
+                        "Your session is then ready, and your students can join at its scheduled time.",
+                        "If you need any help, I'm here for you.",
+                    ][..],
+                ),
+            };
+            let body: Vec<String> = paragraphs.iter().map(|p| sub(p)).collect();
+            let (html, text) = email_layout(locale, heading, &body, None);
+            RenderedEmail {
+                subject: subject.to_string(),
+                html,
+                text,
+            }
+        }
         "enrollment_removed" => {
             let (subject, heading, p1, p2, cta_label) = match locale {
                 "ar" => (

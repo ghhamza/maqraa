@@ -323,7 +323,13 @@
     "profileComplete": "Complete",
     "profileIncomplete": "Incomplete",
     "qfLinked": "Linked to Quran.Foundation",
-    "qfNotLinked": "Not linked"
+    "qfNotLinked": "Not linked",
+    "sessionGuide": {
+      "button": "Send first-session guide",
+      "description": "Email this teacher a short guide explaining the difference between a halaqah and a session, and how to create their first session.",
+      "success": "Guide sent successfully.",
+      "error": "Couldn't send the guide, please try again."
+    }
   },
   "room": {
     "gettingStarted": {
