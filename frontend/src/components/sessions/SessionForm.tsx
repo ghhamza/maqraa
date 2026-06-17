@@ -16,6 +16,8 @@ export interface SessionFormProps {
   session: SessionPublic | null;
   defaultRoomId?: string;
   lockedRoomId?: string;
+  /** Display name when {@link lockedRoomId} is set (wizard after room create). */
+  lockedRoomName?: string;
   defaultDatetime?: Date | null;
   presetMorningStart?: boolean;
   editScope?: "this" | "this_and_future" | "all";
@@ -32,6 +34,7 @@ export function SessionForm({
   session,
   defaultRoomId,
   lockedRoomId,
+  lockedRoomName,
   defaultDatetime,
   presetMorningStart,
   editScope,
@@ -93,7 +96,7 @@ export function SessionForm({
   }, [active, mode, session, effectiveDefaultRoomId, defaultDatetime, presetMorningStart]);
 
   const roomsQuery = useRoomsList("session-form", undefined, {
-    enabled: active,
+    enabled: active && !lockedRoomId,
     staleTime: 5 * 60_000,
   });
 
@@ -154,7 +157,13 @@ export function SessionForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (loading || !roomId) return;
+    if (loading) return;
+
+    const effectiveRoomId = lockedRoomId ?? roomId;
+    if (!effectiveRoomId) {
+      setError(t("errors.badRequest"));
+      return;
+    }
 
     const scheduled = new Date(datetimeLocal);
     if (Number.isNaN(scheduled.getTime())) {
@@ -183,7 +192,7 @@ export function SessionForm({
 
     if (mode === "create") {
       const payload: CreatePayload = {
-        room_id: roomId,
+        room_id: effectiveRoomId,
         title: title.trim() || null,
         scheduled_at: iso,
         duration_minutes: duration,
@@ -220,22 +229,31 @@ export function SessionForm({
         <label className="mb-1 block text-sm font-medium text-[var(--color-text)]" htmlFor="session-room">
           {t("sessions.room")}
         </label>
-        <FormSelect
-          id="session-room"
-          triggerClassName="w-full rounded-xl border border-gray-200 bg-white py-2 text-sm text-[var(--color-text)]"
-          triggerStyle={{ color: "var(--color-text)" }}
-          value={roomId}
-          onValueChange={setRoomId}
-          disabled={roomPickerDisabled}
-          required
-          options={
-            loadingRooms
-              ? [{ value: "", label: t("common.loading") }]
-              : rooms.length === 0
-                ? [{ value: "", label: t("rooms.noRooms") }]
-                : rooms.map((r) => ({ value: r.id, label: r.name }))
-          }
-        />
+        {lockedRoomId ? (
+          <p
+            id="session-room"
+            className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-[var(--color-text)]"
+          >
+            {lockedRoomName ?? lockedRoomId}
+          </p>
+        ) : (
+          <FormSelect
+            id="session-room"
+            triggerClassName="w-full rounded-xl border border-gray-200 bg-white py-2 text-sm text-[var(--color-text)]"
+            triggerStyle={{ color: "var(--color-text)" }}
+            value={roomId}
+            onValueChange={setRoomId}
+            disabled={roomPickerDisabled}
+            required
+            options={
+              loadingRooms
+                ? [{ value: "", label: t("common.loading") }]
+                : rooms.length === 0
+                  ? [{ value: "", label: t("rooms.noRooms") }]
+                  : rooms.map((r) => ({ value: r.id, label: r.name }))
+            }
+          />
+        )}
       </div>
       <Input
         label={t("sessions.sessionTitle")}
@@ -391,7 +409,7 @@ export function SessionForm({
           <Button type="button" variant="secondary" onClick={onCancel}>
             {t("common.cancel")}
           </Button>
-          <Button type="submit" variant="primary" disabled={loading || !roomId}>
+          <Button type="submit" variant="primary" disabled={loading || (!lockedRoomId && !roomId)}>
             {loading ? t("common.loading") : t("common.save")}
           </Button>
         </div>

@@ -155,6 +155,7 @@ export function CreateHalaqaWizard() {
             mode="create"
             session={null}
             lockedRoomId={createdRoom.id}
+            lockedRoomName={createdRoom.name}
             defaultRoomId={createdRoom.id}
             formId="wizard-session-form"
             showFooter={false}
