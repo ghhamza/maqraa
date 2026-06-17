@@ -324,11 +324,15 @@
     "profileIncomplete": "Incomplet",
     "qfLinked": "Lié à Quran.Foundation",
     "qfNotLinked": "Non lié",
-    "sessionGuide": {
-      "button": "Envoyer le guide de la première session",
-      "description": "Envoyer à cet enseignant un guide court expliquant la différence entre une halaqa et une session, et comment créer sa première session.",
-      "success": "Guide envoyé avec succès.",
-      "error": "Impossible d'envoyer le guide, veuillez réessayer."
+    "communication": {
+      "title": "Communication",
+      "description": "Envoyer des e-mails d'accueil et de soutien à cet enseignant.",
+      "sendSuccess": "E-mail ajouté à la file d'envoi.",
+      "sendError": "Impossible d'envoyer l'e-mail, veuillez réessayer.",
+      "firstSessionGuide": {
+        "button": "Rappel de séance",
+        "description": "Envoyer un guide court expliquant la différence entre une halaqa et une session, et comment créer la première session."
+      }
     }
   },
   "room": {

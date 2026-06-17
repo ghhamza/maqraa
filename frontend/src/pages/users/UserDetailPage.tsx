@@ -10,6 +10,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { UserFormModal } from "../../components/users/UserFormModal";
 import { DeleteConfirmModal } from "../../components/users/DeleteConfirmModal";
+import { UserCommunicationSection } from "../../components/users/UserCommunicationSection";
 import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
 import { ProfileDetailsSummary } from "../../components/profile/ProfileDetailsSummary";
@@ -91,6 +92,8 @@ export function UserDetailPage() {
         <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("users.personalDetails")}</h2>
         <ProfileDetailsSummary user={user} />
       </PageCard>
+
+      {user.role === "teacher" ? <UserCommunicationSection userId={user.id} /> : null}
 
       <PageCard>
         <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("users.integrations")}</h2>

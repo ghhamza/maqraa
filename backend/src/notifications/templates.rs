@@ -83,6 +83,14 @@ fn email_layout(
     cta: Option<(&str, &str)>,
 ) -> (String, String) {
     let dir = if locale == "ar" { "rtl" } else { "ltr" };
+    let lang = if locale == "ar" {
+        "ar"
+    } else if locale == "fr" {
+        "fr"
+    } else {
+        "en"
+    };
+    let text_align = if locale == "ar" { "right" } else { "left" };
     let font_family = if locale == "ar" {
         "Tahoma, 'Segoe UI', Arial, sans-serif"
     } else {
@@ -93,7 +101,8 @@ fn email_layout(
         .iter()
         .map(|p| {
             format!(
-                "<p style=\"margin:0 0 16px;font-size:16px;line-height:1.7;color:#1A1A1A;\">{p}</p>"
+                "<p style=\"margin:0 0 16px;font-size:16px;line-height:1.7;color:#1A1A1A;\
+                 direction:{dir};text-align:{text_align};\">{p}</p>"
             )
         })
         .collect();
@@ -124,20 +133,21 @@ fn email_layout(
     let footer_label = footer_copy(locale);
 
     let html = format!(
-        "<!DOCTYPE html><html dir=\"{dir}\"><body style=\"margin:0;padding:0;background:#FAFAF5;\
-         font-family:{font_family};\">\
+        "<!DOCTYPE html><html dir=\"{dir}\" lang=\"{lang}\"><body style=\"margin:0;padding:0;background:#FAFAF5;\
+         font-family:{font_family};direction:{dir};\">\
          <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" \
-         style=\"background:#FAFAF5;padding:32px 16px;\">\
+         style=\"background:#FAFAF5;padding:32px 16px;direction:{dir};\">\
          <tr><td align=\"center\">\
          <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" \
-         style=\"max-width:560px;background:#FFFFFF;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);padding:32px 28px;\">\
+         style=\"max-width:560px;background:#FFFFFF;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);padding:32px 28px;direction:{dir};\">\
          <tr><td style=\"text-align:center;padding-bottom:24px;\">\
          <a href=\"{website_url}\" style=\"text-decoration:none;\">\
          <img src=\"{logo_url}\" alt=\"Al-Maqraa\" width=\"180\" \
          style=\"display:block;margin:0 auto;max-width:180px;height:auto;border:0;\" />\
          </a></td></tr>\
-         <tr><td>\
-         <h1 style=\"margin:0 0 20px;font-size:22px;line-height:1.4;color:#1A1A1A;\">{heading}</h1>\
+         <tr><td dir=\"{dir}\" style=\"direction:{dir};text-align:{text_align};\">\
+         <h1 style=\"margin:0 0 20px;font-size:22px;line-height:1.4;color:#1A1A1A;\
+         direction:{dir};text-align:{text_align};\">{heading}</h1>\
          {body_html}\
          {cta_html}\
          </td></tr>\
