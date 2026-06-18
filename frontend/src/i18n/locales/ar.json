@@ -332,6 +332,24 @@
       "firstSessionGuide": {
         "button": "تذكير بالحصة",
         "description": "إرسال دليل مختصر يوضّح الفرق بين الحلقة والحصة وكيفية إنشاء أول حصة."
+      },
+      "customEmail": {
+        "button": "رسالة مخصصة",
+        "description": "اكتب رسالة شخصية وإرسالها بقالب البريد المعتاد.",
+        "composeTitle": "رسالة مخصصة",
+        "previewTitle": "معاينة البريد",
+        "recipient": "إلى: {{name}} ({{email}})",
+        "subjectLabel": "الموضوع",
+        "messageLabel": "نص الرسالة",
+        "messagePlaceholder": "اكتب رسالتك هنا…",
+        "messageHint": "السطر الفارغ يبدأ فقرة جديدة. يُضاف التحية مع اسم المعلّم تلقائيًا.",
+        "previewButton": "معاينة",
+        "previewHint": "هذا شكل البريد كما سيصل إلى {{email}}.",
+        "backButton": "تعديل",
+        "sendButton": "إرسال البريد",
+        "validationRequired": "الموضوع ونص الرسالة مطلوبان.",
+        "validationSubjectLength": "يجب ألا يتجاوز الموضوع ٢٠٠ حرف.",
+        "validationMessageLength": "يجب ألا يتجاوز نص الرسالة ٥٬٠٠٠ حرف."
       }
     }
   },

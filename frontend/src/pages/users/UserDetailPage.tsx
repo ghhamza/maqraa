@@ -93,7 +93,14 @@ export function UserDetailPage() {
         <ProfileDetailsSummary user={user} />
       </PageCard>
 
-      {user.role === "teacher" ? <UserCommunicationSection userId={user.id} /> : null}
+      {user.role === "teacher" ? (
+        <UserCommunicationSection
+          userId={user.id}
+          userName={user.name}
+          userEmail={user.email}
+          preferredLanguage={user.preferred_language}
+        />
+      ) : null}
 
       <PageCard>
         <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("users.integrations")}</h2>

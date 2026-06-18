@@ -13,5 +13,5 @@ pub use format::{format_session_time, grade_label, recitation_ref};
 pub use provider::build_provider;
 pub use queue::enqueue;
 pub use scheduler::spawn_scheduler;
-pub use templates::TemplateVars;
+pub use templates::{render, TemplateVars};
 pub use worker::spawn_worker;

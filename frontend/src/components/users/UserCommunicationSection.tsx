@@ -3,19 +3,29 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Mail } from "lucide-react";
+import { Mail, PenLine } from "lucide-react";
 import { Button } from "../ui/Button";
 import { PageCard } from "../layout/PageCard";
+import { CustomTeacherEmailModal } from "./CustomTeacherEmailModal";
 import { useSendSessionGuide } from "../../data/users";
 
 interface UserCommunicationSectionProps {
   userId: string;
+  userName: string;
+  userEmail: string;
+  preferredLanguage: string;
 }
 
-export function UserCommunicationSection({ userId }: UserCommunicationSectionProps) {
+export function UserCommunicationSection({
+  userId,
+  userName,
+  userEmail,
+  preferredLanguage,
+}: UserCommunicationSectionProps) {
   const { t } = useTranslation();
   const [toast, setToast] = useState<"success" | "error" | null>(null);
   const [cooldown, setCooldown] = useState(false);
+  const [customEmailOpen, setCustomEmailOpen] = useState(false);
 
   const sendGuideMutation = useSendSessionGuide(
     () => setToast("success"),
@@ -61,8 +71,30 @@ export function UserCommunicationSection({ userId }: UserCommunicationSectionPro
               {t("users.communication.firstSessionGuide.button")}
             </span>
           </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setCustomEmailOpen(true)}
+            title={t("users.communication.customEmail.description")}
+          >
+            <span className="inline-flex items-center gap-2">
+              <PenLine className="h-4 w-4 text-[#D4A843]" aria-hidden />
+              {t("users.communication.customEmail.button")}
+            </span>
+          </Button>
         </div>
       </PageCard>
+
+      <CustomTeacherEmailModal
+        open={customEmailOpen}
+        userId={userId}
+        userName={userName}
+        userEmail={userEmail}
+        preferredLanguage={preferredLanguage}
+        onClose={() => setCustomEmailOpen(false)}
+        onSent={() => setToast("success")}
+      />
 
       {toast ? (
         <div

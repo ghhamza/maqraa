@@ -15,7 +15,7 @@ use crate::api::types::{Paginated, UserAdminDetail, UserPublic, UserStatsRespons
 use crate::api::user_response::load_user_admin_detail;
 use crate::api::AppState;
 use crate::auth::password;
-use crate::notifications::{enqueue, TemplateVars};
+use crate::notifications::{enqueue, render, TemplateVars};
 
 #[derive(Deserialize)]
 pub struct ListUsersQuery {
@@ -420,4 +420,135 @@ pub async fn send_session_guide(
     })?;
 
     Ok(Json(SendSessionGuideResponse { queued: true }))
+}
+
+const CUSTOM_EMAIL_MAX_SUBJECT: usize = 200;
+const CUSTOM_EMAIL_MAX_MESSAGE: usize = 5_000;
+
+#[derive(Deserialize)]
+pub struct CustomTeacherEmailRequest {
+    pub subject: String,
+    pub message: String,
+}
+
+#[derive(Serialize)]
+pub struct CustomTeacherEmailPreviewResponse {
+    pub subject: String,
+    pub html: String,
+    pub text: String,
+}
+
+#[derive(Serialize)]
+pub struct SendCustomTeacherEmailResponse {
+    pub queued: bool,
+}
+
+struct TeacherEmailTarget {
+    name: String,
+    email: String,
+    preferred_language: String,
+}
+
+async fn load_teacher_email_target(
+    db: &sqlx::PgPool,
+    id: Uuid,
+) -> Result<TeacherEmailTarget, StatusCode> {
+    let target: Option<(String, String, String, String)> = sqlx::query_as(
+        "SELECT name, email, preferred_language, role::text FROM users WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let Some((name, email, preferred_language, role)) = target else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+
+    if role != "teacher" {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    Ok(TeacherEmailTarget {
+        name,
+        email,
+        preferred_language,
+    })
+}
+
+fn validate_custom_teacher_email(body: &CustomTeacherEmailRequest) -> Result<(String, String), StatusCode> {
+    let subject = body.subject.trim();
+    let message = body.message.trim();
+
+    if subject.is_empty() || message.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if subject.chars().count() > CUSTOM_EMAIL_MAX_SUBJECT
+        || message.chars().count() > CUSTOM_EMAIL_MAX_MESSAGE
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    Ok((subject.to_string(), message.to_string()))
+}
+
+fn custom_teacher_email_vars(name: &str, subject: &str, message: &str) -> TemplateVars {
+    TemplateVars::new()
+        .with("name", name)
+        .with("subject", subject)
+        .with("message", message)
+}
+
+pub async fn preview_custom_teacher_email(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CustomTeacherEmailRequest>,
+) -> Result<Json<CustomTeacherEmailPreviewResponse>, StatusCode> {
+    require_admin(&auth)?;
+
+    let target = load_teacher_email_target(&state.db, id).await?;
+    let (subject, message) = validate_custom_teacher_email(&body)?;
+    let vars = custom_teacher_email_vars(&target.name, &subject, &message);
+    let rendered = render(
+        "teacher_custom_message",
+        &target.preferred_language,
+        &vars,
+    );
+
+    Ok(Json(CustomTeacherEmailPreviewResponse {
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+    }))
+}
+
+pub async fn send_custom_teacher_email(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CustomTeacherEmailRequest>,
+) -> Result<Json<SendCustomTeacherEmailResponse>, StatusCode> {
+    require_admin(&auth)?;
+
+    let target = load_teacher_email_target(&state.db, id).await?;
+    let (subject, message) = validate_custom_teacher_email(&body)?;
+    let vars = custom_teacher_email_vars(&target.name, &subject, &message);
+
+    enqueue(
+        &state.db,
+        &state.config,
+        "teacher_custom_message",
+        &target.preferred_language,
+        &target.email,
+        Some(id),
+        vars,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, user_id = %id, "failed to enqueue teacher_custom_message");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    Ok(Json(SendCustomTeacherEmailResponse { queued: true }))
 }

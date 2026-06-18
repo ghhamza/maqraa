@@ -157,6 +157,48 @@ export function useSendSessionGuide(onSuccess?: () => void, onError?: (message: 
   });
 }
 
+export interface CustomTeacherEmailInput {
+  subject: string;
+  message: string;
+}
+
+export interface CustomTeacherEmailPreview {
+  subject: string;
+  html: string;
+  text: string;
+}
+
+export function usePreviewCustomTeacherEmail(
+  userId: string,
+  onError?: (message: string) => void,
+) {
+  return useApiMutation<CustomTeacherEmailPreview, CustomTeacherEmailInput>({
+    mutationFn: async (input) => {
+      const { data } = await api.post<CustomTeacherEmailPreview>(
+        `users/${userId}/preview-custom-email`,
+        input,
+      );
+      return data;
+    },
+    onError: (message) => onError?.(message),
+  });
+}
+
+export function useSendCustomTeacherEmail(
+  userId: string,
+  onSuccess?: () => void,
+  onError?: (message: string) => void,
+) {
+  return useApiMutation<{ queued: boolean }, CustomTeacherEmailInput>({
+    mutationFn: async (input) => {
+      const { data } = await api.post<{ queued: boolean }>(`users/${userId}/send-custom-email`, input);
+      return data;
+    },
+    onSuccess: () => onSuccess?.(),
+    onError: (message) => onError?.(message),
+  });
+}
+
 interface UpdatePasswordInput {
   current_password: string;
   new_password: string;

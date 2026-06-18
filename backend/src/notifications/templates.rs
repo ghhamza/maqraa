@@ -60,6 +60,43 @@ fn html_escape_attr(value: &str) -> String {
         .replace('>', "&gt;")
 }
 
+fn html_escape_body(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+fn message_to_html_paragraphs(message: &str) -> Vec<String> {
+    let trimmed = message.trim();
+    if trimmed.is_empty() {
+        return vec![];
+    }
+
+    trimmed
+        .split("\n\n")
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(|paragraph| {
+            paragraph
+                .lines()
+                .map(html_escape_body)
+                .collect::<Vec<_>>()
+                .join("<br>")
+        })
+        .collect()
+}
+
+fn message_to_text_paragraphs(message: &str) -> Vec<String> {
+    message
+        .trim()
+        .split("\n\n")
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 fn cta_fallback_copy(locale: &str) -> &'static str {
     match locale {
         "ar" => "إن لم يعمل الزر، انسخ الرابط التالي ولصقه في المتصفح:",
@@ -531,6 +568,45 @@ pub fn render(template_key: &str, locale: &str, vars: &TemplateVars) -> Rendered
             );
             RenderedEmail {
                 subject: subject.to_string(),
+                html,
+                text,
+            }
+        }
+        "teacher_custom_message" => {
+            let greeting = match locale {
+                "ar" => "السلام عليكم ورحمة الله وبركاته، {{name}}،",
+                "fr" => "Assalamou alaykoum {{name}},",
+                _ => "Assalamu alaikum {{name}},",
+            };
+            let subject = vars
+                .values
+                .get("subject")
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(sub)
+                .unwrap_or_else(|| match locale {
+                    "ar" => "رسالة من المقرأة".to_string(),
+                    "fr" => "Message d'Al-Maqraa".to_string(),
+                    _ => "Message from Al-Maqraa".to_string(),
+                });
+            let message = vars.values.get("message").cloned().unwrap_or_default();
+
+            let mut html_paragraphs = vec![sub(greeting)];
+            html_paragraphs.extend(message_to_html_paragraphs(&message));
+
+            let mut text_paragraphs = vec![sub(greeting)];
+            text_paragraphs.extend(message_to_text_paragraphs(&message));
+
+            let (html, _) = email_layout(locale, &subject, &html_paragraphs, None);
+            let text_body = text_paragraphs.join("\n\n");
+            let text = format!(
+                "{subject}\n\n{text_body}\n\n{footer_label}: {website_url}",
+                footer_label = footer_copy(locale),
+                website_url = WEBSITE_URL,
+            );
+
+            RenderedEmail {
+                subject,
                 html,
                 text,
             }

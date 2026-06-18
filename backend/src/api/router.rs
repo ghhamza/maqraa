@@ -72,6 +72,14 @@ pub fn build_router(state: AppState) -> Router {
             post(handlers::users::send_session_guide),
         )
         .route(
+            "/api/users/{id}/preview-custom-email",
+            post(handlers::users::preview_custom_teacher_email),
+        )
+        .route(
+            "/api/users/{id}/send-custom-email",
+            post(handlers::users::send_custom_teacher_email),
+        )
+        .route(
             "/api/students/{student_id}/recitations",
             get(handlers::recitations::list_by_student),
         )

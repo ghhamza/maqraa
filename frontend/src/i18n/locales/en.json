@@ -332,6 +332,24 @@
       "firstSessionGuide": {
         "button": "Session reminder",
         "description": "Email a short guide explaining the difference between a halaqah and a session, and how to create the first session."
+      },
+      "customEmail": {
+        "button": "Custom message",
+        "description": "Write a personal message and send it with the standard email layout.",
+        "composeTitle": "Custom email",
+        "previewTitle": "Email preview",
+        "recipient": "To: {{name}} ({{email}})",
+        "subjectLabel": "Subject",
+        "messageLabel": "Message",
+        "messagePlaceholder": "Write your message here…",
+        "messageHint": "Blank lines start a new paragraph. The greeting with the teacher's name is added automatically.",
+        "previewButton": "Preview",
+        "previewHint": "This is how the email will look for {{email}}.",
+        "backButton": "Edit",
+        "sendButton": "Send email",
+        "validationRequired": "Subject and message are required.",
+        "validationSubjectLength": "Subject must be 200 characters or fewer.",
+        "validationMessageLength": "Message must be 5,000 characters or fewer."
       }
     }
   },

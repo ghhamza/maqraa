@@ -332,6 +332,24 @@
       "firstSessionGuide": {
         "button": "Rappel de séance",
         "description": "Envoyer un guide court expliquant la différence entre une halaqa et une session, et comment créer la première session."
+      },
+      "customEmail": {
+        "button": "Message personnalisé",
+        "description": "Rédiger un message personnel et l'envoyer avec la mise en page standard.",
+        "composeTitle": "E-mail personnalisé",
+        "previewTitle": "Aperçu de l'e-mail",
+        "recipient": "À : {{name}} ({{email}})",
+        "subjectLabel": "Objet",
+        "messageLabel": "Message",
+        "messagePlaceholder": "Écrivez votre message ici…",
+        "messageHint": "Une ligne vide démarre un nouveau paragraphe. La salutation avec le nom de l'enseignant est ajoutée automatiquement.",
+        "previewButton": "Aperçu",
+        "previewHint": "Voici l'apparence de l'e-mail pour {{email}}.",
+        "backButton": "Modifier",
+        "sendButton": "Envoyer l'e-mail",
+        "validationRequired": "L'objet et le message sont obligatoires.",
+        "validationSubjectLength": "L'objet ne doit pas dépasser 200 caractères.",
+        "validationMessageLength": "Le message ne doit pas dépasser 5 000 caractères."
       }
     }
   },
