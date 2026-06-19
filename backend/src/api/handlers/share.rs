@@ -665,26 +665,25 @@ async fn authorize_room_invites(
     Ok((teacher_name, halaqah_name, teacher_locale))
 }
 
-async fn find_active_invite_for_email(
+async fn revoke_active_invites_for_email(
     db: &sqlx::PgPool,
     room_id: Uuid,
     email: &str,
-) -> Result<Option<ShareLink>, sqlx::Error> {
-    sqlx::query_as(&format!(
-        "SELECT {LINK_COLS} FROM share_links \
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE share_links SET revoked_at = COALESCE(revoked_at, NOW()) \
          WHERE target_type = 'invite' \
          AND target_id = $1 \
          AND email_bound = $2 \
          AND revoked_at IS NULL \
          AND (expires_at IS NULL OR expires_at > NOW()) \
-         AND (max_uses IS NULL OR use_count < max_uses) \
-         ORDER BY created_at DESC \
-         LIMIT 1"
-    ))
+         AND (max_uses IS NULL OR use_count < max_uses)",
+    )
     .bind(room_id)
     .bind(email)
-    .fetch_optional(db)
-    .await
+    .execute(db)
+    .await?;
+    Ok(())
 }
 
 async fn insert_invite_link(
@@ -769,18 +768,9 @@ pub async fn send_room_invites(
             continue;
         }
 
-        if let Some(existing) = find_active_invite_for_email(&state.db, room_id, &email)
+        revoke_active_invites_for_email(&state.db, room_id, &email)
             .await
-            .map_err(|_| server_error())?
-        {
-            results.push(InviteResultItem {
-                id: existing.id,
-                email,
-                share_url: share_url(&state.config, &existing.token),
-                status: "already_invited",
-            });
-            continue;
-        }
+            .map_err(|_| server_error())?;
 
         let link = insert_invite_link(&state.db, room_id, auth.id, &email, auto_approve)
             .await
