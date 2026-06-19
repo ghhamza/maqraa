@@ -14,6 +14,7 @@ use uuid::Uuid;
 use crate::api::extractors::AuthenticatedUser;
 use crate::api::types::{Paginated, RoomPublic, RoomStatsResponse, TeacherOption};
 use crate::api::AppState;
+use crate::entitlements::EntitlementContext;
 use crate::riwaya::parse_riwaya;
 
 /// Distinguish "field absent" from "field present and null".
@@ -494,6 +495,41 @@ pub async fn create_room(
     validate_description(req.description.as_deref())?;
     validate_deadline(req.enrollment_deadline_at, Utc::now())?;
 
+    // Quota enforcement (open-core seam). No-op in community: `quota()` is None,
+    // so neither branch runs — not even the COUNT query. The cloud build injects a
+    // provider that returns Some(limit) and these checks bite. Enforcement logic is
+    // identical across editions; only the limit value comes from the provider.
+    let ent = state
+        .entitlements
+        .resolve(&EntitlementContext {
+            user_id: teacher_id,
+            role: "teacher".to_string(),
+        })
+        .await;
+
+    // max_halaqat: number of active rooms this teacher owns.
+    // NOTE: counted per-teacher — the only dimension core knows. Org-level caps,
+    // if ever needed, are enforced in cloud's own routes, never by changing this.
+    if let Some(limit) = ent.quota("max_halaqat") {
+        let current: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM rooms WHERE teacher_id = $1 AND is_active = true",
+        )
+        .bind(teacher_id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if current >= limit {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    // max_students_per_halaqah: ceiling on the room's configured capacity.
+    if let Some(limit) = ent.quota("max_students_per_halaqah") {
+        if (max_students as i64) > limit {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
     sqlx::query(
         "INSERT INTO rooms (id, name, teacher_id, max_students, is_active, riwaya, halaqah_type, is_public, enrollment_open, requires_approval, description, enrollment_deadline_at) \
          VALUES ($1, $2, $3, $4, true, $5, $6::halaqah_type, $7, $8, $9, $10, $11)",
@@ -585,6 +621,21 @@ pub async fn update_room(
     }
     if let Some(deadline_opt) = &req.enrollment_deadline_at {
         validate_deadline(*deadline_opt, Utc::now())?;
+    }
+
+    if let Some(new_max) = req.max_students {
+        let ent = state
+            .entitlements
+            .resolve(&EntitlementContext {
+                user_id: existing.teacher_id,
+                role: "teacher".to_string(),
+            })
+            .await;
+        if let Some(limit) = ent.quota("max_students_per_halaqah") {
+            if (new_max as i64) > limit {
+                return Err(StatusCode::FORBIDDEN);
+            }
+        }
     }
 
     let name = req.name.map(|n| n.trim().to_string()).unwrap_or(existing.name.clone());

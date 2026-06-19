@@ -1,11 +1,19 @@
 [package]
-name = "miqraa-backend"
+name = "maqraa"
 version = "0.1.0"
 edition = "2021"
 description = "Al-Maqraa (المقرأ) — Open-source Quran education platform backend"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/ghhamza/maqraa"
 homepage = "https://miqraa.org"
+
+[lib]
+name = "maqraa"
+path = "src/lib.rs"
+
+[[bin]]
+name = "maqraa-backend"
+path = "src/main.rs"
 
 [dependencies]
 # Web framework

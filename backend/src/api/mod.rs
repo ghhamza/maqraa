@@ -10,6 +10,7 @@ pub mod user_response;
 pub mod ws;
 
 use crate::config::AppConfig;
+use crate::entitlements::{CommunityEntitlements, EntitlementsProvider};
 use crate::media::LivekitClient;
 use crate::qf::config::QfConfig;
 use crate::qf::content::ContentApiClient;
@@ -32,6 +33,7 @@ pub struct AppState {
     pub user_api: Arc<UserApiClient>,
     pub rooms: Arc<RoomManager>,
     pub livekit: Arc<LivekitClient>,
+    pub entitlements: Arc<dyn EntitlementsProvider>,
 }
 
 impl AppState {
@@ -56,6 +58,14 @@ impl AppState {
             config,
             rooms,
             livekit,
+            entitlements: Arc::new(CommunityEntitlements),
         }
+    }
+
+    /// Override the entitlements provider (used by the cloud build to inject a
+    /// plan-aware provider). Community core uses the default from `new`.
+    pub fn with_entitlements(mut self, provider: Arc<dyn EntitlementsProvider>) -> Self {
+        self.entitlements = provider;
+        self
     }
 }

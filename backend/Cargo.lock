@@ -1493,6 +1493,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "maqraa"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "argon2",
+ "async-trait",
+ "axum",
+ "axum-extra",
+ "base64 0.22.1",
+ "chrono",
+ "chrono-tz",
+ "clap",
+ "dotenvy",
+ "figment",
+ "futures-util",
+ "jsonwebtoken",
+ "livekit-api",
+ "livekit-protocol",
+ "rand 0.8.5",
+ "reqwest 0.12.28",
+ "resend-rs",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1559,41 +1594,6 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "miqraa-backend"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "argon2",
- "async-trait",
- "axum",
- "axum-extra",
- "base64 0.22.1",
- "chrono",
- "chrono-tz",
- "clap",
- "dotenvy",
- "figment",
- "futures-util",
- "jsonwebtoken",
- "livekit-api",
- "livekit-protocol",
- "rand 0.8.5",
- "reqwest 0.12.28",
- "resend-rs",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "thiserror 2.0.18",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]

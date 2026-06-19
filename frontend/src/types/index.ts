@@ -20,6 +20,14 @@ export interface User {
   preferred_language: string;
 }
 
+/** Resolved entitlements from /api/auth/me. Community: empty + unlimited. */
+export interface Entitlements {
+  /** Pro/operational capabilities that are ON. Empty in community. */
+  capabilities: string[];
+  /** Numeric plan limits by key. `null` (or absent key) = unlimited. */
+  quotas: Record<string, number | null>;
+}
+
 /** Full user row from admin APIs */
 export interface UserPublic extends User {
   created_at: string;

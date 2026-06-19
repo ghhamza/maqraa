@@ -6,6 +6,8 @@ use serde::Serialize;
 use sqlx::FromRow;
 use uuid::Uuid;
 
+use crate::entitlements::Entitlements;
+
 #[derive(Serialize)]
 pub struct UserResponse {
     pub id: Uuid,
@@ -24,6 +26,17 @@ pub struct UserResponse {
     pub qiraat_taught: Vec<String>,
     pub email_verified: bool,
     pub preferred_language: String,
+}
+
+/// Response for `GET /api/auth/me`. Flattens the user projection and the
+/// resolved entitlements into a single flat object so the existing flat
+/// client contract is preserved while adding `capabilities` + `quotas`.
+#[derive(Serialize)]
+pub struct MeResponse {
+    #[serde(flatten)]
+    pub user: UserResponse,
+    #[serde(flatten)]
+    pub entitlements: Entitlements,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

@@ -6,27 +6,20 @@ use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
-mod api;
-mod auth;
-mod config;
-mod db;
-mod models;
-mod media;
-mod notifications;
-mod qf;
-mod quran_ayah_counts;
-mod riwaya;
-mod rooms;
-mod services;
-
 use chrono::Utc;
-
-use crate::api::ws::signaling::on_session_ended;
-use crate::media::LivekitClient;
-use crate::rooms::RoomManager;
+use maqraa::api::router::build_router;
+use maqraa::api::ws::signaling::on_session_ended;
+use maqraa::api::AppState;
+use maqraa::auth::password::hash_password;
+use maqraa::config::AppConfig;
+use maqraa::db::create_pool;
+use maqraa::media::LivekitClient;
+use maqraa::notifications::{build_provider, spawn_scheduler, spawn_worker};
+use maqraa::rooms::RoomManager;
+use maqraa::services::storage::StorageService;
 
 #[derive(Parser)]
-#[command(name = "miqraa-backend")]
+#[command(name = "maqraa-backend")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -48,7 +41,7 @@ enum Commands {
 fn init_tracing() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::from_default_env().add_directive("miqraa_backend=debug".parse()?),
+            EnvFilter::from_default_env().add_directive("maqraa=debug".parse()?),
         )
         .init();
     Ok(())
@@ -57,8 +50,8 @@ fn init_tracing() -> Result<()> {
 async fn create_admin(name: String, email: String, password: String) -> Result<()> {
     init_tracing()?;
 
-    let config = config::AppConfig::load()?;
-    let pool = db::create_pool(&config.database_url).await?;
+    let config = AppConfig::load()?;
+    let pool = create_pool(&config.database_url).await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
 
     let email_norm = email.trim().to_lowercase();
@@ -73,7 +66,7 @@ async fn create_admin(name: String, email: String, password: String) -> Result<(
         std::process::exit(1);
     }
 
-    let hash = auth::password::hash_password(&password)?;
+    let hash = hash_password(&password)?;
     let id = Uuid::new_v4();
 
     sqlx::query(
@@ -97,7 +90,7 @@ async fn run_server() -> Result<()> {
     tracing::info!("بسم الله الرحمن الرحيم");
     tracing::info!("Starting Al-Maqraa server...");
 
-    let config = config::AppConfig::load()?;
+    let config = AppConfig::load()?;
     tracing::info!(
         notifications_enabled = config.notifications_enabled,
         email_provider = %config.email_provider,
@@ -108,14 +101,14 @@ async fn run_server() -> Result<()> {
 
     std::fs::create_dir_all(&config.recordings_path)?;
 
-    let db_pool = db::create_pool(&config.database_url).await?;
+    let db_pool = create_pool(&config.database_url).await?;
 
     sqlx::migrate!("./migrations").run(&db_pool).await?;
 
     if config.notifications_enabled {
-        let provider = notifications::build_provider(&config)?;
-        notifications::spawn_worker(db_pool.clone(), provider, config.clone());
-        notifications::spawn_scheduler(db_pool.clone(), config.clone());
+        let provider = build_provider(&config)?;
+        spawn_worker(db_pool.clone(), provider, config.clone());
+        spawn_scheduler(db_pool.clone(), config.clone());
     } else {
         if !config.resend_api_key.is_empty() {
             tracing::warn!(
@@ -125,7 +118,7 @@ async fn run_server() -> Result<()> {
         tracing::info!("notifications disabled (NOTIFICATIONS_ENABLED=false)");
     }
 
-    let storage = services::storage::StorageService::new(&config.recordings_path);
+    let storage = StorageService::new(&config.recordings_path);
 
     let rooms = std::sync::Arc::new(RoomManager::new());
     let livekit = std::sync::Arc::new(
@@ -133,7 +126,7 @@ async fn run_server() -> Result<()> {
             .expect("failed to initialize LiveKit client"),
     );
     tracing::info!("LiveKit client initialized: {}", livekit.ws_url());
-    let state = api::AppState::new(db_pool, storage, config.clone(), rooms, livekit);
+    let state = AppState::new(db_pool, storage, config.clone(), rooms, livekit);
     let warm = state.content_api.clone();
     tokio::spawn(async move {
         match warm.get_access_token().await {
@@ -187,7 +180,7 @@ async fn run_server() -> Result<()> {
         }
     });
 
-    let app = api::router::build_router(state);
+    let app = build_router(state);
 
     let addr = format!("{}:{}", config.host, config.port);
     tracing::info!(

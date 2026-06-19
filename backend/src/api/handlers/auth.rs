@@ -7,8 +7,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
-use crate::api::types::UserResponse;
+use crate::api::types::{MeResponse, UserResponse};
 use crate::api::user_response::load_user_response;
+use crate::entitlements::EntitlementContext;
 use crate::api::AppState;
 use crate::auth::{
     create_reset_token, create_verification_token, consume_reset_token, consume_verification_token,
@@ -269,11 +270,21 @@ pub async fn whats_new(
 pub async fn me(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
-) -> Result<Json<UserResponse>, StatusCode> {
-    load_user_response(&state.db, auth.id)
+) -> Result<Json<MeResponse>, StatusCode> {
+    let user = load_user_response(&state.db, auth.id)
         .await
-        .map(Json)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let entitlements = state
+        .entitlements
+        .resolve(&EntitlementContext {
+            user_id: auth.id,
+            role: auth.role.clone(),
+        })
+        .await;
+    Ok(Json(MeResponse {
+        user,
+        entitlements,
+    }))
 }
 
 #[derive(Deserialize)]
