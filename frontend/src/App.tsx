@@ -19,6 +19,7 @@ import { AdminRoute } from "./components/ui/AdminRoute";
 import { AppLayout } from "./components/layout/AppLayout";
 import { HomePage } from "./pages/HomePage";
 import { UsersPage } from "./pages/users/UsersPage";
+import { InstanceInvitesPage } from "./pages/admin/InstanceInvitesPage";
 import { UserDetailPage } from "./pages/users/UserDetailPage";
 import { RoomsPage } from "./pages/rooms/RoomsPage";
 import { ArchivedRoomsPage } from "./pages/rooms/ArchivedRoomsPage";
@@ -33,6 +34,7 @@ import { RecitationsPage } from "./pages/recitations/RecitationsPage";
 import { StudentProgressPage } from "./pages/recitations/StudentProgressPage";
 import { ProfilePage } from "./pages/profile/ProfilePage";
 import { ProfileCompletePage } from "./pages/profile/ProfileCompletePage";
+import { ShareAcceptPage } from "./pages/share/ShareAcceptPage";
 import { AccountLinksPage } from "./pages/settings/AccountLinksPage";
 import { MushafPage } from "./pages/mushaf/MushafPage";
 import { useAuthStore } from "./stores/authStore";
@@ -91,6 +93,18 @@ const router = createBrowserRouter([
     ),
   },
   {
+    path: "/share/:token",
+    element: (
+      <ProtectedRoute>
+        <RoleSelectionGuard>
+          <ProfileCompletionGuard>
+            <ShareAcceptPage />
+          </ProfileCompletionGuard>
+        </RoleSelectionGuard>
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: "/sessions/:id/live",
     element: (
       <ProtectedRoute>
@@ -120,6 +134,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute>
             <UsersPage />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/invites",
+        element: (
+          <AdminRoute>
+            <InstanceInvitesPage />
           </AdminRoute>
         ),
       },

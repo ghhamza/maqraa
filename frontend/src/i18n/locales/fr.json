@@ -141,7 +141,8 @@
     "live": "Direct",
     "liveBadge": "LIVE",
     "pendingRequests": "Demandes en attente",
-    "pendingIndicator": "Demandes d’inscription en attente"
+    "pendingIndicator": "Demandes d’inscription en attente",
+    "instanceInvites": "Invitations"
   },
   "roomDetail": {
     "studentsEmptyTitle": "Aucun élève inscrit",
@@ -1121,6 +1122,72 @@
     "waqf_ibtida": "Arrêt/reprise",
     "shadda": "Accentuation",
     "other": "Autre"
+  },
+  "share": {
+    "joining": "Adhésion en cours…",
+    "invalid": "Ce lien est invalide ou expiré",
+    "wrongAccount": "Ce lien est destiné à un autre compte",
+    "goHome": "Accueil",
+    "share": "Partager",
+    "createLink": "Créer un lien",
+    "preparing": "Préparation du lien…",
+    "copy": "Copier le lien",
+    "copied": "Copié",
+    "whatsapp": "WhatsApp",
+    "email": "E-mail",
+    "nativeShare": "Partager…",
+    "inviteMessage": "Rejoignez mon cercle « {{name}} » sur Al-Maqraa :",
+    "advanced": "Options avancées",
+    "expiry": "Date d'expiration",
+    "maxUses": "Utilisations max",
+    "opens": "Ouvertures",
+    "joins": "Adhésions",
+    "createdAt": "Créé le",
+    "linkType": "Type",
+    "status": {
+      "active": "Actif",
+      "expired": "Expiré",
+      "revoked": "Révoqué",
+      "limit": "Limite atteinte"
+    },
+    "revoke": "Révoquer",
+    "revokeConfirm": "Révoquer ce lien ? Il cessera de fonctionner.",
+    "noLinks": "Aucun lien pour l'instant",
+    "liveNow": "En direct",
+    "joinNow": "Rejoindre"
+  },
+  "instanceInvite": {
+    "title": "Inviter sur Al-Maqraa",
+    "subtitle": "Partagez un lien pour inviter de nouveaux enseignants et élèves.",
+    "generate": "Générer un lien d'invitation",
+    "opens": "Ouvertures",
+    "joins": "Inscriptions",
+    "noLinks": "Aucun lien d'invitation"
+  },
+  "live": {
+    "pendingApproval": "Votre demande est en attente. Vous pourrez entrer après l'approbation de l'enseignant.",
+    "notEnrolled": "Vous n'êtes pas inscrit à ce cercle.",
+    "notLive": "Cette séance n'est pas en direct actuellement.",
+    "goToSession": "Aller à la séance"
+  },
+  "invite": {
+    "invite": "Inviter des élèves",
+    "emailsPlaceholder": "Saisissez un ou plusieurs e-mails",
+    "autoApprove": "Approbation automatique",
+    "autoApproveHint": "Les invités sont approuvés directement, sans révision",
+    "send": "Envoyer les invitations",
+    "sent": "{{count}} invitation(s) envoyée(s)",
+    "alreadyInvited": "Déjà invité",
+    "invalidEmail": "E-mail invalide",
+    "resend": "Renvoyer",
+    "resent": "Renvoyé",
+    "status": {
+      "joined": "A rejoint"
+    },
+    "noInvites": "Aucune invitation"
+  },
+  "calendar": {
+    "add": "Ajouter au calendrier"
   },
   "errorBoundary": {
     "title": "Une erreur est survenue",

@@ -141,7 +141,8 @@
     "live": "مباشر",
     "liveBadge": "مباشر",
     "pendingRequests": "طلبات قيد الانتظار",
-    "pendingIndicator": "طلبات انضمام قيد الانتظار"
+    "pendingIndicator": "طلبات انضمام قيد الانتظار",
+    "instanceInvites": "دعوة إلى المقرأة"
   },
   "roomDetail": {
     "studentsEmptyTitle": "لا يوجد طلاب مسجَّلون بعد",
@@ -1121,6 +1122,72 @@
     "waqf_ibtida": "وقف/ابتداء",
     "shadda": "شدّة",
     "other": "أخرى"
+  },
+  "share": {
+    "joining": "جارٍ الانضمام…",
+    "invalid": "هذا الرابط غير صالح أو منتهي الصلاحية",
+    "wrongAccount": "هذا الرابط مخصّص لحساب آخر",
+    "goHome": "الذهاب إلى الرئيسية",
+    "share": "مشاركة",
+    "createLink": "إنشاء رابط",
+    "preparing": "جارٍ تجهيز الرابط…",
+    "copy": "نسخ الرابط",
+    "copied": "تم النسخ",
+    "whatsapp": "واتساب",
+    "email": "بريد إلكتروني",
+    "nativeShare": "مشاركة…",
+    "inviteMessage": "انضمّ إلى حلقتي «{{name}}» على المقرأة:",
+    "advanced": "خيارات متقدمة",
+    "expiry": "تاريخ الانتهاء",
+    "maxUses": "الحد الأقصى للاستخدام",
+    "opens": "مرات الفتح",
+    "joins": "مرات الانضمام",
+    "createdAt": "تاريخ الإنشاء",
+    "linkType": "النوع",
+    "status": {
+      "active": "نشط",
+      "expired": "منتهٍ",
+      "revoked": "ملغى",
+      "limit": "اكتمل الحد"
+    },
+    "revoke": "إبطال",
+    "revokeConfirm": "إبطال هذا الرابط؟ لن يعمل بعد ذلك.",
+    "noLinks": "لا توجد روابط بعد",
+    "liveNow": "مباشر الآن",
+    "joinNow": "انضمّ الآن"
+  },
+  "instanceInvite": {
+    "title": "دعوة إلى المقرأة",
+    "subtitle": "شارك رابطًا لدعوة معلّمين وطلاب جدد للمنصّة.",
+    "generate": "إنشاء رابط دعوة",
+    "opens": "مرات الفتح",
+    "joins": "تسجيلات",
+    "noLinks": "لا توجد روابط دعوة بعد"
+  },
+  "live": {
+    "pendingApproval": "طلب انضمامك قيد المراجعة. ستتمكن من الدخول بعد قبول المعلّم.",
+    "notEnrolled": "لست مسجّلاً في هذه الحلقة.",
+    "notLive": "هذه الحصّة ليست مباشرة حالياً.",
+    "goToSession": "الذهاب إلى الحصّة"
+  },
+  "invite": {
+    "invite": "دعوة طلاب",
+    "emailsPlaceholder": "أدخل بريدًا إلكترونيًا أو أكثر",
+    "autoApprove": "قبول تلقائي",
+    "autoApproveHint": "يُقبل المدعوّون مباشرة دون مراجعة",
+    "send": "إرسال الدعوات",
+    "sent": "تم إرسال {{count}} دعوة",
+    "alreadyInvited": "مدعوّ مسبقًا",
+    "invalidEmail": "بريد غير صالح",
+    "resend": "إعادة الإرسال",
+    "resent": "تم إعادة الإرسال",
+    "status": {
+      "joined": "انضمّ"
+    },
+    "noInvites": "لا توجد دعوات بعد"
+  },
+  "calendar": {
+    "add": "إضافة إلى التقويم"
   },
   "errorBoundary": {
     "title": "حدث خطأ غير متوقع",

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../../../components/ui/Button";
 
 export function LiveSessionLoading() {
@@ -45,6 +46,28 @@ export function LiveSessionAnotherTab() {
       <Button type="button" variant="primary" onClick={() => window.location.reload()}>
         {t("liveSession.refreshPage")}
       </Button>
+    </div>
+  );
+}
+
+export function LiveSessionAccessBlocked({
+  messageKey,
+  sessionId,
+}: {
+  messageKey: string;
+  sessionId: string;
+}) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)] p-6">
+      <div className="w-full max-w-md rounded-xl bg-white p-8 text-center shadow-[0_4px_24px_rgba(26,26,26,0.08)]">
+        <p className="mb-6 text-[var(--color-text)]">{t(messageKey)}</p>
+        <Button type="button" variant="primary" onClick={() => navigate(`/sessions/${sessionId}`)}>
+          {t("live.goToSession")}
+        </Button>
+      </div>
     </div>
   );
 }

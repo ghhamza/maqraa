@@ -371,3 +371,27 @@ export function usePatchSessionDetailCache(sessionId: string) {
   return (patch: (prev: SessionDetail | undefined) => SessionDetail | undefined) =>
     qc.setQueryData<SessionDetail | undefined>(sessionKeys.detail(sessionId), patch);
 }
+
+const SESSION_ICS_FILENAME = "halaqah-session.ics";
+
+/** Fetch session ICS text (auth required). */
+export async function fetchSessionIcs(sessionId: string, signal?: AbortSignal): Promise<string> {
+  const { data } = await api.get<string>(`/sessions/${sessionId}/ics`, {
+    signal,
+    responseType: "text",
+    transformResponse: [(raw) => raw],
+  });
+  return data;
+}
+
+/** Download session ICS via authenticated axios fetch (JWT in header, not URL). */
+export async function downloadSessionIcs(sessionId: string): Promise<void> {
+  const text = await fetchSessionIcs(sessionId);
+  const blob = new Blob([text], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = SESSION_ICS_FILENAME;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}

@@ -9,6 +9,7 @@ import {
   Calendar,
   DoorOpen,
   Home,
+  Link2,
   Menu,
   Users,
 } from "lucide-react";
@@ -102,6 +103,7 @@ export function AppLayout() {
     return {
       home: p === "/" || p === "",
       users: p.startsWith("/users"),
+      invites: p.startsWith("/admin/invites"),
       rooms: p.startsWith("/rooms"),
       calendar: p === "/calendar",
       mushaf: p.startsWith("/mushaf"),
@@ -147,6 +149,18 @@ export function AppLayout() {
             <span className="inline-flex items-center gap-2">
               <Users className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
               {t("nav.users")}
+            </span>
+          </NavLink>
+        ) : null}
+        {isAdmin ? (
+          <NavLink
+            to="/admin/invites"
+            className={cn(navLinkClassName(navActive.invites), linkWrap)}
+            onClick={() => setMobileNavOpen(false)}
+          >
+            <span className="inline-flex items-center gap-2">
+              <Link2 className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+              {t("nav.instanceInvites")}
             </span>
           </NavLink>
         ) : null}
@@ -291,6 +305,18 @@ export function AppLayout() {
                       <span className="inline-flex items-center gap-2">
                         <Users className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
                         {t("nav.users")}
+                      </span>
+                    </NavLink>
+                  </NavigationMenuLink>
+                </NavigationMenuItem>
+              ) : null}
+              {isAdmin ? (
+                <NavigationMenuItem>
+                  <NavigationMenuLink asChild>
+                    <NavLink to="/admin/invites" className={navLinkClassName(navActive.invites)}>
+                      <span className="inline-flex items-center gap-2">
+                        <Link2 className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+                        {t("nav.instanceInvites")}
                       </span>
                     </NavLink>
                   </NavigationMenuLink>

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { api, userFacingApiError } from "../../lib/api";
+import { navigateAfterAuth } from "../../lib/safeNext";
 import { useAuthStore } from "../../stores/authStore";
 import { RoleChoiceCards, type RoleChoice } from "../../components/auth/RoleChoiceCards";
 import { Button } from "../../components/ui/Button";
@@ -32,7 +33,13 @@ export function RoleSelectionPage() {
         data: { role: selectedRole },
       });
       setUser(data);
-      navigate("/", { replace: true });
+      if (data.profile_completion_pending) {
+        navigate("/profile/complete", { replace: true });
+        return;
+      }
+      if (!navigateAfterAuth(navigate)) {
+        navigate("/", { replace: true });
+      }
     } catch (err) {
       setError(userFacingApiError(err, "auth.roleSelection.saveFailed"));
     } finally {

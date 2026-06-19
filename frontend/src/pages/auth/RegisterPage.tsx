@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BookOpen } from "lucide-react";
 import { api } from "../../lib/api";
+import { finishAuthNavigation, resolveShareTokenForRegister, stashShareNext } from "../../lib/safeNext";
 import { useAuthStore } from "../../stores/authStore";
 import type { AuthResponse } from "../../types";
 import { RoleChoiceCards } from "../../components/auth/RoleChoiceCards";
@@ -16,6 +17,7 @@ import { LanguageSwitcher } from "../../components/ui/LanguageSwitcher";
 export function RegisterPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const login = useAuthStore((s) => s.login);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -26,6 +28,15 @@ export function RegisterPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [qfError, setQfError] = useState<string | null>(null);
   const [qfLoading, setQfLoading] = useState(false);
+
+  useEffect(() => {
+    stashShareNext(searchParams.get("next"));
+  }, [searchParams]);
+
+  const shareToken = useMemo(
+    () => resolveShareTokenForRegister(searchParams.get("next")),
+    [searchParams],
+  );
 
   async function handleQfLogin() {
     if (qfLoading) return;
@@ -73,10 +84,11 @@ export function RegisterPage() {
           password,
           role,
           locale: (i18n.language || "ar").split("-")[0],
+          ...(shareToken ? { share_token: shareToken } : {}),
         },
       });
       login(data.token, data.user);
-      navigate("/", { replace: true });
+      finishAuthNavigation(navigate, data.user);
     } catch {
       setFormError(t("auth.registerFailed"));
     } finally {

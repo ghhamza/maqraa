@@ -26,6 +26,7 @@ import { ParticipantDrawer } from "../../components/session/ParticipantDrawer";
 import { AdHocStartModal } from "../../components/session/AdHocStartModal";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import {
+  LiveSessionAccessBlocked,
   LiveSessionAnotherTab,
   LiveSessionLoadError,
   LiveSessionLoading,
@@ -70,14 +71,14 @@ import { StudentAnnotationPopover } from "../../components/session/StudentAnnota
 import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudioButton";
 import { cn } from "@/lib/utils";
 import { useLivekitConnection } from "@/hooks/useLivekitConnection";
-import { useRoom } from "../../data/rooms";
+import { useMyEnrollment, useRoom } from "../../data/rooms";
 import {
   useCreateRecitation,
   usePatchSessionRecitationsCache,
   usePlanTransitions,
   useSessionRecitations,
 } from "../../data/recitations";
-import { usePatchSessionStatus, useSessionDetail } from "../../data/sessions";
+import { usePatchSessionStatus, useSessionDetail, useLivePublicSessions } from "../../data/sessions";
 import { useAnnotations } from "../../data/annotations";
 function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -310,23 +311,24 @@ function LiveSessionPageInner() {
    */
   const sessionDetailQuery = useSessionDetail(id, !!id);
 
-  /**
-   * Room detail. Depends on the session's `room_id`. Doesn't change during a
-   * session, so a long staleTime is appropriate.
-   */
-  const roomQuery = useRoom(sessionDetailQuery.data?.room_id);
-
   const sessionDetail = sessionDetailQuery.data ?? null;
-  const room = roomQuery.data ?? null;
-  const riwaya = (room?.riwaya ?? "hafs") as Riwaya;
-  const totalPages = getTotalPages(riwaya);
-  const loading = sessionDetailQuery.isPending || roomQuery.isPending;
   const detailErrorStatus =
     (sessionDetailQuery.error as { response?: { status?: number } } | null)?.response?.status;
   const loadError =
     sessionDetailQuery.error && detailErrorStatus !== 403
       ? userFacingApiError(sessionDetailQuery.error)
       : null;
+
+  /**
+   * Room detail. Depends on the session's `room_id`. Doesn't change during a
+   * session, so a long staleTime is appropriate.
+   */
+  const roomQuery = useRoom(sessionDetail?.room_id);
+
+  const room = roomQuery.data ?? null;
+  const riwaya = (room?.riwaya ?? "hafs") as Riwaya;
+  const totalPages = getTotalPages(riwaya);
+  const loading = sessionDetailQuery.isPending || (!!sessionDetail?.room_id && roomQuery.isPending);
 
   useEffect(() => {
     if (!id) return;
@@ -335,15 +337,8 @@ function LiveSessionPageInner() {
         replace: true,
         state: { liveSessionError: t("liveSession.sessionNotActive") },
       });
-      return;
     }
-    if (detailErrorStatus === 403) {
-      navigate(`/sessions/${id}`, {
-        replace: true,
-        state: { liveSessionError: t("liveSession.notEnrolled") },
-      });
-    }
-  }, [id, sessionDetailQuery.data, detailErrorStatus, navigate, t]);
+  }, [id, sessionDetailQuery.data, navigate, t]);
 
   const sessionReady = !!(sessionDetail && room && id && user && token);
 
@@ -456,6 +451,45 @@ function LiveSessionPageInner() {
     sessionId: id ?? "",
     canPublish: canPublishAudio,
   });
+
+  const livePublicQuery = useLivePublicSessions(
+    !!id &&
+      user?.role === "student" &&
+      (livekit.accessBlock === "forbidden" || detailErrorStatus === 403),
+  );
+  const livePublicMatch = livePublicQuery.data?.find((s) => s.id === id);
+  const roomIdForEnrollment = sessionDetail?.room_id ?? livePublicMatch?.room_id;
+  const myEnrollmentQuery = useMyEnrollment(
+    roomIdForEnrollment,
+    livekit.accessBlock === "forbidden" && !!roomIdForEnrollment,
+  );
+
+  const accessBlockedMessageKey = useMemo(() => {
+    if (livekit.accessBlock === "not_live") return "live.notLive";
+    if (livekit.accessBlock !== "forbidden") return null;
+    if (
+      myEnrollmentQuery.data?.status === "pending" ||
+      livePublicMatch?.my_enrollment_status === "pending"
+    ) {
+      return "live.pendingApproval";
+    }
+    return "live.notEnrolled";
+  }, [
+    livekit.accessBlock,
+    myEnrollmentQuery.data?.status,
+    livePublicMatch?.my_enrollment_status,
+  ]);
+
+  const waitingForAccessGate =
+    livekit.accessBlock === "forbidden" &&
+    user?.role === "student" &&
+    (livePublicQuery.isPending || (!!roomIdForEnrollment && myEnrollmentQuery.isPending));
+
+  const waitingForTokenGate =
+    detailErrorStatus === 403 &&
+    !livekit.accessBlock &&
+    (livekit.status === "idle" || livekit.status === "requesting_token");
+
   const elapsedLabel = formatElapsed(elapsedMs);
   const micState: "publishing" | "muted" | "listener" = canPublishAudio
     ? livekit.isMicEnabled
@@ -1085,7 +1119,11 @@ function LiveSessionPageInner() {
     return null;
   }
 
-  if (loading) return <LiveSessionLoading />;
+  if (loading || waitingForTokenGate || waitingForAccessGate) return <LiveSessionLoading />;
+
+  if (accessBlockedMessageKey) {
+    return <LiveSessionAccessBlocked messageKey={accessBlockedMessageKey} sessionId={id} />;
+  }
 
   if (loadError || !sessionDetail || !room || !user || !token) {
     return <LiveSessionLoadError message={loadError} onBack={() => navigate(`/sessions/${id}`)} />;

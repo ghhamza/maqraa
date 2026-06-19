@@ -10,6 +10,7 @@ import type {
   EnrollmentWithStatus,
   HalaqahType,
   JoinResult,
+  MyEnrollmentStatus,
   Paginated,
   QuranRiwaya,
   RecitationPublic,
@@ -132,6 +133,18 @@ export function useRoom(id: string | undefined) {
       if (status === 403) return false;
       return failureCount < 2;
     },
+  });
+}
+
+export function useMyEnrollment(roomId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: roomKeys.myEnrollment(roomId ?? ""),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<MyEnrollmentStatus>(`rooms/${roomId}/my-enrollment`, { signal });
+      return data;
+    },
+    enabled: !!roomId && enabled,
+    staleTime: 30_000,
   });
 }
 

@@ -11,5 +11,6 @@ pub mod recitations;
 pub mod rooms;
 pub mod schedules;
 pub mod sessions;
+pub mod share;
 pub mod users;
 pub mod qf;

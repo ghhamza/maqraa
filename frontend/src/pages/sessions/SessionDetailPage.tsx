@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { BookMarked, BookOpen, Calendar, Clock, Pencil, Repeat, Trash2 } from "lucide-react";
+import { BookMarked, BookOpen, Calendar, CalendarPlus, Clock, Pencil, Repeat, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { RecitationPublic, SessionPublic } from "../../types";
+import { ShareButton } from "../../components/share/ShareButton";
 import { useAuthStore } from "../../stores/authStore";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -34,6 +35,7 @@ import { Modal } from "../../components/ui/Modal";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 import { cn } from "@/lib/utils";
 import {
+  downloadSessionIcs,
   useDeleteSession,
   usePatchSessionDetailCache,
   usePatchSessionStatus,
@@ -146,6 +148,7 @@ export function SessionDetailPage() {
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [earlyStartConfirmOpen, setEarlyStartConfirmOpen] = useState(false);
   const [liveTick, setLiveTick] = useState(0);
+  const [icsLoading, setIcsLoading] = useState(false);
   const patchSessionDetail = usePatchSessionDetailCache(id ?? "");
   const patchSessionRecitations = usePatchSessionRecitationsCache(id);
 
@@ -200,6 +203,15 @@ export function SessionDetailPage() {
   const canEditSession = manage && (detail?.status === "scheduled" || detail?.status === "in_progress");
   const canDeleteSession = manage && detail?.status !== "in_progress";
   const attendanceDisabled = manage && detail?.status === "cancelled";
+
+  const openSessionEdit = useCallback(() => {
+    if (!detail) return;
+    if (detail.recurrence_group_id) setRecurrencePrompt("edit");
+    else {
+      setEditScope(undefined);
+      setFormOpen(true);
+    }
+  }, [detail]);
 
   const minutesRunning = useMemo(() => {
     if (!detail || detail.status !== "in_progress") return 0;
@@ -459,23 +471,18 @@ export function SessionDetailPage() {
       ]}
       title={<span>{title}</span>}
       actions={
-        canEditSession && status !== "scheduled" ? (
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => {
-              if (detail.recurrence_group_id) setRecurrencePrompt("edit");
-              else {
-                setEditScope(undefined);
-                setFormOpen(true);
-              }
-            }}
-          >
-            <span className="inline-flex items-center gap-2">
-              <Pencil className="h-4 w-4" />
-              {t("common.edit")}
-            </span>
-          </Button>
+        manage ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <ShareButton targetType="session" targetId={detail.id} displayName={title} />
+            {canEditSession ? (
+              <Button type="button" variant="secondary" onClick={openSessionEdit}>
+                <span className="inline-flex items-center gap-2">
+                  <Pencil className="h-4 w-4" />
+                  {t("common.edit")}
+                </span>
+              </Button>
+            ) : null}
+          </div>
         ) : undefined
       }
       contentClassName="space-y-8"
@@ -500,35 +507,12 @@ export function SessionDetailPage() {
 
       {manage && status === "scheduled" ? (
         <div className="flex flex-col">
-          {canEditSession ? (
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  if (detail.recurrence_group_id) setRecurrencePrompt("edit");
-                  else {
-                    setEditScope(undefined);
-                    setFormOpen(true);
-                  }
-                }}
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Pencil className="h-4 w-4" />
-                  {t("common.edit")}
-                </span>
-              </Button>
-            </div>
-          ) : null}
           <Button
             type="button"
             variant="primary"
             loading={actionLoading}
             onClick={handleStartClick}
-            className={cn(
-              "min-h-14 w-full bg-[#1B5E20] text-base font-semibold hover:opacity-95 md:mx-auto md:max-w-md",
-              canEditSession && "mt-4",
-            )}
+            className="min-h-14 w-full bg-[#1B5E20] text-base font-semibold hover:opacity-95 md:mx-auto md:max-w-md"
           >
             {t("liveSession.startSession")}
           </Button>
@@ -612,6 +596,28 @@ export function SessionDetailPage() {
             />
           </div>
         </div>
+        {status === "scheduled" ? (
+          <div className="mt-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+            <Button
+              type="button"
+              variant="secondary"
+              loading={icsLoading}
+              className="rounded-lg border-[#1B5E20]/30 text-[#1B5E20] hover:bg-[#1B5E20]/5"
+              onClick={() => {
+                if (!id) return;
+                setIcsLoading(true);
+                void downloadSessionIcs(id)
+                  .catch(() => setError(t("errors.generic")))
+                  .finally(() => setIcsLoading(false));
+              }}
+            >
+              <span className="inline-flex items-center gap-2">
+                <CalendarPlus className="h-4 w-4" aria-hidden />
+                {t("calendar.add")}
+              </span>
+            </Button>
+          </div>
+        ) : null}
         {detail.notes && status !== "cancelled" ? (
           <p className="mt-3 whitespace-pre-wrap text-sm text-[var(--color-text)]">{detail.notes}</p>
         ) : null}
