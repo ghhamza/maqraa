@@ -21,7 +21,7 @@ Two repos, never long-lived branches:
 Cloud pins core like this:
 
 ```toml
-maqraa = { git = "https://github.com/ghhamza/maqraa", tag = "v0.1.0", package = "maqraa" }
+maqraa = { git = "https://github.com/ghhamza/maqraa", tag = "v0.4.0", package = "maqraa" }
 ```
 
 ## Where does a commit go?
@@ -73,4 +73,4 @@ Friends helping with marketing or comms only do not need a CLA.
 - `EntitlementsProvider` seam exists, community-default, injectable.
 - Enforcement call sites baked into room handlers; `/api/auth/me` emits entitlements; `useEntitlements()` consumes them.
 - Boundary documented in `backend/src/lib.rs` and this file.
-- `main` carries all of it; `v0.1.0` tagged and pinnable from `github.com/ghhamza/maqraa`.
+- `main` carries all of it; `v0.4.0` tagged and pinnable from `github.com/ghhamza/maqraa`.
