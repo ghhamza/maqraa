@@ -3,20 +3,13 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
-use chrono::Utc;
 use maqraa::api::router::build_router;
-use maqraa::api::ws::signaling::on_session_ended;
-use maqraa::api::AppState;
 use maqraa::auth::password::hash_password;
 use maqraa::config::AppConfig;
 use maqraa::db::create_pool;
-use maqraa::media::LivekitClient;
-use maqraa::notifications::{build_provider, spawn_scheduler, spawn_worker};
-use maqraa::rooms::RoomManager;
-use maqraa::services::storage::StorageService;
+use maqraa::{build_app_state, init_tracing, run_migrations, serve, spawn_background_tasks};
 
 #[derive(Parser)]
 #[command(name = "maqraa-backend")]
@@ -38,21 +31,12 @@ enum Commands {
     },
 }
 
-fn init_tracing() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::from_default_env().add_directive("maqraa=debug".parse()?),
-        )
-        .init();
-    Ok(())
-}
-
 async fn create_admin(name: String, email: String, password: String) -> Result<()> {
     init_tracing()?;
 
     let config = AppConfig::load()?;
     let pool = create_pool(&config.database_url).await?;
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    run_migrations(&pool).await?;
 
     let email_norm = email.trim().to_lowercase();
     let existing: Option<Uuid> =
@@ -99,98 +83,10 @@ async fn run_server() -> Result<()> {
     );
     tracing::debug!(recordings_path = %config.recordings_path);
 
-    std::fs::create_dir_all(&config.recordings_path)?;
-
-    let db_pool = create_pool(&config.database_url).await?;
-
-    sqlx::migrate!("./migrations").run(&db_pool).await?;
-
-    if config.notifications_enabled {
-        let provider = build_provider(&config)?;
-        spawn_worker(db_pool.clone(), provider, config.clone());
-        spawn_scheduler(db_pool.clone(), config.clone());
-    } else {
-        if !config.resend_api_key.is_empty() {
-            tracing::warn!(
-                "NOTIFICATIONS_ENABLED=false but RESEND_API_KEY is set — no emails will be sent until enabled"
-            );
-        }
-        tracing::info!("notifications disabled (NOTIFICATIONS_ENABLED=false)");
-    }
-
-    let storage = StorageService::new(&config.recordings_path);
-
-    let rooms = std::sync::Arc::new(RoomManager::new());
-    let livekit = std::sync::Arc::new(
-        LivekitClient::new(config.livekit.clone())
-            .expect("failed to initialize LiveKit client"),
-    );
-    tracing::info!("LiveKit client initialized: {}", livekit.ws_url());
-    let state = AppState::new(db_pool, storage, config.clone(), rooms, livekit);
-    let warm = state.content_api.clone();
-    tokio::spawn(async move {
-        match warm.get_access_token().await {
-            Ok(_) => tracing::info!("QF content token pre-warmed"),
-            Err(e) => tracing::warn!(
-                error = %e,
-                "QF content token pre-warm failed (will retry on first use)"
-            ),
-        }
-    });
-    let cleanup_state = state.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
-        loop {
-            interval.tick().await;
-            match sqlx::query("DELETE FROM qf_oauth_states WHERE expires_at < NOW()")
-                .execute(&cleanup_state.db)
-                .await
-            {
-                Ok(done) => tracing::debug!(
-                    rows_deleted = done.rows_affected(),
-                    "deleted expired qf oauth states"
-                ),
-                Err(err) => tracing::debug!(error = %err, "failed to cleanup qf oauth states"),
-            }
-        }
-    });
-
-    let idle_state = state.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
-        loop {
-            interval.tick().await;
-            let cutoff = Utc::now() - chrono::Duration::minutes(10);
-            let ids = idle_state.rooms.inactive_empty_sessions(cutoff).await;
-            for sid in ids {
-                tracing::info!(session_id = %sid, "Session auto-completed due to inactivity");
-                let r = sqlx::query(
-                    "UPDATE sessions SET status = 'completed'::session_status \
-                     WHERE id = $1 AND status::text = 'in_progress'",
-                )
-                .bind(sid)
-                .execute(&idle_state.db)
-                .await;
-                if let Err(e) = r {
-                    tracing::warn!(error = %e, "failed to mark session completed (idle)");
-                    continue;
-                }
-                on_session_ended(&idle_state, sid).await;
-            }
-        }
-    });
-
+    let state = build_app_state(config.clone()).await?;
+    spawn_background_tasks(state.clone())?;
     let app = build_router(state);
-
-    let addr = format!("{}:{}", config.host, config.port);
-    tracing::info!(
-        "Al-Maqraa listening on {} (set HOST=127.0.0.1 to block LAN; default 0.0.0.0 accepts all interfaces)",
-        addr
-    );
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
-    axum::serve(listener, app).await?;
-
-    Ok(())
+    serve(app, &config.host, config.port).await
 }
 
 #[tokio::main]

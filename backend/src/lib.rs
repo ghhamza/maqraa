@@ -20,6 +20,7 @@
 
 pub mod api;
 pub mod auth;
+pub mod bootstrap;
 pub mod config;
 pub mod db;
 pub mod entitlements;
@@ -31,3 +32,5 @@ pub mod quran_ayah_counts;
 pub mod riwaya;
 pub mod rooms;
 pub mod services;
+
+pub use bootstrap::{build_app_state, init_tracing, run_migrations, serve, spawn_background_tasks};
