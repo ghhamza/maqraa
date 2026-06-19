@@ -121,7 +121,6 @@ export interface Enrollment {
   id: string;
   student_id: string;
   student_name: string;
-  student_email: string;
   enrolled_at: string;
 }
 
@@ -137,7 +136,6 @@ export interface EnrollmentCount {
 export interface StudentOption {
   id: string;
   name: string;
-  email: string;
 }
 
 export interface RoomStats {
@@ -151,7 +149,6 @@ export interface RoomStats {
 export interface TeacherOption {
   id: string;
   name: string;
-  email: string;
 }
 
 export interface SignalMessage {

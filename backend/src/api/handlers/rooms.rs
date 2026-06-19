@@ -201,7 +201,7 @@ pub async fn list_teachers(
     require_admin(&auth)?;
 
     let teachers = sqlx::query_as::<_, TeacherOption>(
-        "SELECT id, name, email FROM users WHERE role = 'teacher'::user_role ORDER BY name ASC",
+        "SELECT id, name FROM users WHERE role = 'teacher'::user_role ORDER BY name ASC",
     )
     .fetch_all(&state.db)
     .await

@@ -81,7 +81,6 @@ export function PendingRequestsList({ roomId, onChanged }: PendingRequestsListPr
           >
             <div>
               <p className="font-medium text-[var(--color-text)]">{e.student_name}</p>
-              <p className="text-sm text-[var(--color-text-muted)]">{e.student_email}</p>
               <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                 {t("enrollment.requestDate")}: {full(e.enrolled_at)}
               </p>

@@ -48,7 +48,7 @@ pub async fn list_students(
 
     if let Some(rid) = params.exclude_room_id {
         let students = sqlx::query_as::<_, StudentOption>(
-            "SELECT u.id, u.name, u.email FROM users u \
+            "SELECT u.id, u.name FROM users u \
              WHERE u.role = 'student'::user_role \
              AND NOT EXISTS (SELECT 1 FROM enrollments e WHERE e.student_id = u.id AND e.room_id = $1 \
              AND e.status IN ('approved', 'pending')) \
@@ -61,7 +61,7 @@ pub async fn list_students(
         Ok(Json(students))
     } else {
         let students = sqlx::query_as::<_, StudentOption>(
-            "SELECT id, name, email FROM users WHERE role = 'student'::user_role ORDER BY name ASC",
+            "SELECT id, name FROM users WHERE role = 'student'::user_role ORDER BY name ASC",
         )
         .fetch_all(&state.db)
         .await
@@ -119,7 +119,7 @@ pub async fn list_enrollments(
     }
 
     let rows = sqlx::query_as::<_, EnrollmentPublic>(
-        "SELECT e.id, e.student_id, u.name AS student_name, u.email AS student_email, e.enrolled_at \
+        "SELECT e.id, e.student_id, u.name AS student_name, e.enrolled_at \
          FROM enrollments e \
          INNER JOIN users u ON u.id = e.student_id \
          WHERE e.room_id = $1 AND e.status = 'approved' \
@@ -294,7 +294,7 @@ pub async fn create_enrollment(
     })?;
 
     let row = sqlx::query_as::<_, EnrollmentPublic>(
-        "SELECT e.id, e.student_id, u.name AS student_name, u.email AS student_email, e.enrolled_at \
+        "SELECT e.id, e.student_id, u.name AS student_name, e.enrolled_at \
          FROM enrollments e \
          INNER JOIN users u ON u.id = e.student_id \
          WHERE e.id = $1",
@@ -686,8 +686,7 @@ pub async fn list_pending_enrollments(
     }
 
     let rows = sqlx::query_as::<_, EnrollmentWithStatus>(
-        "SELECT e.id, e.student_id, u.name AS student_name, u.email AS student_email, \
-         e.enrolled_at, e.status \
+        "SELECT e.id, e.student_id, u.name AS student_name, e.enrolled_at, e.status \
          FROM enrollments e INNER JOIN users u ON u.id = e.student_id \
          WHERE e.room_id = $1 AND e.status = 'pending' \
          ORDER BY e.enrolled_at ASC",
@@ -833,7 +832,7 @@ pub async fn approve_enrollment(
     }
 
     let row = sqlx::query_as::<_, EnrollmentPublic>(
-        "SELECT e.id, e.student_id, u.name AS student_name, u.email AS student_email, e.enrolled_at \
+        "SELECT e.id, e.student_id, u.name AS student_name, e.enrolled_at \
          FROM enrollments e INNER JOIN users u ON u.id = e.student_id WHERE e.id = $1",
     )
     .bind(enrollment_id)

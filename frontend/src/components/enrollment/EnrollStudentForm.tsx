@@ -45,9 +45,7 @@ export function EnrollStudentForm({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return students;
-    return students.filter(
-      (s) => s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q),
-    );
+    return students.filter((s) => s.name.toLowerCase().includes(q));
   }, [students, search]);
 
   const enrollMutation = useEnrollStudent(
@@ -110,7 +108,6 @@ export function EnrollStudentForm({
                   onClick={() => void enroll(s)}
                 >
                   <span className="font-medium text-[var(--color-text)]">{s.name}</span>
-                  <span className="mt-0.5 block text-sm text-[var(--color-text-muted)]">{s.email}</span>
                 </button>
               </li>
             ))}

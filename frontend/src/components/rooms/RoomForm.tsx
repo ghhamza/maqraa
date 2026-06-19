@@ -221,7 +221,7 @@ export function RoomForm({
                   ? [{ value: "", label: t("rooms.noTeachersOption") }]
                   : teachers.map((teach) => ({
                       value: teach.id,
-                      label: `${teach.name} (${teach.email})`,
+                      label: teach.name,
                     }))
               }
             />

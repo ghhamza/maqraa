@@ -52,7 +52,6 @@ export function EnrolledStudentsList({
             >
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-[var(--color-text)]">{e.student_name}</p>
-                <p className="truncate text-[var(--color-text-muted)]">{e.student_email}</p>
                 <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                   {t("enrollment.enrolledOn")}: {medium(e.enrolled_at)}
                 </p>

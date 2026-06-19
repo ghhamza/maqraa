@@ -238,11 +238,11 @@ export function useTeacherScopedStudents(user: User | null, enabled = true) {
       for (const r of mine) {
         try {
           const { data: ens } = await api.get<
-            { student_id: string; student_name: string; student_email: string }[]
+            { student_id: string; student_name: string }[]
           >(`rooms/${r.id}/enrollments`, { signal });
           for (const e of ens) {
             if (!map.has(e.student_id)) {
-              map.set(e.student_id, { id: e.student_id, name: e.student_name, email: e.student_email });
+              map.set(e.student_id, { id: e.student_id, name: e.student_name });
             }
           }
         } catch (err) {

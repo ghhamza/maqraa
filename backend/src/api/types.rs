@@ -124,7 +124,6 @@ pub struct EnrollmentWithStatus {
     pub id: Uuid,
     pub student_id: Uuid,
     pub student_name: String,
-    pub student_email: String,
     pub enrolled_at: DateTime<Utc>,
     pub status: String,
 }
@@ -134,7 +133,6 @@ pub struct EnrollmentPublic {
     pub id: Uuid,
     pub student_id: Uuid,
     pub student_name: String,
-    pub student_email: String,
     pub enrolled_at: DateTime<Utc>,
 }
 
@@ -148,7 +146,6 @@ pub struct EnrollmentCountResponse {
 pub struct StudentOption {
     pub id: Uuid,
     pub name: String,
-    pub email: String,
 }
 
 #[derive(Serialize)]
@@ -166,7 +163,6 @@ pub struct RoomStatsResponse {
 pub struct TeacherOption {
     pub id: Uuid,
     pub name: String,
-    pub email: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
