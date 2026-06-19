@@ -16,6 +16,11 @@ use super::{
 use crate::api::AppState;
 
 const SITE_NAME: &str = "المقرأة";
+const SHARE_LOGO_PATH: &str = "/logo-icon.svg";
+
+fn share_logo_url(base: &str) -> String {
+    format!("{base}{SHARE_LOGO_PATH}")
+}
 
 struct ShareLocale {
     lang: &'static str,
@@ -42,7 +47,7 @@ pub async fn share_landing(
     );
     let base = state.config.public_base_url.trim_end_matches('/');
     let page_url = format!("{base}/s/{}", urlencoding_path_segment(&token));
-    let card_image = format!("{base}/share-card.png");
+    let card_image = share_logo_url(base);
     let token_trimmed = token.trim();
     let register_url = format!(
         "{base}/register?next={}",
@@ -319,13 +324,11 @@ body {{
   line-height: 1.6;
 }}
 .wrap {{ width: 100%; max-width: 480px; }}
-.logo {{
-  font-family: Amiri, serif;
-  font-size: 2rem;
-  color: #1B5E20;
-  text-align: center;
-  margin-bottom: 24px;
-  font-weight: 700;
+.logo-img {{
+  display: block;
+  width: 120px;
+  height: auto;
+  margin: 0 auto 24px;
 }}
 .card {{
   background: #FFFFFF;
@@ -416,7 +419,7 @@ body {{
 <body>
 {redirect}
 <div class="wrap">
-  <div class="logo">{site_name}</div>
+  <img class="logo-img" src="{logo_src}" alt="{site_name}" width="120" height="120">
   <div class="card">{body}</div>
 </div>
 </body>
@@ -428,6 +431,7 @@ body {{
         card_image = html_escape(card_image),
         page_url = html_escape(page_url),
         site_name = html_escape(SITE_NAME),
+        logo_src = html_escape(SHARE_LOGO_PATH),
         og_locale = locale.og_locale,
         body = body,
         redirect = redirect,
