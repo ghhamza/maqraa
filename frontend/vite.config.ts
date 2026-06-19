@@ -32,6 +32,11 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      // Public share teasers (`/s/{token}`) — must not match `/src/*`.
+      '^/s/': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+      },
     },
   },
 })

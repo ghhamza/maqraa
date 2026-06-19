@@ -710,6 +710,40 @@ pub fn render(template_key: &str, locale: &str, vars: &TemplateVars) -> Rendered
                 text,
             }
         }
+        "halaqah_invite" => {
+            let (subject, line, note, cta_label) = match locale {
+                "ar" => (
+                    "دعوة للانضمام إلى حلقة «{{halaqah_name}}»",
+                    "يدعوك {{teacher_name}} للانضمام إلى حلقة «{{halaqah_name}}» على المقرأة.",
+                    "إذا لم يكن لديك حساب، يمكنك إنشاؤه بهذا البريد نفسه.",
+                    "الانضمام إلى الحلقة",
+                ),
+                "fr" => (
+                    "Invitation à rejoindre « {{halaqah_name}} »",
+                    "{{teacher_name}} vous invite à rejoindre « {{halaqah_name}} » sur Al-Maqraa.",
+                    "Si vous n'avez pas de compte, créez-en un avec ce même e-mail.",
+                    "Rejoindre le cercle",
+                ),
+                _ => (
+                    "Invitation to join \"{{halaqah_name}}\"",
+                    "{{teacher_name}} invites you to join \"{{halaqah_name}}\" on Al-Maqraa.",
+                    "If you don't have an account, create one with this same email.",
+                    "Join the circle",
+                ),
+            };
+            let share_url = vars.values.get("share_url").cloned().unwrap_or_default();
+            let (html, text) = email_layout(
+                locale,
+                &sub(subject),
+                &[sub(line), sub(note)],
+                Some((cta_label, &share_url)),
+            );
+            RenderedEmail {
+                subject: sub(subject),
+                html,
+                text,
+            }
+        }
         "new_signup_digest" => {
             let (subject, heading, intro, cta_label) = match locale {
                 "ar" => (

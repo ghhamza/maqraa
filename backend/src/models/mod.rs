@@ -5,4 +5,5 @@ pub mod enrollment;
 pub mod recitation;
 pub mod room;
 pub mod session;
+pub mod share_link;
 pub mod user;

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
+use crate::api::handlers::share::try_attribute_instance_registration;
 use crate::api::types::{MeResponse, UserResponse};
 use crate::api::user_response::load_user_response;
 use crate::entitlements::EntitlementContext;
@@ -32,6 +33,8 @@ pub struct RegisterRequest {
     pub role: String,
     #[serde(default = "default_locale")]
     pub locale: String,
+    #[serde(default)]
+    pub share_token: Option<String>,
 }
 
 fn default_locale() -> String {
@@ -92,6 +95,8 @@ pub async fn register(
     .execute(&state.db)
     .await
     .map_err(|_| StatusCode::CONFLICT)?;
+
+    try_attribute_instance_registration(&state.db, req.share_token.as_deref()).await;
 
     let verify_token = create_verification_token(&state.db, user_id)
         .await

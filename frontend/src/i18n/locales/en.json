@@ -141,7 +141,8 @@
     "live": "Live",
     "liveBadge": "LIVE",
     "pendingRequests": "Pending requests",
-    "pendingIndicator": "Pending enrollment requests"
+    "pendingIndicator": "Pending enrollment requests",
+    "instanceInvites": "Invites"
   },
   "roomDetail": {
     "studentsEmptyTitle": "No students enrolled yet",
@@ -1121,6 +1122,72 @@
     "waqf_ibtida": "Stop/start",
     "shadda": "Emphasis",
     "other": "Other"
+  },
+  "share": {
+    "joining": "Joining…",
+    "invalid": "This link is invalid or expired",
+    "wrongAccount": "This link is for a different account",
+    "goHome": "Go home",
+    "share": "Share",
+    "createLink": "Create link",
+    "preparing": "Preparing link…",
+    "copy": "Copy link",
+    "copied": "Copied",
+    "whatsapp": "WhatsApp",
+    "email": "Email",
+    "nativeShare": "Share…",
+    "inviteMessage": "Join my circle \"{{name}}\" on Al-Maqraa:",
+    "advanced": "Advanced",
+    "expiry": "Expiry date",
+    "maxUses": "Max uses",
+    "opens": "Opens",
+    "joins": "Joins",
+    "createdAt": "Created",
+    "linkType": "Type",
+    "status": {
+      "active": "Active",
+      "expired": "Expired",
+      "revoked": "Revoked",
+      "limit": "Limit reached"
+    },
+    "revoke": "Revoke",
+    "revokeConfirm": "Revoke this link? It will stop working.",
+    "noLinks": "No links yet",
+    "liveNow": "Live now",
+    "joinNow": "Join now"
+  },
+  "instanceInvite": {
+    "title": "Invite to Al-Maqraa",
+    "subtitle": "Share a link to invite new teachers and students to the platform.",
+    "generate": "Generate invite link",
+    "opens": "Opens",
+    "joins": "Sign-ups",
+    "noLinks": "No invite links yet"
+  },
+  "live": {
+    "pendingApproval": "Your join request is pending. You can enter once the teacher approves.",
+    "notEnrolled": "You're not enrolled in this circle.",
+    "notLive": "This session isn't live right now.",
+    "goToSession": "Go to session"
+  },
+  "invite": {
+    "invite": "Invite students",
+    "emailsPlaceholder": "Enter one or more emails",
+    "autoApprove": "Auto-approve",
+    "autoApproveHint": "Invitees are approved directly, no review",
+    "send": "Send invites",
+    "sent": "{{count}} invite(s) sent",
+    "alreadyInvited": "Already invited",
+    "invalidEmail": "Invalid email",
+    "resend": "Resend",
+    "resent": "Resent",
+    "status": {
+      "joined": "Joined"
+    },
+    "noInvites": "No invites yet"
+  },
+  "calendar": {
+    "add": "Add to calendar"
   },
   "errorBoundary": {
     "title": "Something went wrong",

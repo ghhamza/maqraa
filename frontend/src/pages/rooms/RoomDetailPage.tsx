@@ -4,9 +4,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Archive, Pencil, RotateCcw } from "lucide-react";
+import { Archive, Pencil, RotateCcw, UserPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Enrollment, Room } from "../../types";
+import { ShareButton } from "../../components/share/ShareButton";
+import { ShareLinkList } from "../../components/share/ShareLinkList";
+import { InviteLinkList } from "../../components/share/InviteLinkList";
+import { InviteStudentsModal } from "../../components/share/InviteStudentsModal";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../../components/ui/Button";
 import {
@@ -82,6 +86,7 @@ export function RoomDetailPage() {
   const [sessionPrefillDate, setSessionPrefillDate] = useState<Date | null>(null);
   const [sessionPresetMorning, setSessionPresetMorning] = useState(false);
   const [recitationFormOpen, setRecitationFormOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [studentConfirm, setStudentConfirm] = useState<"leave" | "cancel" | null>(null);
   const invalidateRoomSessions = useInvalidateRoomSessions(id ?? "");
   const invalidateRoomRecitations = useInvalidateRoomRecitations(id ?? "");
@@ -226,6 +231,13 @@ export function RoomDetailPage() {
       actions={
         showActions ? (
           <div className="flex flex-wrap gap-2">
+            <ShareButton targetType="halaqah" targetId={room.id} displayName={room.name} />
+            <Button type="button" variant="secondary" onClick={() => setInviteOpen(true)}>
+              <span className="inline-flex items-center gap-2">
+                <UserPlus className="h-4 w-4" />
+                {t("invite.invite")}
+              </span>
+            </Button>
             <Button type="button" variant="secondary" onClick={() => setFormOpen(true)}>
               <span className="inline-flex items-center gap-2">
                 <Pencil className="h-4 w-4" />
@@ -336,6 +348,13 @@ export function RoomDetailPage() {
             onRecitationFormOpen={() => setRecitationFormOpen(true)}
           />
         ) : null}
+
+        {showActions ? (
+          <>
+            <InviteLinkList roomId={room.id} />
+            <ShareLinkList targetType="halaqah" targetId={room.id} />
+          </>
+        ) : null}
       </div>
 
       <SessionFormModal
@@ -397,6 +416,8 @@ export function RoomDetailPage() {
           // No-op: EnrollStudentModal invalidates enrollment keys itself.
         }}
       />
+
+      <InviteStudentsModal open={inviteOpen} roomId={room.id} onClose={() => setInviteOpen(false)} />
 
       <RemoveStudentModal
         open={removeEnrollment !== null}

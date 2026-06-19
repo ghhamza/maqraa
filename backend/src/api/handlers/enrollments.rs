@@ -8,6 +8,7 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
@@ -417,6 +418,178 @@ fn server_error_msg() -> (StatusCode, Json<ApiMessage>) {
     )
 }
 
+pub enum EnrollOutcome {
+    Created { status: String },
+    AlreadyEnrolled { status: String },
+}
+
+pub enum EnrollStudentError {
+    NotFound,
+    RoomNotAvailable,
+    EnrollmentClosed,
+    RoomFull,
+    Db(sqlx::Error),
+}
+
+pub async fn enroll_student(
+    tx: &mut Transaction<'_, Postgres>,
+    room_id: Uuid,
+    student_id: Uuid,
+    force_approved: bool,
+) -> Result<EnrollOutcome, EnrollStudentError> {
+    let room_row: Option<(Uuid, i32, bool, bool, bool, bool)> = sqlx::query_as(
+        "SELECT teacher_id, max_students, is_active, is_public, enrollment_open, requires_approval \
+         FROM rooms WHERE id = $1 FOR UPDATE",
+    )
+    .bind(room_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(EnrollStudentError::Db)?;
+
+    let Some((_, max_students, is_active, is_public, enrollment_open, requires_approval)) = room_row else {
+        return Err(EnrollStudentError::NotFound);
+    };
+
+    if !is_active || !is_public {
+        return Err(EnrollStudentError::RoomNotAvailable);
+    }
+
+    if !enrollment_open {
+        return Err(EnrollStudentError::EnrollmentClosed);
+    }
+
+    let existing: Option<(String,)> = sqlx::query_as(
+        "SELECT status FROM enrollments WHERE room_id = $1 AND student_id = $2",
+    )
+    .bind(room_id)
+    .bind(student_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(EnrollStudentError::Db)?;
+
+    if let Some((status,)) = existing {
+        return Ok(EnrollOutcome::AlreadyEnrolled { status });
+    }
+
+    let approved_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM enrollments WHERE room_id = $1 AND status = 'approved'",
+    )
+    .bind(room_id)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(EnrollStudentError::Db)?;
+
+    if approved_count >= max_students as i64 {
+        return Err(EnrollStudentError::RoomFull);
+    }
+
+    let status = if force_approved || !requires_approval {
+        "approved"
+    } else {
+        "pending"
+    };
+    let enrollment_id = Uuid::new_v4();
+
+    sqlx::query(
+        "INSERT INTO enrollments (id, room_id, student_id, status) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(enrollment_id)
+    .bind(room_id)
+    .bind(student_id)
+    .bind(status)
+    .execute(&mut **tx)
+    .await
+    .map_err(EnrollStudentError::Db)?;
+
+    if status == "approved" {
+        let _ = sqlx::query(
+            "INSERT INTO session_attendance (session_id, student_id, attended) \
+             SELECT s.id, $1, false FROM sessions s \
+             WHERE s.room_id = $2 AND s.status::text = 'scheduled' \
+             ON CONFLICT (session_id, student_id) DO NOTHING",
+        )
+        .bind(student_id)
+        .bind(room_id)
+        .execute(&mut **tx)
+        .await;
+    }
+
+    Ok(EnrollOutcome::Created {
+        status: status.to_string(),
+    })
+}
+
+pub async fn notify_pending_enrollment_request(
+    state: &AppState,
+    room_id: Uuid,
+    student_id: Uuid,
+) {
+    if let Ok(Some((teacher_id, teacher_name, teacher_email, preferred_language, room_name, student_name))) =
+        sqlx::query_as::<_, (Uuid, String, String, String, String, String)>(
+            "SELECT t.id, t.name, t.email, t.preferred_language, r.name, u.name \
+             FROM rooms r \
+             JOIN users t ON t.id = r.teacher_id \
+             JOIN users u ON u.id = $1 \
+             WHERE r.id = $2",
+        )
+        .bind(student_id)
+        .bind(room_id)
+        .fetch_optional(&state.db)
+        .await
+    {
+        let base = state.config.app_base_url.trim_end_matches('/');
+        let vars = TemplateVars::new()
+            .with("name", teacher_name)
+            .with("student_name", student_name)
+            .with("room_name", room_name)
+            .with("app_url", format!("{base}/rooms/{room_id}"));
+        let _ = enqueue(
+            &state.db,
+            &state.config,
+            "enrollment_requested",
+            &preferred_language,
+            &teacher_email,
+            Some(teacher_id),
+            vars,
+        )
+        .await;
+    }
+}
+
+fn enroll_student_http_error(err: EnrollStudentError) -> (StatusCode, Json<ApiMessage>) {
+    match err {
+        EnrollStudentError::NotFound => (
+            StatusCode::NOT_FOUND,
+            Json(ApiMessage {
+                message: "غير موجود",
+                code: "not_found",
+            }),
+        ),
+        EnrollStudentError::RoomNotAvailable => (
+            StatusCode::FORBIDDEN,
+            Json(ApiMessage {
+                message: "الغرفة غير متاحة",
+                code: "room_not_available",
+            }),
+        ),
+        EnrollStudentError::EnrollmentClosed => (
+            StatusCode::BAD_REQUEST,
+            Json(ApiMessage {
+                message: "التسجيل مغلق",
+                code: "enrollment_closed",
+            }),
+        ),
+        EnrollStudentError::RoomFull => (
+            StatusCode::BAD_REQUEST,
+            Json(ApiMessage {
+                message: "الغرفة ممتلئة",
+                code: "room_full",
+            }),
+        ),
+        EnrollStudentError::Db(_) => server_error_msg(),
+    }
+}
+
 pub async fn my_enrollment(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -508,147 +681,28 @@ pub async fn join_room(
 
     let mut tx = state.db.begin().await.map_err(|_| server_error_msg())?;
 
-    let room_row: Option<(Uuid, i32, bool, bool, bool, bool)> = sqlx::query_as(
-        "SELECT teacher_id, max_students, is_active, is_public, enrollment_open, requires_approval \
-         FROM rooms WHERE id = $1 FOR UPDATE",
-    )
-    .bind(room_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(|_| server_error_msg())?;
+    let outcome = enroll_student(&mut tx, room_id, auth.id, false)
+        .await
+        .map_err(enroll_student_http_error)?;
 
-    let Some((_, max_students, is_active, is_public, enrollment_open, requires_approval)) = room_row else {
-        let _ = tx.rollback().await;
-        return Err((
-            StatusCode::NOT_FOUND,
-            Json(ApiMessage {
-                message: "غير موجود",
-                code: "not_found",
-            }),
-        ));
+    let (status, created) = match outcome {
+        EnrollOutcome::Created { status } => (status, true),
+        EnrollOutcome::AlreadyEnrolled { status } => {
+            let _ = tx.rollback().await;
+            let (code, msg): (&'static str, &'static str) = match status.as_str() {
+                "approved" => ("already_enrolled", "أنت مسجل بالفعل"),
+                "pending" => ("already_pending", "طلبك قيد المراجعة"),
+                "rejected" => ("previously_rejected", "تم رفض طلبك سابقًا"),
+                _ => ("already_enrolled", "أنت مسجل بالفعل"),
+            };
+            return Err((StatusCode::CONFLICT, Json(ApiMessage { message: msg, code })));
+        }
     };
-
-    if !is_active || !is_public {
-        let _ = tx.rollback().await;
-        return Err((
-            StatusCode::FORBIDDEN,
-            Json(ApiMessage {
-                message: "الغرفة غير متاحة",
-                code: "room_not_available",
-            }),
-        ));
-    }
-
-    if !enrollment_open {
-        let _ = tx.rollback().await;
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ApiMessage {
-                message: "التسجيل مغلق",
-                code: "enrollment_closed",
-            }),
-        ));
-    }
-
-    let existing: Option<(String,)> = sqlx::query_as(
-        "SELECT status FROM enrollments WHERE room_id = $1 AND student_id = $2",
-    )
-    .bind(room_id)
-    .bind(auth.id)
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(|_| server_error_msg())?;
-
-    if let Some((status,)) = existing {
-        let _ = tx.rollback().await;
-        let (code, msg): (&'static str, &'static str) = match status.as_str() {
-            "approved" => ("already_enrolled", "أنت مسجل بالفعل"),
-            "pending" => ("already_pending", "طلبك قيد المراجعة"),
-            "rejected" => ("previously_rejected", "تم رفض طلبك سابقًا"),
-            _ => ("already_enrolled", "أنت مسجل بالفعل"),
-        };
-        return Err((StatusCode::CONFLICT, Json(ApiMessage { message: msg, code })));
-    }
-
-    let approved_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM enrollments WHERE room_id = $1 AND status = 'approved'",
-    )
-    .bind(room_id)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(|_| server_error_msg())?;
-
-    if approved_count >= max_students as i64 {
-        let _ = tx.rollback().await;
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ApiMessage {
-                message: "الغرفة ممتلئة",
-                code: "room_full",
-            }),
-        ));
-    }
-
-    let status = if requires_approval { "pending" } else { "approved" };
-    let enrollment_id = Uuid::new_v4();
-
-    sqlx::query(
-        "INSERT INTO enrollments (id, room_id, student_id, status) VALUES ($1, $2, $3, $4)",
-    )
-    .bind(enrollment_id)
-    .bind(room_id)
-    .bind(auth.id)
-    .bind(status)
-    .execute(&mut *tx)
-    .await
-    .map_err(|_| server_error_msg())?;
-
-    if status == "approved" {
-        let _ = sqlx::query(
-            "INSERT INTO session_attendance (session_id, student_id, attended) \
-             SELECT s.id, $1, false FROM sessions s \
-             WHERE s.room_id = $2 AND s.status::text = 'scheduled' \
-             ON CONFLICT (session_id, student_id) DO NOTHING",
-        )
-        .bind(auth.id)
-        .bind(room_id)
-        .execute(&mut *tx)
-        .await;
-    }
 
     tx.commit().await.map_err(|_| server_error_msg())?;
 
-    if status == "pending" {
-        if let Ok(Some((teacher_id, teacher_name, teacher_email, preferred_language, room_name, student_name))) =
-            sqlx::query_as::<_, (Uuid, String, String, String, String, String)>(
-                "SELECT t.id, t.name, t.email, t.preferred_language, r.name, u.name \
-                 FROM rooms r \
-                 JOIN users t ON t.id = r.teacher_id \
-                 JOIN users u ON u.id = $1 \
-                 WHERE r.id = $2",
-            )
-            .bind(auth.id)
-            .bind(room_id)
-            .fetch_optional(&state.db)
-            .await
-        {
-            let base = state.config.app_base_url.trim_end_matches('/');
-            let vars = TemplateVars::new()
-                .with("name", teacher_name)
-                .with("student_name", student_name)
-                .with("room_name", room_name)
-                .with("app_url", format!("{base}/rooms/{room_id}"));
-            let _ = enqueue(
-                &state.db,
-                &state.config,
-                "enrollment_requested",
-                &preferred_language,
-                &teacher_email,
-                Some(teacher_id),
-                vars,
-            )
-            .await;
-        }
+    if created && status == "pending" {
+        notify_pending_enrollment_request(&state, room_id, auth.id).await;
     }
 
     let message = if status == "pending" {
@@ -660,7 +714,7 @@ pub async fn join_room(
     Ok((
         StatusCode::CREATED,
         Json(JoinResult {
-            status: status.to_string(),
+            status,
             message,
         }),
     ))

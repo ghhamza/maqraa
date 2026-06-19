@@ -39,6 +39,7 @@ export const roomKeys = {
   archived: () => ["rooms", "archived"] as const,
   details: () => ["rooms", "detail"] as const,
   detail: (id: string) => ["rooms", "detail", id] as const,
+  myEnrollment: (roomId: string) => ["rooms", roomId, "my-enrollment"] as const,
   enrollments: (roomId: string) => ["rooms", roomId, "enrollments"] as const,
   pending: (roomId: string) => ["rooms", roomId, "pending"] as const,
   recitations: (roomId: string) => ["rooms", roomId, "recitations"] as const,
@@ -117,6 +118,13 @@ export const qfKeys = {
 export const quranKeys = {
   chapterAudio: (chapterId: number, reciterId: number) =>
     ["quran", "chapter-audio", chapterId, reciterId] as const,
+};
+
+export const shareKeys = {
+  all: ["share-links"] as const,
+  lists: () => ["share-links", "list"] as const,
+  list: (targetType: string, targetId: string) =>
+    ["share-links", "list", targetType, targetId] as const,
 };
 
 // ─── Home aggregates ─────────────────────────────────────────────────────

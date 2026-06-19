@@ -1,0 +1,1 @@
+ALTER TABLE share_links ADD COLUMN join_count INTEGER NOT NULL DEFAULT 0;

@@ -22,6 +22,7 @@ use crate::api::types::{
 };
 use crate::api::AppState;
 use crate::notifications::{enqueue, format_session_time, TemplateVars};
+use crate::services::ics::{build_session_ics, ics_calendar_response, SessionIcsInput};
 
 #[derive(FromRow)]
 struct SessionLivePublicRow {
@@ -1081,4 +1082,39 @@ async fn notify_session_update(
             );
         }
     }
+}
+
+pub async fn session_ics(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<axum::response::Response, StatusCode> {
+    let session = fetch_session_public(&state.db, id)
+        .await?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if !can_access_room(&state.db, &auth, session.room_id).await? {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let teacher_name: String = sqlx::query_scalar("SELECT name FROM users WHERE id = $1")
+        .bind(session.teacher_id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let base = state.config.public_base_url.trim_end_matches('/');
+    let join_url = format!("{base}/sessions/{id}");
+
+    let body = build_session_ics(&SessionIcsInput {
+        session_id: session.id,
+        title: session.title,
+        room_name: session.room_name,
+        teacher_name,
+        scheduled_at: session.scheduled_at,
+        duration_minutes: session.duration_minutes,
+        join_url,
+    });
+
+    Ok(ics_calendar_response(body))
 }

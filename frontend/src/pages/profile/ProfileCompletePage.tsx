@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
+import { navigateAfterAuth } from "../../lib/safeNext";
 import { useAuthStore } from "../../stores/authStore";
 import type { User } from "../../types";
 import { Button } from "../../components/ui/Button";
@@ -52,7 +53,9 @@ export function ProfileCompletePage() {
         data: profileDetailsPayload(values, isTeacher),
       });
       setUser(normalizeUserFromApi(data));
-      navigate("/", { replace: true });
+      if (!navigateAfterAuth(navigate)) {
+        navigate("/", { replace: true });
+      }
     } catch (err) {
       setError(userFacingApiError(err, "profile.errRequired"));
     } finally {

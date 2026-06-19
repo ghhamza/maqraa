@@ -23,6 +23,8 @@ pub fn build_router(state: AppState) -> Router {
             "/health",
             get(|| async { "بسم الله — Al-Maqraa is running" }),
         )
+        .route("/s/{token}", get(handlers::share::share_landing))
+        .route("/s/{token}/ics", get(handlers::share::share_ics))
         .route("/api/auth/register", post(handlers::auth::register))
         .route("/api/auth/login", post(handlers::auth::login))
         .route("/api/auth/verify-email", post(handlers::auth::verify_email))
@@ -214,6 +216,10 @@ pub fn build_router(state: AppState) -> Router {
                 .delete(handlers::sessions::delete_session),
         )
         .route(
+            "/api/sessions/{id}/ics",
+            get(handlers::sessions::session_ics),
+        )
+        .route(
             "/api/sessions/{id}/attendance",
             put(handlers::sessions::update_attendance),
         )
@@ -236,6 +242,30 @@ pub fn build_router(state: AppState) -> Router {
             get(ws::signaling::ws_session_handler),
         )
         .route("/api/livekit/token", post(handlers::livekit::mint_token))
+        .route(
+            "/api/rooms/{room_id}/invites",
+            post(handlers::share::send_room_invites),
+        )
+        .route(
+            "/api/share-links",
+            get(handlers::share::list_links).post(handlers::share::create_link),
+        )
+        .route(
+            "/api/share-links/{id}",
+            delete(handlers::share::revoke_link),
+        )
+        .route(
+            "/api/share-links/{id}/resend",
+            post(handlers::share::resend_invite),
+        )
+        .route(
+            "/api/public/share/{token}",
+            get(handlers::share::resolve_public),
+        )
+        .route(
+            "/api/share-links/{token}/accept",
+            post(handlers::share::accept_share),
+        )
         .with_state(state)
         .layer(cors)
         .layer(TraceLayer::new_for_http())

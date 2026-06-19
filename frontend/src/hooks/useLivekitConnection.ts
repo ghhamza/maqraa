@@ -1,3 +1,4 @@
+import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ConnectionState,
@@ -24,9 +25,12 @@ export interface UseLivekitConnectionOptions {
   autoConnect?: boolean;
 }
 
+export type LivekitAccessBlock = "forbidden" | "not_live";
+
 export interface UseLivekitConnectionResult {
   status: LivekitConnectionStatus;
   error: string | null;
+  accessBlock: LivekitAccessBlock | null;
   room: Room | null;
   hasRemoteAudio: boolean;
   audioPlaybackBlocked: boolean;
@@ -84,6 +88,7 @@ export function useLivekitConnection(
 
   const [status, setStatus] = useState<LivekitConnectionStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [accessBlock, setAccessBlock] = useState<LivekitAccessBlock | null>(null);
   const [hasRemoteAudio, setHasRemoteAudio] = useState(false);
   const [audioPlaybackBlocked, setAudioPlaybackBlocked] = useState(false);
   const [isMicEnabled, setIsMicEnabled] = useState(false);
@@ -156,6 +161,7 @@ export function useLivekitConnection(
       try {
         setStatus("requesting_token");
         setError(null);
+        setAccessBlock(null);
 
         const { data } = await api.post<TokenResponse>(
           "/livekit/token",
@@ -322,6 +328,22 @@ export function useLivekitConnection(
         if (generationRef.current !== myGen) return;
         if (tokenAbort.signal.aborted) return;
 
+        if (axios.isAxiosError(connectErr)) {
+          const httpStatus = connectErr.response?.status;
+          if (httpStatus === 403) {
+            setAccessBlock("forbidden");
+            setError(null);
+            setStatus("error");
+            return;
+          }
+          if (httpStatus === 404) {
+            setAccessBlock("not_live");
+            setError(null);
+            setStatus("error");
+            return;
+          }
+        }
+
         console.error("LiveKit connection failed:", connectErr);
         setError(connectErr instanceof Error ? connectErr.message : String(connectErr));
         setStatus("error");
@@ -381,6 +403,7 @@ export function useLivekitConnection(
   // Auto-retry connection after transient signal failures.
   useEffect(() => {
     if (!autoConnect || !sessionId) return;
+    if (accessBlock) return;
     if (status !== "error" && status !== "disconnected") return;
     if (reconnectTimerRef.current) return;
 
@@ -395,7 +418,7 @@ export function useLivekitConnection(
         reconnectTimerRef.current = null;
       }
     };
-  }, [status, autoConnect, sessionId]);
+  }, [status, autoConnect, sessionId, accessBlock]);
 
   const reconnect = useCallback(async () => {
     // Increment trigger to re-run the connect effect. Its cleanup will
@@ -432,6 +455,7 @@ export function useLivekitConnection(
   return {
     status,
     error,
+    accessBlock,
     room: roomRef.current,
     hasRemoteAudio,
     audioPlaybackBlocked,
