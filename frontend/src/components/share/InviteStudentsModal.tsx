@@ -7,6 +7,7 @@ import { Send, X } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { parseEmailInput, useInviteStudents } from "../../data/share";
+import { userFacingApiError } from "../../lib/api";
 import { cn } from "@/lib/utils";
 
 interface InviteStudentsModalProps {
@@ -23,6 +24,7 @@ export function InviteStudentsModal({ open, roomId, onClose }: InviteStudentsMod
   const [autoApprove, setAutoApprove] = useState(true);
   const [chipEmails, setChipEmails] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackIsError, setFeedbackIsError] = useState(false);
   const [invalidHint, setInvalidHint] = useState(false);
 
   const locale = i18n.language?.startsWith("ar")
@@ -37,6 +39,7 @@ export function InviteStudentsModal({ open, roomId, onClose }: InviteStudentsMod
       setChipEmails([]);
       setAutoApprove(true);
       setFeedback(null);
+      setFeedbackIsError(false);
       setInvalidHint(false);
     }
   }, [open]);
@@ -74,30 +77,27 @@ export function InviteStudentsModal({ open, roomId, onClose }: InviteStudentsMod
   }
 
   async function handleSend() {
+    setFeedback(null);
+    setFeedbackIsError(false);
+
     const { valid: fromRaw, invalidCount } = parseEmailInput(rawInput);
     if (invalidCount > 0) setInvalidHint(true);
     const emails = [...new Set([...chipEmails, ...fromRaw])];
-    if (emails.length === 0) return;
+    if (emails.length === 0) {
+      setInvalidHint(true);
+      return;
+    }
 
     try {
-      const results = await inviteMutation.mutateAsync({
+      await inviteMutation.mutateAsync({
         emails,
         auto_approve: autoApprove,
         locale,
       });
-      const sent = results.filter((r) => r.status === "created").length;
-      const skipped = results.filter((r) => r.status === "already_invited").length;
-      const parts: string[] = [];
-      if (sent > 0) parts.push(t("invite.sent", { count: sent }));
-      if (skipped > 0) parts.push(t("invite.alreadyInvited") + ` (${skipped})`);
-      setFeedback(parts.join(" · ") || t("invite.sent", { count: 0 }));
-      setRawInput("");
-      setChipEmails([]);
-      if (sent > 0) {
-        window.setTimeout(() => onClose(), 1400);
-      }
-    } catch {
-      // useApiMutation surfaces errors via toast if configured
+      onClose();
+    } catch (err) {
+      setFeedback(userFacingApiError(err));
+      setFeedbackIsError(true);
     }
   }
 
@@ -165,7 +165,13 @@ export function InviteStudentsModal({ open, roomId, onClose }: InviteStudentsMod
         </label>
 
         {feedback ? (
-          <p className="rounded-lg bg-[#E8F5E9] px-3 py-2 text-sm text-[#1B5E20]" role="status">
+          <p
+            className={cn(
+              "rounded-lg px-3 py-2 text-sm",
+              feedbackIsError ? "bg-red-50 text-red-800" : "bg-[#E8F5E9] text-[#1B5E20]",
+            )}
+            role="alert"
+          >
             {feedback}
           </p>
         ) : null}
