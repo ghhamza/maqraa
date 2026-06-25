@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { SessionControlsCorner } from "../../../components/session/SessionControlsCorner";
 import { AutoFollowBadge } from "../../../components/session/AutoFollowBadge";
 import { MEET_ICON_BTN_BASE } from "../../../components/session/sessionMeetButtonStyles";
-import type { LivekitConnectionStatus } from "@/hooks/useLivekitConnection";
+import type { LivekitConnectionStatus, MicError } from "@/hooks/useLivekitConnection";
 
 export interface LiveSessionDesktopActionBarProps {
   isTeacher: boolean;
@@ -16,6 +16,7 @@ export interface LiveSessionDesktopActionBarProps {
   livekitConnected: boolean;
   livekitStatus: LivekitConnectionStatus;
   isMicEnabled: boolean;
+  micError?: MicError | null;
   annotationMode: boolean;
   autoFollow: boolean;
   page: number;
@@ -41,6 +42,7 @@ export function LiveSessionDesktopActionBar(props: LiveSessionDesktopActionBarPr
     livekitConnected,
     livekitStatus,
     isMicEnabled,
+    micError = null,
     annotationMode,
     autoFollow,
     page,
@@ -140,6 +142,7 @@ export function LiveSessionDesktopActionBar(props: LiveSessionDesktopActionBarPr
           livekitConnected={livekitConnected}
           livekitStatus={livekitStatus}
           isMicEnabled={isMicEnabled}
+          micError={micError}
           onToggleMic={onToggleMic}
           annotationMode={annotationMode}
           onToggleAnnotation={onToggleAnnotation}

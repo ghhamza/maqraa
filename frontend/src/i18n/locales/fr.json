@@ -978,7 +978,13 @@
     "layoutZoneTopRight": "Statut en haut à droite",
     "micStatus": {
       "on": "Microphone en direct",
-      "off": "Microphone coupé"
+      "off": "Microphone coupé",
+      "blocked": "Microphone indisponible"
+    },
+    "micPermissionDenied": {
+      "title": "Autoriser l'accès au microphone",
+      "description": "Votre navigateur a bloqué le microphone. Autorisez l'accès dans les paramètres du navigateur, puis appuyez sur Réessayer.",
+      "retry": "Réessayer"
     },
     "layoutZoneBottomLeft": "Bas gauche · quitter et terminer",
     "layoutZoneBottomMiddle": "Bas centre · contrôles",

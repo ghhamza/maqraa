@@ -20,6 +20,10 @@ export interface LiveSessionConfirmModalsProps {
   navBlockOpen: boolean;
   onNavStay: () => void;
   onNavLeave: () => void;
+  // Microphone permission
+  micPermissionOpen: boolean;
+  onMicPermissionDismiss: () => void;
+  onMicPermissionRetry: () => void;
 }
 
 export function LiveSessionConfirmModals(props: LiveSessionConfirmModalsProps) {
@@ -72,6 +76,24 @@ export function LiveSessionConfirmModals(props: LiveSessionConfirmModalsProps) {
           </Button>
           <Button type="button" variant="primary" onClick={props.onNavLeave}>
             {t("liveSession.leave")}
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={props.micPermissionOpen}
+        title={t("liveSession.micPermissionDenied.title")}
+        onClose={props.onMicPermissionDismiss}
+      >
+        <p className="mb-6 text-sm text-[var(--color-text-muted)]">
+          {t("liveSession.micPermissionDenied.description")}
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={props.onMicPermissionDismiss}>
+            {t("common.cancel")}
+          </Button>
+          <Button type="button" variant="primary" onClick={props.onMicPermissionRetry}>
+            {t("liveSession.micPermissionDenied.retry")}
           </Button>
         </div>
       </Modal>

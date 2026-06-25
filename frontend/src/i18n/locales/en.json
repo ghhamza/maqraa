@@ -978,7 +978,13 @@
     "layoutZoneTopRight": "Top-right status",
     "micStatus": {
       "on": "Microphone on air",
-      "off": "Microphone muted"
+      "off": "Microphone muted",
+      "blocked": "Microphone unavailable"
+    },
+    "micPermissionDenied": {
+      "title": "Allow microphone access",
+      "description": "Your browser blocked the microphone. Allow access in your browser settings, then tap Retry to turn on your mic.",
+      "retry": "Retry"
     },
     "layoutZoneBottomLeft": "Bottom left · leave & end session",
     "layoutZoneBottomMiddle": "Bottom middle · controls",

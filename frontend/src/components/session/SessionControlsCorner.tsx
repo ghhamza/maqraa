@@ -4,7 +4,7 @@
 import { Circle, Hand, Mic, MicOff, MousePointer2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
-import type { LivekitConnectionStatus } from "@/hooks/useLivekitConnection";
+import type { LivekitConnectionStatus, MicError } from "@/hooks/useLivekitConnection";
 import { MEET_ICON_BTN_BASE } from "./sessionMeetButtonStyles";
 
 interface SessionControlsCornerProps {
@@ -14,6 +14,7 @@ interface SessionControlsCornerProps {
   livekitConnected?: boolean;
   livekitStatus?: LivekitConnectionStatus;
   isMicEnabled?: boolean;
+  micError?: MicError | null;
   onToggleMic?: () => void;
   annotationMode?: boolean;
   onToggleAnnotation?: () => void;
@@ -26,6 +27,7 @@ export function SessionControlsCorner({
   livekitConnected = false,
   livekitStatus = "idle",
   isMicEnabled = false,
+  micError = null,
   onToggleMic,
   annotationMode,
   onToggleAnnotation,
@@ -38,20 +40,31 @@ export function SessionControlsCorner({
 
   const hasLivekitError = livekitStatus === "error";
   const canToggleMic = canPublishAudio && livekitConnected && !hasLivekitError;
-  const micState = hasLivekitError ? "error" : canToggleMic && isMicEnabled ? "open" : "closed";
+  const micBlocked = micError != null;
+  const micState = hasLivekitError
+    ? "error"
+    : micBlocked
+      ? "blocked"
+      : canToggleMic && isMicEnabled
+        ? "open"
+        : "closed";
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-2">
       <button
         type="button"
-        onClick={canToggleMic ? onToggleMic : undefined}
-        disabled={!canToggleMic}
+        onClick={canToggleMic || micBlocked ? onToggleMic : undefined}
+        disabled={!canToggleMic && !micBlocked}
         title={
           micState === "error"
             ? t("liveSession.audio.error")
-            : canToggleMic
-            ? t(isMicEnabled ? "liveSession.muteMic" : "liveSession.unmuteMic")
-            : t("liveSession.tooltip.micDisabled")
+            : micState === "blocked"
+              ? micError === "browser_denied"
+                ? t("liveSession.micPermissionDenied.title")
+                : t("liveSession.micStatus.blocked")
+              : canToggleMic
+                ? t(isMicEnabled ? "liveSession.muteMic" : "liveSession.unmuteMic")
+                : t("liveSession.tooltip.micDisabled")
         }
         aria-label={
           canToggleMic
@@ -62,10 +75,10 @@ export function SessionControlsCorner({
           MEET_ICON_BTN_BASE,
           micState === "open"
             ? "bg-gradient-to-b from-emerald-50 to-emerald-100/90 text-emerald-800 hover:from-emerald-100 hover:to-emerald-200/90"
-            : micState === "error"
+            : micState === "error" || micState === "blocked"
               ? "bg-gradient-to-b from-red-100 to-red-200/90 text-[#C62828] hover:from-red-100 hover:to-red-200/90"
               : "bg-gradient-to-b from-rose-50 to-rose-100/90 text-[#EF5350] hover:from-rose-100 hover:to-rose-200/90",
-          !canToggleMic && "cursor-not-allowed opacity-85",
+          !canToggleMic && micState !== "blocked" && "cursor-not-allowed opacity-85",
         )}
       >
         {micState === "open" ? (

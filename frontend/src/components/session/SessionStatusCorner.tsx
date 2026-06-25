@@ -14,11 +14,12 @@ interface SessionStatusCornerProps {
   elapsedLabel: string;
   /**
    * Mic state.
-   * - `publishing`: user is a publisher and mic is on -> green mic icon
+   * - `publishing`: user is a publisher and mic is on air -> green mic icon
    * - `muted`: user is a publisher and mic is off -> gray mic-off icon
+   * - `blocked`: mic permission denied or publish failed -> warning mic-off icon
    * - `listener`: user has no publish grant -> mic indicator hidden entirely
    */
-  micState: "publishing" | "muted" | "listener";
+  micState: "publishing" | "muted" | "blocked" | "listener";
 }
 
 /**
@@ -44,7 +45,9 @@ export function SessionStatusCorner({
       ? t("liveSession.micStatus.on")
       : micState === "muted"
         ? t("liveSession.micStatus.off")
-        : "";
+        : micState === "blocked"
+          ? t("liveSession.micStatus.blocked")
+          : "";
 
   return (
     <div className="relative z-0 flex w-full max-w-full flex-wrap items-center gap-2">
@@ -58,6 +61,8 @@ export function SessionStatusCorner({
         >
           {micState === "publishing" ? (
             <Mic className="size-3 text-[#1B5E20]" strokeWidth={2.5} aria-hidden />
+          ) : micState === "blocked" ? (
+            <MicOff className="size-3 text-[#C62828]" strokeWidth={2.5} aria-hidden />
           ) : (
             <MicOff className="size-3 text-[#6B7280]" strokeWidth={2.5} aria-hidden />
           )}

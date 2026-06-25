@@ -180,6 +180,7 @@ function LiveSessionPageInner() {
   const [adHocStudentId, setAdHocStudentId] = useState<string | null>(null);
   const [planEndGradeDialogOpen, setPlanEndGradeDialogOpen] = useState(false);
   const [planEndGradePlanId, setPlanEndGradePlanId] = useState<string | null>(null);
+  const [micPermissionOpen, setMicPermissionOpen] = useState(false);
 
   const studentPopoverPinnedRef = useRef(false);
   const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -491,11 +492,39 @@ function LiveSessionPageInner() {
     (livekit.status === "idle" || livekit.status === "requesting_token");
 
   const elapsedLabel = formatElapsed(elapsedMs);
-  const micState: "publishing" | "muted" | "listener" = canPublishAudio
-    ? livekit.isMicEnabled
-      ? "publishing"
-      : "muted"
-    : "listener";
+  const micState: "publishing" | "muted" | "blocked" | "listener" = !canPublishAudio
+    ? "listener"
+    : livekit.micError != null
+      ? "blocked"
+      : livekit.isMicEnabled
+        ? "publishing"
+        : "muted";
+
+  useEffect(() => {
+    if (livekit.micError === "browser_denied") {
+      setMicPermissionOpen(true);
+    }
+  }, [livekit.micError]);
+
+  const handleToggleMic = useCallback(() => {
+    if (livekit.micError === "browser_denied") {
+      setMicPermissionOpen(true);
+      return;
+    }
+    livekit.clearMicError();
+    void livekit.setMicEnabled(!livekit.isMicEnabled);
+  }, [livekit]);
+
+  const handleMicPermissionRetry = useCallback(() => {
+    livekit.clearMicError();
+    setMicPermissionOpen(false);
+    void livekit.setMicEnabled(true);
+  }, [livekit]);
+
+  const handleMicPermissionDismiss = useCallback(() => {
+    livekit.clearMicError();
+    setMicPermissionOpen(false);
+  }, [livekit]);
 
   /** When a student is set as active reciter, turn on pen/annotation mode so the teacher can mark without an extra click. */
   useEffect(() => {
@@ -1236,8 +1265,9 @@ function LiveSessionPageInner() {
             livekitConnected={livekit.status === "connected"}
             livekitStatus={livekit.status}
             isMicEnabled={livekit.isMicEnabled}
+            micError={livekit.micError}
             annotationMode={annotationMode}
-            onToggleMic={() => void livekit.setMicEnabled(!livekit.isMicEnabled)}
+            onToggleMic={handleToggleMic}
             onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
             onOpenParticipants={() => setDrawerOpen(true)}
             onOpenMore={() => setMobileOverflowOpen(true)}
@@ -1252,12 +1282,13 @@ function LiveSessionPageInner() {
             livekitConnected={livekit.status === "connected"}
             livekitStatus={livekit.status}
             isMicEnabled={livekit.isMicEnabled}
+            micError={livekit.micError}
             annotationMode={annotationMode}
             autoFollow={autoFollow}
             page={page}
             surahLabel={navCornerLabels.surahLabel}
             juzN={navCornerLabels.juzN}
-            onToggleMic={() => void livekit.setMicEnabled(!livekit.isMicEnabled)}
+            onToggleMic={handleToggleMic}
             onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
             onAutoFollowToggle={handleAutoFollowToggle}
             onOpenParticipants={() => setDrawerOpen(true)}
@@ -1412,6 +1443,9 @@ function LiveSessionPageInner() {
           sessionState.disconnect();
           blocker.proceed?.();
         }}
+        micPermissionOpen={micPermissionOpen}
+        onMicPermissionDismiss={handleMicPermissionDismiss}
+        onMicPermissionRetry={handleMicPermissionRetry}
       />
 
       {isTeacher ? (

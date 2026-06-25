@@ -2,6 +2,7 @@ import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ConnectionState,
+  PublishTrackError,
   RemoteParticipant,
   RemoteTrack,
   RemoteTrackPublication,
@@ -10,6 +11,44 @@ import {
   Track,
 } from "livekit-client";
 import { api } from "@/lib/api";
+
+export type MicError = "browser_denied" | "publish_denied" | "device_error";
+
+function isMicPublished(room: Room): boolean {
+  const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+  return !!(pub?.track && !pub.isMuted);
+}
+
+function hasLivekitPublishPermission(room: Room): boolean {
+  return room.localParticipant.permissions?.canPublish === true;
+}
+
+function classifyMicError(err: unknown): MicError {
+  if (err instanceof PublishTrackError) {
+    return "publish_denied";
+  }
+  if (err instanceof Error) {
+    if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+      return "browser_denied";
+    }
+    const msg = err.message.toLowerCase();
+    if (msg.includes("permission") || msg.includes("not allowed")) {
+      return "browser_denied";
+    }
+    if (msg.includes("insufficient permissions")) {
+      return "publish_denied";
+    }
+  }
+  return "device_error";
+}
+
+async function resetLocalMic(room: Room): Promise<void> {
+  try {
+    await room.localParticipant.setMicrophoneEnabled(false);
+  } catch {
+    // ignore cleanup failures
+  }
+}
 
 export type LivekitConnectionStatus =
   | "idle"
@@ -35,7 +74,10 @@ export interface UseLivekitConnectionResult {
   hasRemoteAudio: boolean;
   audioPlaybackBlocked: boolean;
   startAudio: () => Promise<void>;
+  /** True only when the microphone track is published and unmuted in LiveKit. */
   isMicEnabled: boolean;
+  micError: MicError | null;
+  clearMicError: () => void;
   setMicEnabled: (enabled: boolean) => Promise<void>;
   reconnect: () => Promise<void>;
 }
@@ -92,6 +134,7 @@ export function useLivekitConnection(
   const [hasRemoteAudio, setHasRemoteAudio] = useState(false);
   const [audioPlaybackBlocked, setAudioPlaybackBlocked] = useState(false);
   const [isMicEnabled, setIsMicEnabled] = useState(false);
+  const [micError, setMicError] = useState<MicError | null>(null);
 
   // The one and only live Room instance. Null when disconnected or between attempts.
   const roomRef = useRef<Room | null>(null);
@@ -124,6 +167,34 @@ export function useLivekitConnection(
    * support async cleanup - but the generation bump ensures any stale
    * async step that resumes afterwards will abort.
    */
+  const syncMicFromRoom = useCallback((room: Room) => {
+    setIsMicEnabled(isMicPublished(room));
+  }, []);
+
+  const attemptEnableMic = useCallback(
+    async (room: Room, myGen: number) => {
+      if (!hasLivekitPublishPermission(room)) {
+        return;
+      }
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+        if (generationRef.current !== myGen) return;
+        syncMicFromRoom(room);
+        if (isMicPublished(room)) {
+          setMicError(null);
+        } else {
+          setMicError("publish_denied");
+        }
+      } catch (err) {
+        if (generationRef.current !== myGen) return;
+        await resetLocalMic(room);
+        syncMicFromRoom(room);
+        setMicError(classifyMicError(err));
+      }
+    },
+    [syncMicFromRoom],
+  );
+
   const teardownCurrentRoom = useCallback(async () => {
     for (const [, audioEl] of attachedAudioElementsRef.current) {
       if (audioEl.parentElement) {
@@ -247,12 +318,15 @@ export function useLivekitConnection(
 
         room.on(RoomEvent.LocalTrackPublished, () => {
           if (generationRef.current !== myGen) return;
-          setIsMicEnabled(room.localParticipant.isMicrophoneEnabled);
+          syncMicFromRoom(room);
+          if (isMicPublished(room)) {
+            setMicError(null);
+          }
         });
 
         room.on(RoomEvent.LocalTrackUnpublished, () => {
           if (generationRef.current !== myGen) return;
-          setIsMicEnabled(room.localParticipant.isMicrophoneEnabled);
+          syncMicFromRoom(room);
         });
 
         room.on(RoomEvent.ParticipantPermissionsChanged, (_prev, participant) => {
@@ -264,23 +338,17 @@ export function useLivekitConnection(
           const perm = room.localParticipant.permissions;
           const nowCanPublish = perm?.canPublish === true;
 
-          if (nowCanPublish && !room.localParticipant.isMicrophoneEnabled) {
+          if (nowCanPublish && !isMicPublished(room)) {
             // Enable mic now that LiveKit has accepted our new publish permission.
-            room.localParticipant
-              .setMicrophoneEnabled(true)
-              .then(() => {
-                if (generationRef.current === myGen) {
-                  setIsMicEnabled(true);
-                }
-              })
-              .catch((err) => console.warn("auto-enable mic after permission grant failed:", err));
+            void attemptEnableMic(room, myGen);
           } else if (!nowCanPublish && room.localParticipant.isMicrophoneEnabled) {
             // Teacher revoked publish rights - disable mic and unpublish.
             room.localParticipant
               .setMicrophoneEnabled(false)
               .then(() => {
                 if (generationRef.current === myGen) {
-                  setIsMicEnabled(false);
+                  syncMicFromRoom(room);
+                  setMicError(null);
                 }
               })
               .catch((err) => console.warn("auto-disable mic after permission revoke failed:", err));
@@ -308,19 +376,11 @@ export function useLivekitConnection(
         roomRef.current = room;
         setStatus("connected");
         setAudioPlaybackBlocked(!room.canPlaybackAudio);
-        setIsMicEnabled(room.localParticipant.isMicrophoneEnabled);
+        syncMicFromRoom(room);
 
-        // Auto-enable mic for publishers. Read from ref so a flip of
-        // canPublish between connect start and now is respected.
+        // Auto-enable mic for publishers once LiveKit grants publish permission.
         if (canPublishRef.current) {
-          try {
-            await room.localParticipant.setMicrophoneEnabled(true);
-            if (generationRef.current === myGen) {
-              setIsMicEnabled(true);
-            }
-          } catch (micErr) {
-            console.warn("Failed to auto-enable mic:", micErr);
-          }
+          await attemptEnableMic(room, myGen);
         }
       } catch (connectErr) {
         // Only surface errors for the CURRENT attempt. Stale attempts that
@@ -366,30 +426,45 @@ export function useLivekitConnection(
     // sessionId and autoConnect drive full reconnects.
     // reconnectTrigger lets the reconnect() API force a fresh attempt.
     // canPublish is NOT in deps (see canPublishRef above).
-  }, [sessionId, autoConnect, reconnectTrigger, teardownCurrentRoom]);
+  }, [sessionId, autoConnect, reconnectTrigger, teardownCurrentRoom, syncMicFromRoom, attemptEnableMic]);
 
-  // Sync mic state with canPublish changes mid-session. The backend already
-  // updates LiveKit permissions server-side; we just reflect locally.
+  // Sync mic state with canPublish changes mid-session. Wait for LiveKit publish
+  // permission before enabling; reconnect if the token is still listener-only.
   useEffect(() => {
     if (status !== "connected" || !roomRef.current) return;
     const room = roomRef.current;
     const wasCanPublish = prevCanPublishRef.current;
     prevCanPublishRef.current = canPublish;
 
-    // Only auto-enable when permission transitions false -> true.
-    // Do not force-enable if user manually muted while still permitted.
-    if (!wasCanPublish && canPublish && !isMicEnabled) {
-      room.localParticipant
-        .setMicrophoneEnabled(true)
-        .then(() => setIsMicEnabled(true))
-        .catch((err) => console.warn("setMicrophoneEnabled(true) failed:", err));
-    } else if (wasCanPublish && !canPublish && isMicEnabled) {
+    if (!wasCanPublish && canPublish) {
+      if (hasLivekitPublishPermission(room)) {
+        if (!isMicPublished(room)) {
+          void attemptEnableMic(room, generationRef.current);
+        }
+      } else {
+        const timer = window.setTimeout(() => {
+          const currentRoom = roomRef.current;
+          if (!currentRoom || !canPublishRef.current) return;
+          if (hasLivekitPublishPermission(currentRoom)) {
+            if (!isMicPublished(currentRoom)) {
+              void attemptEnableMic(currentRoom, generationRef.current);
+            }
+            return;
+          }
+          setReconnectTrigger((n) => n + 1);
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    } else if (wasCanPublish && !canPublish && isMicPublished(room)) {
       room.localParticipant
         .setMicrophoneEnabled(false)
-        .then(() => setIsMicEnabled(false))
+        .then(() => {
+          syncMicFromRoom(room);
+          setMicError(null);
+        })
         .catch((err) => console.warn("setMicrophoneEnabled(false) failed:", err));
     }
-  }, [canPublish, status, isMicEnabled]);
+  }, [canPublish, status, attemptEnableMic, syncMicFromRoom]);
 
   // Clear remote audio and mic state when status transitions away from connected.
   useEffect(() => {
@@ -397,6 +472,7 @@ export function useLivekitConnection(
       setHasRemoteAudio(false);
       setAudioPlaybackBlocked(false);
       setIsMicEnabled(false);
+      setMicError(null);
     }
   }, [status]);
 
@@ -441,16 +517,40 @@ export function useLivekitConnection(
     }
   }, []);
 
-  const setMicEnabled = useCallback(async (enabled: boolean) => {
-    const r = roomRef.current;
-    if (!r) return;
-    try {
-      await r.localParticipant.setMicrophoneEnabled(enabled);
-      setIsMicEnabled(enabled);
-    } catch (micErr) {
-      console.warn("setMicrophoneEnabled failed:", micErr);
-    }
+  const clearMicError = useCallback(() => {
+    setMicError(null);
   }, []);
+
+  const setMicEnabled = useCallback(
+    async (enabled: boolean) => {
+      const r = roomRef.current;
+      if (!r) return;
+      setMicError(null);
+
+      if (enabled && !hasLivekitPublishPermission(r)) {
+        setMicError("publish_denied");
+        return;
+      }
+
+      try {
+        await r.localParticipant.setMicrophoneEnabled(enabled);
+        syncMicFromRoom(r);
+        if (enabled && !isMicPublished(r)) {
+          setMicError("publish_denied");
+        }
+      } catch (micErr) {
+        if (enabled) {
+          await resetLocalMic(r);
+          syncMicFromRoom(r);
+          setMicError(classifyMicError(micErr));
+        } else {
+          syncMicFromRoom(r);
+        }
+        console.warn("setMicrophoneEnabled failed:", micErr);
+      }
+    },
+    [syncMicFromRoom],
+  );
 
   return {
     status,
@@ -461,6 +561,8 @@ export function useLivekitConnection(
     audioPlaybackBlocked,
     startAudio,
     isMicEnabled,
+    micError,
+    clearMicError,
     setMicEnabled,
     reconnect,
   };
