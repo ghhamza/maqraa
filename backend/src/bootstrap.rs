@@ -70,9 +70,15 @@ pub fn spawn_background_tasks(state: AppState) -> Result<()> {
         spawn_worker(state.db.clone(), provider, state.config.clone());
         spawn_scheduler(state.db.clone(), state.config.clone());
     } else {
-        if !state.config.resend_api_key.is_empty() {
+        let creds_configured = match state.config.email_provider.as_str() {
+            "resend" => !state.config.resend_api_key.is_empty(),
+            "smtp" => state.config.smtp.credentials_configured(),
+            _ => false,
+        };
+        if creds_configured {
             tracing::warn!(
-                "NOTIFICATIONS_ENABLED=false but RESEND_API_KEY is set — no emails will be sent until enabled"
+                email_provider = %state.config.email_provider,
+                "NOTIFICATIONS_ENABLED=false but email credentials are set — no emails will be sent until enabled"
             );
         }
         tracing::info!("notifications disabled (NOTIFICATIONS_ENABLED=false)");

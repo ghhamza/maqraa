@@ -139,9 +139,9 @@ maqraa/
 
 ## Email / notifications
 
-Transactional email (welcome/verify, password reset, enrollment approved/rejected) uses a Postgres-backed queue and a pluggable provider. The default build ships [Resend](https://resend.com) via `EMAIL_PROVIDER=resend`. See [`backend/src/notifications/README.md`](backend/src/notifications/README.md) for swapping in SMTP or another relay.
+Transactional email (welcome/verify, password reset, enrollment approved/rejected) uses a Postgres-backed queue and a pluggable provider. Built-in providers: [Resend](https://resend.com) (`EMAIL_PROVIDER=resend`) and generic SMTP (`EMAIL_PROVIDER=smtp`, e.g. Amazon SES). See [`backend/src/notifications/README.md`](backend/src/notifications/README.md).
 
-Set `NOTIFICATIONS_ENABLED=true` and configure `RESEND_API_KEY` in production. Leave disabled locally (`NOTIFICATIONS_ENABLED=false`) so registration works without mail credentials.
+Set `NOTIFICATIONS_ENABLED=true` and configure your provider in production. Leave disabled locally (`NOTIFICATIONS_ENABLED=false`) so registration works without mail credentials.
 
 ## License
 

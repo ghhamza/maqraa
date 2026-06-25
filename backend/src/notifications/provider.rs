@@ -5,6 +5,8 @@ use std::sync::Arc;
 
 use crate::config::AppConfig;
 
+use super::smtp::SmtpProvider;
+
 #[derive(Debug, thiserror::Error)]
 pub enum EmailError {
     #[error("email send failed: {0}")]
@@ -68,8 +70,13 @@ pub fn build_provider(config: &AppConfig) -> anyhow::Result<Arc<dyn EmailProvide
                 &config.email_from_email,
             )))
         }
+        "smtp" => Ok(Arc::new(SmtpProvider::new(
+            &config.smtp,
+            &config.email_from_name,
+            &config.email_from_email,
+        )?)),
         other => anyhow::bail!(
-            "unsupported EMAIL_PROVIDER \"{other}\" — supported providers: resend"
+            "unsupported EMAIL_PROVIDER \"{other}\" — supported providers: resend, smtp"
         ),
     }
 }

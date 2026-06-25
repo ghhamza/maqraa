@@ -39,6 +39,7 @@ pub struct AppConfig {
     pub livekit: LivekitConfig,
     pub email_provider: String,
     pub resend_api_key: String,
+    pub smtp: SmtpConfig,
     pub email_from_email: String,
     pub email_from_name: String,
     pub app_base_url: String,
@@ -49,6 +50,86 @@ pub struct AppConfig {
     /// Local hour (0–23 in APP_DISPLAY_TZ) when the daily new-signup digest may send.
     pub digest_send_hour: u32,
     pub notifications_enabled: bool,
+}
+
+/// How the SMTP client negotiates transport security (matches common panel labels).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmtpEncryption {
+    /// Plain SMTP (no TLS). Use only on trusted local relays.
+    None,
+    /// STARTTLS on connect (typical port 587, e.g. Amazon SES submission).
+    StartTls,
+    /// Implicit TLS / SMTPS (typical port 465, e.g. Amazon SES with SSL/TLS).
+    SslTls,
+}
+
+impl SmtpEncryption {
+    pub fn parse(raw: &str) -> Result<Self, String> {
+        match raw.trim().to_lowercase().as_str() {
+            "none" | "plain" => Ok(Self::None),
+            "starttls" | "tls" | "tls (starttls)" => Ok(Self::StartTls),
+            "ssl_tls" | "ssl/tls" | "ssl" | "smtps" | "wrapper" => Ok(Self::SslTls),
+            other => Err(format!(
+                "unknown SMTP_ENCRYPTION \"{other}\" — use none, starttls, or ssl_tls"
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SmtpConfig {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub encryption: SmtpEncryption,
+    /// Log recipient/subject before each send (never logs credentials).
+    pub debug: bool,
+}
+
+impl SmtpConfig {
+    pub fn from_env() -> Self {
+        let encryption = std::env::var("SMTP_ENCRYPTION")
+            .unwrap_or_else(|_| "starttls".into())
+            .parse()
+            .unwrap_or(SmtpEncryption::StartTls);
+
+        Self {
+            host: std::env::var("SMTP_HOST").unwrap_or_default(),
+            port: std::env::var("SMTP_PORT")
+                .unwrap_or_else(|_| default_smtp_port(encryption).to_string())
+                .parse()
+                .unwrap_or_else(|_| default_smtp_port(encryption)),
+            username: std::env::var("SMTP_USERNAME").unwrap_or_default(),
+            password: std::env::var("SMTP_PASSWORD").unwrap_or_default(),
+            encryption,
+            debug: std::env::var("SMTP_DEBUG")
+                .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
+                .unwrap_or(false),
+        }
+    }
+
+    pub fn validate(&self) -> anyhow::Result<()> {
+        if self.host.trim().is_empty() {
+            anyhow::bail!("SMTP_HOST is required when EMAIL_PROVIDER=smtp");
+        }
+        if self.port == 0 {
+            anyhow::bail!("SMTP_PORT must be a valid port number");
+        }
+        Ok(())
+    }
+
+    pub fn credentials_configured(&self) -> bool {
+        !self.host.is_empty() && !self.username.is_empty()
+    }
+}
+
+fn default_smtp_port(encryption: SmtpEncryption) -> u16 {
+    match encryption {
+        SmtpEncryption::SslTls => 465,
+        SmtpEncryption::StartTls => 587,
+        SmtpEncryption::None => 25,
+    }
 }
 
 impl AppConfig {
@@ -103,6 +184,7 @@ impl AppConfig {
             email_provider: std::env::var("EMAIL_PROVIDER")
                 .unwrap_or_else(|_| "resend".into()),
             resend_api_key: std::env::var("RESEND_API_KEY").unwrap_or_default(),
+            smtp: SmtpConfig::from_env(),
             email_from_email: std::env::var("EMAIL_FROM_EMAIL")
                 .unwrap_or_else(|_| "no-reply@maqraa.org".into()),
             email_from_name: std::env::var("EMAIL_FROM_NAME")
@@ -126,9 +208,31 @@ impl AppConfig {
     }
 }
 
+// Parse SMTP_ENCRYPTION from env (supports `none`, `starttls`, `ssl_tls`, and Odoo-style labels).
+impl std::str::FromStr for SmtpEncryption {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s)
+    }
+}
+
 #[cfg(test)]
 mod config_tests {
     use std::path::Path;
+
+    #[test]
+    fn smtp_encryption_from_env_values() {
+        use super::SmtpEncryption;
+        assert_eq!(
+            "ssl_tls".parse::<SmtpEncryption>().unwrap(),
+            SmtpEncryption::SslTls
+        );
+        assert_eq!(
+            "starttls".parse::<SmtpEncryption>().unwrap(),
+            SmtpEncryption::StartTls
+        );
+    }
 
     #[test]
     fn dotenv_loads_notifications_enabled() {

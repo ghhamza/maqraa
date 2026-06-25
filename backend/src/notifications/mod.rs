@@ -5,6 +5,7 @@ mod format;
 mod provider;
 mod queue;
 mod scheduler;
+mod smtp;
 mod surah_names;
 mod templates;
 mod worker;
