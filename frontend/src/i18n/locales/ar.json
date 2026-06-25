@@ -359,6 +359,43 @@
         "validationSubjectLength": "يجب ألا يتجاوز الموضوع ٢٠٠ حرف.",
         "validationMessageLength": "يجب ألا يتجاوز نص الرسالة ٥٬٠٠٠ حرف."
       }
+    },
+    "notifications": {
+      "title": "سجل البريد",
+      "description": "رسائل البريد المُرسَلة إلى هذا المستخدم. إعادة الإرسال تُدرج الرسالة مجددًا ويُحدَّث وقت الإرسال الأخير عند نجاح التسليم.",
+      "template": "البريد",
+      "status": "الحالة",
+      "locale": "اللغة",
+      "lastSent": "آخر إرسال",
+      "created": "تاريخ الإدراج",
+      "resend": "إعادة الإرسال",
+      "resendSending": "جاري الإرسال…",
+      "empty": "لم يُرسَل أي بريد إلى هذا المستخدم بعد.",
+      "loadError": "تعذّر تحميل سجل البريد.",
+      "statuses": {
+        "queued": "في قائمة الإرسال",
+        "sending": "جاري الإرسال",
+        "sent": "مُرسَل",
+        "failed": "فشل"
+      },
+      "templates": {
+        "welcome_verify": "ترحيب وتفعيل البريد",
+        "password_reset": "إعادة تعيين كلمة المرور",
+        "enrollment_approved": "قبول الانضمام",
+        "enrollment_rejected": "رفض الانضمام",
+        "enrollment_requested": "طلب انضمام",
+        "enrollment_removed": "إزالة من الحلقة",
+        "session_reminder": "تذكير بالحصة",
+        "session_cancelled": "إلغاء حصة",
+        "session_rescheduled": "تغيير موعد حصة",
+        "recitation_feedback": "ملاحظات التلاوة",
+        "profile_completion_reminder": "تذكير بإكمال الملف",
+        "teacher_custom_message": "رسالة مخصصة (معلّم)",
+        "student_custom_message": "رسالة مخصصة (طالب)",
+        "first_session_guide": "دليل أول حصة",
+        "halaqah_invite": "دعوة حلقة",
+        "new_signup_digest": "ملخص التسجيلات الجديدة"
+      }
     }
   },
   "room": {

@@ -60,6 +60,7 @@ export const userKeys = {
   detail: (id: string) => ["users", "detail", id] as const,
   studentRecitations: (id: string) => ["users", id, "recitations"] as const,
   studentProgress: (id: string) => ["users", id, "progress"] as const,
+  notifications: (id: string) => ["users", id, "notifications"] as const,
 };
 
 // ─── Sessions ────────────────────────────────────────────────────────────

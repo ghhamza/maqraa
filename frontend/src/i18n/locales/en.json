@@ -359,6 +359,43 @@
         "validationSubjectLength": "Subject must be 200 characters or fewer.",
         "validationMessageLength": "Message must be 5,000 characters or fewer."
       }
+    },
+    "notifications": {
+      "title": "Email history",
+      "description": "Emails sent to this user. Resend re-queues the same message and updates the last sent time when delivery succeeds.",
+      "template": "Email",
+      "status": "Status",
+      "locale": "Language",
+      "lastSent": "Last sent",
+      "created": "Queued",
+      "resend": "Resend",
+      "resendSending": "Delivery in progress…",
+      "empty": "No emails have been sent to this user yet.",
+      "loadError": "Couldn't load email history.",
+      "statuses": {
+        "queued": "Queued",
+        "sending": "Sending",
+        "sent": "Sent",
+        "failed": "Failed"
+      },
+      "templates": {
+        "welcome_verify": "Welcome & verify email",
+        "password_reset": "Password reset",
+        "enrollment_approved": "Enrollment approved",
+        "enrollment_rejected": "Enrollment rejected",
+        "enrollment_requested": "Enrollment request",
+        "enrollment_removed": "Enrollment removed",
+        "session_reminder": "Session reminder",
+        "session_cancelled": "Session cancelled",
+        "session_rescheduled": "Session rescheduled",
+        "recitation_feedback": "Recitation feedback",
+        "profile_completion_reminder": "Complete profile reminder",
+        "teacher_custom_message": "Custom message (teacher)",
+        "student_custom_message": "Custom message (student)",
+        "first_session_guide": "First session guide",
+        "halaqah_invite": "Halaqah invite",
+        "new_signup_digest": "New signup digest"
+      }
     }
   },
   "room": {

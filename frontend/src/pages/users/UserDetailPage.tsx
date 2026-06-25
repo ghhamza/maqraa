@@ -11,6 +11,7 @@ import { Button } from "../../components/ui/Button";
 import { UserFormModal } from "../../components/users/UserFormModal";
 import { DeleteConfirmModal } from "../../components/users/DeleteConfirmModal";
 import { UserCommunicationSection } from "../../components/users/UserCommunicationSection";
+import { UserNotificationsSection } from "../../components/users/UserNotificationsSection";
 import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
 import { ProfileDetailsSummary } from "../../components/profile/ProfileDetailsSummary";
@@ -102,6 +103,8 @@ export function UserDetailPage() {
           profileCompletionPending={user.profile_completion_pending}
         />
       ) : null}
+
+      <UserNotificationsSection userId={user.id} />
 
       <PageCard>
         <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("users.integrations")}</h2>

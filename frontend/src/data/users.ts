@@ -6,7 +6,7 @@ import { api } from "../lib/api";
 import { userKeys } from "../lib/queryKeys";
 import { normalizeUserPublic } from "../lib/profileDetails";
 import { useApiMutation } from "../lib/useApiMutation";
-import type { Paginated, RecitationPublic, StudentProgress, UserPublic, UserStats } from "../types";
+import type { Paginated, RecitationPublic, StudentProgress, UserNotificationItem, UserPublic, UserStats } from "../types";
 
 type RoleFilter = "" | "student" | "teacher" | "admin";
 
@@ -147,23 +147,31 @@ export function useDeleteUser(onSuccess?: () => void, onError?: (message: string
 }
 
 export function useSendSessionGuide(onSuccess?: () => void, onError?: (message: string) => void) {
+  const queryClient = useQueryClient();
   return useApiMutation<{ queued: boolean }, string>({
     mutationFn: async (userId) => {
       const { data } = await api.post<{ queued: boolean }>(`users/${userId}/send-session-guide`);
       return data;
     },
-    onSuccess: () => onSuccess?.(),
+    onSuccess: (_data, userId) => {
+      void queryClient.invalidateQueries({ queryKey: userKeys.notifications(userId) });
+      onSuccess?.();
+    },
     onError: (message) => onError?.(message),
   });
 }
 
 export function useSendProfileReminder(onSuccess?: () => void, onError?: (message: string) => void) {
+  const queryClient = useQueryClient();
   return useApiMutation<{ queued: boolean }, string>({
     mutationFn: async (userId) => {
       const { data } = await api.post<{ queued: boolean }>(`users/${userId}/send-profile-reminder`);
       return data;
     },
-    onSuccess: () => onSuccess?.(),
+    onSuccess: (_data, userId) => {
+      void queryClient.invalidateQueries({ queryKey: userKeys.notifications(userId) });
+      onSuccess?.();
+    },
     onError: (message) => onError?.(message),
   });
 }
@@ -201,12 +209,52 @@ export function useSendCustomTeacherEmail(
   onSuccess?: () => void,
   onError?: (message: string) => void,
 ) {
+  const queryClient = useQueryClient();
   return useApiMutation<{ queued: boolean }, CustomTeacherEmailInput>({
     mutationFn: async (input) => {
       const { data } = await api.post<{ queued: boolean }>(`users/${userId}/send-custom-email`, input);
       return data;
     },
-    onSuccess: () => onSuccess?.(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: userKeys.notifications(userId) });
+      onSuccess?.();
+    },
+    onError: (message) => onError?.(message),
+  });
+}
+
+export function useUserNotifications(userId: string | undefined) {
+  return useQuery({
+    queryKey: userKeys.notifications(userId ?? ""),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<{ items: UserNotificationItem[] }>(`users/${userId}/notifications`, {
+        signal,
+      });
+      return data.items;
+    },
+    enabled: !!userId,
+    refetchInterval: (query) => {
+      const items = query.state.data;
+      if (!items?.some((item) => item.status === "queued" || item.status === "sending")) {
+        return false;
+      }
+      return 5000;
+    },
+  });
+}
+
+export function useResendUserNotification(userId: string, onError?: (message: string) => void) {
+  const queryClient = useQueryClient();
+  return useApiMutation<{ queued: boolean }, string>({
+    mutationFn: async (notificationId) => {
+      const { data } = await api.post<{ queued: boolean }>(
+        `users/${userId}/notifications/${notificationId}/resend`,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: userKeys.notifications(userId) });
+    },
     onError: (message) => onError?.(message),
   });
 }

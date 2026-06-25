@@ -6,6 +6,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, QueryBuilder};
 use uuid::Uuid;
@@ -658,4 +659,124 @@ pub async fn send_custom_email(
     })?;
 
     Ok(Json(SendCustomEmailResponse { queued: true }))
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct NotificationLogItem {
+    pub id: Uuid,
+    pub template_key: String,
+    pub locale: String,
+    pub subject: String,
+    pub status: String,
+    pub retry_count: i32,
+    pub last_error: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub sent_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize)]
+pub struct UserNotificationsResponse {
+    pub items: Vec<NotificationLogItem>,
+}
+
+#[derive(Deserialize)]
+pub struct ListUserNotificationsQuery {
+    pub limit: Option<i64>,
+}
+
+#[derive(Serialize)]
+pub struct ResendNotificationResponse {
+    pub queued: bool,
+}
+
+pub async fn list_user_notifications(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(user_id): Path<Uuid>,
+    Query(query): Query<ListUserNotificationsQuery>,
+) -> Result<Json<UserNotificationsResponse>, StatusCode> {
+    require_admin(&auth)?;
+
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)")
+        .bind(user_id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !exists {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let limit = query.limit.unwrap_or(50).clamp(1, 100);
+
+    let items = sqlx::query_as::<_, NotificationLogItem>(
+        "SELECT id, template_key, locale, subject, status, retry_count, last_error, created_at, sent_at \
+         FROM notifications \
+         WHERE recipient_user_id = $1 \
+         ORDER BY COALESCE(sent_at, created_at) DESC \
+         LIMIT $2",
+    )
+    .bind(user_id)
+    .bind(limit)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(UserNotificationsResponse { items }))
+}
+
+pub async fn resend_user_notification(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path((user_id, notification_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ResendNotificationResponse>, StatusCode> {
+    require_admin(&auth)?;
+
+    if !state.config.notifications_enabled {
+        return Err(StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)")
+        .bind(user_id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !exists {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let status: Option<String> = sqlx::query_scalar(
+        "SELECT status FROM notifications WHERE id = $1 AND recipient_user_id = $2",
+    )
+    .bind(notification_id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let Some(status) = status else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+
+    if status == "sending" {
+        return Err(StatusCode::CONFLICT);
+    }
+
+    let result = sqlx::query(
+        "UPDATE notifications \
+         SET status = 'queued', scheduled_at = NOW(), retry_count = 0, last_error = NULL \
+         WHERE id = $1 AND recipient_user_id = $2 AND status IN ('sent', 'failed', 'queued')",
+    )
+    .bind(notification_id)
+    .bind(user_id)
+    .execute(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if result.rows_affected() == 0 {
+        return Err(StatusCode::CONFLICT);
+    }
+
+    Ok(Json(ResendNotificationResponse { queued: true }))
 }

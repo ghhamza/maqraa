@@ -40,6 +40,20 @@ export interface UserStats {
   admins: number;
 }
 
+export type NotificationStatus = "queued" | "sending" | "sent" | "failed";
+
+export interface UserNotificationItem {
+  id: string;
+  template_key: string;
+  locale: string;
+  subject: string;
+  status: NotificationStatus;
+  retry_count: number;
+  last_error: string | null;
+  created_at: string;
+  sent_at: string | null;
+}
+
 /** Paginated list API (users, rooms, sessions, recitations). */
 export interface Paginated<T> {
   items: T[];

@@ -359,6 +359,43 @@
         "validationSubjectLength": "L'objet ne doit pas dépasser 200 caractères.",
         "validationMessageLength": "Le message ne doit pas dépasser 5 000 caractères."
       }
+    },
+    "notifications": {
+      "title": "Historique des e-mails",
+      "description": "E-mails envoyés à cet utilisateur. Renvoyer remet le message en file et met à jour la date du dernier envoi après livraison.",
+      "template": "E-mail",
+      "status": "Statut",
+      "locale": "Langue",
+      "lastSent": "Dernier envoi",
+      "created": "Mis en file",
+      "resend": "Renvoyer",
+      "resendSending": "Envoi en cours…",
+      "empty": "Aucun e-mail n'a encore été envoyé à cet utilisateur.",
+      "loadError": "Impossible de charger l'historique des e-mails.",
+      "statuses": {
+        "queued": "En file",
+        "sending": "Envoi",
+        "sent": "Envoyé",
+        "failed": "Échec"
+      },
+      "templates": {
+        "welcome_verify": "Bienvenue et vérification",
+        "password_reset": "Réinitialisation du mot de passe",
+        "enrollment_approved": "Inscription acceptée",
+        "enrollment_rejected": "Inscription refusée",
+        "enrollment_requested": "Demande d'inscription",
+        "enrollment_removed": "Inscription retirée",
+        "session_reminder": "Rappel de séance",
+        "session_cancelled": "Séance annulée",
+        "session_rescheduled": "Séance reprogrammée",
+        "recitation_feedback": "Retour sur récitation",
+        "profile_completion_reminder": "Rappel profil incomplet",
+        "teacher_custom_message": "Message personnalisé (enseignant)",
+        "student_custom_message": "Message personnalisé (élève)",
+        "first_session_guide": "Guide première séance",
+        "halaqah_invite": "Invitation halaqah",
+        "new_signup_digest": "Résumé des inscriptions"
+      }
     }
   },
   "room": {
