@@ -328,6 +328,7 @@
     "communication": {
       "title": "Communication",
       "description": "Envoyer des e-mails d'accueil et de soutien à cet enseignant.",
+      "studentDescription": "Envoyer un e-mail personnel à cet élève.",
       "sendSuccess": "E-mail ajouté à la file d'envoi.",
       "sendError": "Impossible d'envoyer l'e-mail, veuillez réessayer.",
       "firstSessionGuide": {
@@ -343,7 +344,8 @@
         "subjectLabel": "Objet",
         "messageLabel": "Message",
         "messagePlaceholder": "Écrivez votre message ici…",
-        "messageHint": "Une ligne vide démarre un nouveau paragraphe. La salutation avec le nom de l'enseignant est ajoutée automatiquement.",
+        "messageHint": "Une ligne vide démarre un nouveau paragraphe. La salutation avec le nom du destinataire est ajoutée automatiquement dans votre langue actuelle.",
+        "messageHintStudent": "Une ligne vide démarre un nouveau paragraphe. La salutation avec le nom du destinataire est ajoutée automatiquement dans votre langue actuelle.",
         "previewButton": "Aperçu",
         "previewHint": "Voici l'apparence de l'e-mail pour {{email}}.",
         "backButton": "Modifier",

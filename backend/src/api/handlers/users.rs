@@ -426,57 +426,86 @@ const CUSTOM_EMAIL_MAX_SUBJECT: usize = 200;
 const CUSTOM_EMAIL_MAX_MESSAGE: usize = 5_000;
 
 #[derive(Deserialize)]
-pub struct CustomTeacherEmailRequest {
+pub struct CustomEmailRequest {
     pub subject: String,
     pub message: String,
+    /// Admin UI language for greeting, footer, and layout (ar/en/fr).
+    pub locale: Option<String>,
 }
 
 #[derive(Serialize)]
-pub struct CustomTeacherEmailPreviewResponse {
+pub struct CustomEmailPreviewResponse {
     pub subject: String,
     pub html: String,
     pub text: String,
 }
 
 #[derive(Serialize)]
-pub struct SendCustomTeacherEmailResponse {
+pub struct SendCustomEmailResponse {
     pub queued: bool,
 }
 
-struct TeacherEmailTarget {
+struct CustomEmailTarget {
     name: String,
     email: String,
-    preferred_language: String,
+    role: String,
 }
 
-async fn load_teacher_email_target(
+async fn load_custom_email_target(
     db: &sqlx::PgPool,
     id: Uuid,
-) -> Result<TeacherEmailTarget, StatusCode> {
-    let target: Option<(String, String, String, String)> = sqlx::query_as(
-        "SELECT name, email, preferred_language, role::text FROM users WHERE id = $1",
+) -> Result<CustomEmailTarget, StatusCode> {
+    let target: Option<(String, String, String)> = sqlx::query_as(
+        "SELECT name, email, role::text FROM users WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let Some((name, email, preferred_language, role)) = target else {
+    let Some((name, email, role)) = target else {
         return Err(StatusCode::NOT_FOUND);
     };
 
-    if role != "teacher" {
+    if role != "teacher" && role != "student" {
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    Ok(TeacherEmailTarget {
+    Ok(CustomEmailTarget {
         name,
         email,
-        preferred_language,
+        role,
     })
 }
 
-fn validate_custom_teacher_email(body: &CustomTeacherEmailRequest) -> Result<(String, String), StatusCode> {
+fn normalize_email_locale(locale: &str) -> &str {
+    match locale {
+        "ar" | "en" | "fr" => locale,
+        _ => "ar",
+    }
+}
+
+async fn resolve_sender_locale(
+    db: &sqlx::PgPool,
+    sender_id: Uuid,
+    requested: Option<&str>,
+) -> Result<String, StatusCode> {
+    if let Some(locale) = requested.map(str::trim).filter(|s| !s.is_empty()) {
+        return Ok(normalize_email_locale(locale).to_string());
+    }
+
+    let locale: Option<String> = sqlx::query_scalar(
+        "SELECT preferred_language FROM users WHERE id = $1",
+    )
+    .bind(sender_id)
+    .fetch_optional(db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(normalize_email_locale(&locale.unwrap_or_else(|| "ar".to_string())).to_string())
+}
+
+fn validate_custom_email(body: &CustomEmailRequest) -> Result<(String, String), StatusCode> {
     let subject = body.subject.trim();
     let message = body.message.trim();
 
@@ -492,63 +521,79 @@ fn validate_custom_teacher_email(body: &CustomTeacherEmailRequest) -> Result<(St
     Ok((subject.to_string(), message.to_string()))
 }
 
-fn custom_teacher_email_vars(name: &str, subject: &str, message: &str) -> TemplateVars {
+fn custom_email_vars(name: &str, subject: &str, message: &str) -> TemplateVars {
     TemplateVars::new()
         .with("name", name)
         .with("subject", subject)
         .with("message", message)
 }
 
-pub async fn preview_custom_teacher_email(
+fn custom_message_template(role: &str) -> &'static str {
+    if role == "student" {
+        "student_custom_message"
+    } else {
+        "teacher_custom_message"
+    }
+}
+
+pub async fn preview_custom_email(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
-    Json(body): Json<CustomTeacherEmailRequest>,
-) -> Result<Json<CustomTeacherEmailPreviewResponse>, StatusCode> {
+    Json(body): Json<CustomEmailRequest>,
+) -> Result<Json<CustomEmailPreviewResponse>, StatusCode> {
     require_admin(&auth)?;
 
-    let target = load_teacher_email_target(&state.db, id).await?;
-    let (subject, message) = validate_custom_teacher_email(&body)?;
-    let vars = custom_teacher_email_vars(&target.name, &subject, &message);
+    let target = load_custom_email_target(&state.db, id).await?;
+    let (subject, message) = validate_custom_email(&body)?;
+    let locale = resolve_sender_locale(&state.db, auth.id, body.locale.as_deref()).await?;
+    let vars = custom_email_vars(&target.name, &subject, &message);
     let rendered = render(
-        "teacher_custom_message",
-        &target.preferred_language,
+        custom_message_template(&target.role),
+        &locale,
         &vars,
     );
 
-    Ok(Json(CustomTeacherEmailPreviewResponse {
+    Ok(Json(CustomEmailPreviewResponse {
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
     }))
 }
 
-pub async fn send_custom_teacher_email(
+pub async fn send_custom_email(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
-    Json(body): Json<CustomTeacherEmailRequest>,
-) -> Result<Json<SendCustomTeacherEmailResponse>, StatusCode> {
+    Json(body): Json<CustomEmailRequest>,
+) -> Result<Json<SendCustomEmailResponse>, StatusCode> {
     require_admin(&auth)?;
 
-    let target = load_teacher_email_target(&state.db, id).await?;
-    let (subject, message) = validate_custom_teacher_email(&body)?;
-    let vars = custom_teacher_email_vars(&target.name, &subject, &message);
+    let target = load_custom_email_target(&state.db, id).await?;
+    let (subject, message) = validate_custom_email(&body)?;
+    let locale = resolve_sender_locale(&state.db, auth.id, body.locale.as_deref()).await?;
+    let vars = custom_email_vars(&target.name, &subject, &message);
+    let template_key = custom_message_template(&target.role);
 
     enqueue(
         &state.db,
         &state.config,
-        "teacher_custom_message",
-        &target.preferred_language,
+        template_key,
+        &locale,
         &target.email,
         Some(id),
         vars,
     )
     .await
     .map_err(|e| {
-        tracing::error!(error = %e, user_id = %id, "failed to enqueue teacher_custom_message");
+        tracing::error!(
+            error = %e,
+            user_id = %id,
+            template_key = %template_key,
+            "failed to enqueue custom message"
+        );
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    Ok(Json(SendCustomTeacherEmailResponse { queued: true }))
+    Ok(Json(SendCustomEmailResponse { queued: true }))
 }

@@ -93,12 +93,12 @@ export function UserDetailPage() {
         <ProfileDetailsSummary user={user} />
       </PageCard>
 
-      {user.role === "teacher" ? (
+      {user.role === "teacher" || user.role === "student" ? (
         <UserCommunicationSection
           userId={user.id}
           userName={user.name}
           userEmail={user.email}
-          preferredLanguage={user.preferred_language}
+          role={user.role}
         />
       ) : null}
 

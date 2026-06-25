@@ -206,6 +206,46 @@ fn email_layout(
     (html, text)
 }
 
+fn render_custom_message(locale: &str, vars: &TemplateVars, sub: &dyn Fn(&str) -> String) -> RenderedEmail {
+    let greeting = match locale {
+        "ar" => "السلام عليكم ورحمة الله وبركاته، {{name}}،",
+        "fr" => "Assalamou alaykoum {{name}},",
+        _ => "Assalamu alaikum {{name}},",
+    };
+    let subject = vars
+        .values
+        .get("subject")
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| sub(s))
+        .unwrap_or_else(|| match locale {
+            "ar" => "رسالة من المقرأة".to_string(),
+            "fr" => "Message d'Al-Maqraa".to_string(),
+            _ => "Message from Al-Maqraa".to_string(),
+        });
+    let message = vars.values.get("message").cloned().unwrap_or_default();
+
+    let mut html_paragraphs = vec![sub(greeting)];
+    html_paragraphs.extend(message_to_html_paragraphs(&message));
+
+    let mut text_paragraphs = vec![sub(greeting)];
+    text_paragraphs.extend(message_to_text_paragraphs(&message));
+
+    let (html, _) = email_layout(locale, &subject, &html_paragraphs, None);
+    let text_body = text_paragraphs.join("\n\n");
+    let text = format!(
+        "{subject}\n\n{text_body}\n\n{footer_label}: {website_url}",
+        footer_label = footer_copy(locale),
+        website_url = WEBSITE_URL,
+    );
+
+    RenderedEmail {
+        subject,
+        html,
+        text,
+    }
+}
+
 pub fn render(template_key: &str, locale: &str, vars: &TemplateVars) -> RenderedEmail {
     let locale = normalize_locale(locale);
     let sub = |s: &str| substitute(s, vars);
@@ -572,45 +612,7 @@ pub fn render(template_key: &str, locale: &str, vars: &TemplateVars) -> Rendered
                 text,
             }
         }
-        "teacher_custom_message" => {
-            let greeting = match locale {
-                "ar" => "السلام عليكم ورحمة الله وبركاته، {{name}}،",
-                "fr" => "Assalamou alaykoum {{name}},",
-                _ => "Assalamu alaikum {{name}},",
-            };
-            let subject = vars
-                .values
-                .get("subject")
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-                .map(sub)
-                .unwrap_or_else(|| match locale {
-                    "ar" => "رسالة من المقرأة".to_string(),
-                    "fr" => "Message d'Al-Maqraa".to_string(),
-                    _ => "Message from Al-Maqraa".to_string(),
-                });
-            let message = vars.values.get("message").cloned().unwrap_or_default();
-
-            let mut html_paragraphs = vec![sub(greeting)];
-            html_paragraphs.extend(message_to_html_paragraphs(&message));
-
-            let mut text_paragraphs = vec![sub(greeting)];
-            text_paragraphs.extend(message_to_text_paragraphs(&message));
-
-            let (html, _) = email_layout(locale, &subject, &html_paragraphs, None);
-            let text_body = text_paragraphs.join("\n\n");
-            let text = format!(
-                "{subject}\n\n{text_body}\n\n{footer_label}: {website_url}",
-                footer_label = footer_copy(locale),
-                website_url = WEBSITE_URL,
-            );
-
-            RenderedEmail {
-                subject,
-                html,
-                text,
-            }
-        }
+        "teacher_custom_message" | "student_custom_message" => render_custom_message(locale, vars, &sub),
         "first_session_guide" => {
             let (subject, heading, paragraphs) = match locale {
                 "ar" => (

@@ -160,6 +160,7 @@ export function useSendSessionGuide(onSuccess?: () => void, onError?: (message: 
 export interface CustomTeacherEmailInput {
   subject: string;
   message: string;
+  locale: string;
 }
 
 export interface CustomTeacherEmailPreview {

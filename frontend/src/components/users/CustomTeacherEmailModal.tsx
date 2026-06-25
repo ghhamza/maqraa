@@ -18,7 +18,7 @@ interface CustomTeacherEmailModalProps {
   userId: string;
   userName: string;
   userEmail: string;
-  preferredLanguage: string;
+  recipientRole: "teacher" | "student";
   onClose: () => void;
   onSent: () => void;
 }
@@ -28,16 +28,21 @@ type Step = "compose" | "preview";
 const MAX_SUBJECT = 200;
 const MAX_MESSAGE = 5000;
 
+function normalizeLocale(language: string): "ar" | "en" | "fr" {
+  const base = (language.split("-")[0] ?? "ar") as "ar" | "en" | "fr";
+  return base === "en" || base === "fr" ? base : "ar";
+}
+
 export function CustomTeacherEmailModal({
   open,
   userId,
   userName,
   userEmail,
-  preferredLanguage,
+  recipientRole,
   onClose,
   onSent,
 }: CustomTeacherEmailModalProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [step, setStep] = useState<Step>("compose");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
@@ -55,7 +60,8 @@ export function CustomTeacherEmailModal({
   );
 
   const loading = previewMutation.isPending || sendMutation.isPending;
-  const isRtl = preferredLanguage === "ar";
+  const senderLocale = normalizeLocale(i18n.language || "ar");
+  const isRtl = senderLocale === "ar";
 
   useEffect(() => {
     if (!open) return;
@@ -84,7 +90,11 @@ export function CustomTeacherEmailModal({
     }
 
     setError(null);
-    return { subject: trimmedSubject, message: trimmedMessage };
+    return {
+      subject: trimmedSubject,
+      message: trimmedMessage,
+      locale: senderLocale,
+    };
   }
 
   function handlePreview() {
@@ -163,7 +173,9 @@ export function CustomTeacherEmailModal({
                 placeholder={t("users.communication.customEmail.messagePlaceholder")}
               />
               <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                {t("users.communication.customEmail.messageHint")}
+                {recipientRole === "student"
+                  ? t("users.communication.customEmail.messageHintStudent")
+                  : t("users.communication.customEmail.messageHint")}
               </p>
             </div>
 

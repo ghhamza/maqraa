@@ -328,6 +328,7 @@
     "communication": {
       "title": "Communication",
       "description": "Send onboarding and support emails to this teacher.",
+      "studentDescription": "Send a personal email to this student.",
       "sendSuccess": "Email queued successfully.",
       "sendError": "Couldn't send the email, please try again.",
       "firstSessionGuide": {
@@ -343,7 +344,8 @@
         "subjectLabel": "Subject",
         "messageLabel": "Message",
         "messagePlaceholder": "Write your message here…",
-        "messageHint": "Blank lines start a new paragraph. The greeting with the teacher's name is added automatically.",
+        "messageHint": "Blank lines start a new paragraph. The greeting with the recipient's name is added automatically in your current language.",
+        "messageHintStudent": "Blank lines start a new paragraph. The greeting with the recipient's name is added automatically in your current language.",
         "previewButton": "Preview",
         "previewHint": "This is how the email will look for {{email}}.",
         "backButton": "Edit",

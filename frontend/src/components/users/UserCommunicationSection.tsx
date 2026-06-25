@@ -13,14 +13,14 @@ interface UserCommunicationSectionProps {
   userId: string;
   userName: string;
   userEmail: string;
-  preferredLanguage: string;
+  role: "teacher" | "student";
 }
 
 export function UserCommunicationSection({
   userId,
   userName,
   userEmail,
-  preferredLanguage,
+  role,
 }: UserCommunicationSectionProps) {
   const { t } = useTranslation();
   const [toast, setToast] = useState<"success" | "error" | null>(null);
@@ -55,22 +55,26 @@ export function UserCommunicationSection({
           {t("users.communication.title")}
         </h2>
         <p className="mb-4 text-sm text-[var(--color-text-muted)]">
-          {t("users.communication.description")}
+          {role === "student"
+            ? t("users.communication.studentDescription")
+            : t("users.communication.description")}
         </p>
         <div className="flex flex-wrap gap-3">
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={cooldown || sendGuideMutation.isPending}
-            loading={sendGuideMutation.isPending}
-            onClick={handleSendFirstSessionGuide}
-            title={t("users.communication.firstSessionGuide.description")}
-          >
-            <span className="inline-flex items-center gap-2">
-              <Mail className="h-4 w-4 text-[#D4A843]" aria-hidden />
-              {t("users.communication.firstSessionGuide.button")}
-            </span>
-          </Button>
+          {role === "teacher" ? (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={cooldown || sendGuideMutation.isPending}
+              loading={sendGuideMutation.isPending}
+              onClick={handleSendFirstSessionGuide}
+              title={t("users.communication.firstSessionGuide.description")}
+            >
+              <span className="inline-flex items-center gap-2">
+                <Mail className="h-4 w-4 text-[#D4A843]" aria-hidden />
+                {t("users.communication.firstSessionGuide.button")}
+              </span>
+            </Button>
+          ) : null}
 
           <Button
             type="button"
@@ -91,7 +95,7 @@ export function UserCommunicationSection({
         userId={userId}
         userName={userName}
         userEmail={userEmail}
-        preferredLanguage={preferredLanguage}
+        recipientRole={role}
         onClose={() => setCustomEmailOpen(false)}
         onSent={() => setToast("success")}
       />
