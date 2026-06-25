@@ -335,6 +335,11 @@
         "button": "Rappel de séance",
         "description": "Envoyer un guide court expliquant la différence entre une halaqa et une session, et comment créer la première session."
       },
+      "profileReminder": {
+        "button": "Rappel profil incomplet",
+        "description": "Envoyer un rappel pour compléter les informations du profil.",
+        "alreadyComplete": "Le profil de cet utilisateur est déjà complet."
+      },
       "customEmail": {
         "button": "Message personnalisé",
         "description": "Rédiger un message personnel et l'envoyer avec la mise en page standard.",

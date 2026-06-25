@@ -157,6 +157,17 @@ export function useSendSessionGuide(onSuccess?: () => void, onError?: (message: 
   });
 }
 
+export function useSendProfileReminder(onSuccess?: () => void, onError?: (message: string) => void) {
+  return useApiMutation<{ queued: boolean }, string>({
+    mutationFn: async (userId) => {
+      const { data } = await api.post<{ queued: boolean }>(`users/${userId}/send-profile-reminder`);
+      return data;
+    },
+    onSuccess: () => onSuccess?.(),
+    onError: (message) => onError?.(message),
+  });
+}
+
 export interface CustomTeacherEmailInput {
   subject: string;
   message: string;

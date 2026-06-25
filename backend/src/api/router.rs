@@ -74,6 +74,10 @@ pub fn build_router(state: AppState) -> Router {
             post(handlers::users::send_session_guide),
         )
         .route(
+            "/api/users/{id}/send-profile-reminder",
+            post(handlers::users::send_profile_reminder),
+        )
+        .route(
             "/api/users/{id}/preview-custom-email",
             post(handlers::users::preview_custom_email),
         )

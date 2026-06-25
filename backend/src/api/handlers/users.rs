@@ -422,6 +422,68 @@ pub async fn send_session_guide(
     Ok(Json(SendSessionGuideResponse { queued: true }))
 }
 
+#[derive(Serialize)]
+pub struct SendProfileReminderResponse {
+    pub queued: bool,
+}
+
+pub async fn send_profile_reminder(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<SendProfileReminderResponse>, StatusCode> {
+    require_admin(&auth)?;
+
+    let target: Option<(String, String, String, String, bool)> = sqlx::query_as(
+        "SELECT name, email, preferred_language, role::text, profile_completion_pending \
+         FROM users WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let Some((name, email, preferred_language, role, profile_completion_pending)) = target else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+
+    if role != "teacher" && role != "student" {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if !profile_completion_pending {
+        return Err(StatusCode::CONFLICT);
+    }
+
+    let base = state.config.app_base_url.trim_end_matches('/');
+    let vars = TemplateVars::new()
+        .with("name", name)
+        .with("app_url", format!("{base}/profile/complete"));
+
+    enqueue(
+        &state.db,
+        &state.config,
+        "profile_completion_reminder",
+        &preferred_language,
+        &email,
+        Some(id),
+        vars,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, user_id = %id, "failed to enqueue profile_completion_reminder");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    sqlx::query("UPDATE users SET profile_nudge_sent_at = now() WHERE id = $1")
+        .bind(id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(SendProfileReminderResponse { queued: true }))
+}
+
 const CUSTOM_EMAIL_MAX_SUBJECT: usize = 200;
 const CUSTOM_EMAIL_MAX_MESSAGE: usize = 5_000;
 

@@ -3,17 +3,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Mail, PenLine } from "lucide-react";
+import { Mail, PenLine, UserRound } from "lucide-react";
 import { Button } from "../ui/Button";
 import { PageCard } from "../layout/PageCard";
 import { CustomTeacherEmailModal } from "./CustomTeacherEmailModal";
-import { useSendSessionGuide } from "../../data/users";
+import { useSendProfileReminder, useSendSessionGuide } from "../../data/users";
 
 interface UserCommunicationSectionProps {
   userId: string;
   userName: string;
   userEmail: string;
   role: "teacher" | "student";
+  profileCompletionPending: boolean;
 }
 
 export function UserCommunicationSection({
@@ -21,13 +22,20 @@ export function UserCommunicationSection({
   userName,
   userEmail,
   role,
+  profileCompletionPending,
 }: UserCommunicationSectionProps) {
   const { t } = useTranslation();
   const [toast, setToast] = useState<"success" | "error" | null>(null);
-  const [cooldown, setCooldown] = useState(false);
+  const [guideCooldown, setGuideCooldown] = useState(false);
+  const [profileCooldown, setProfileCooldown] = useState(false);
   const [customEmailOpen, setCustomEmailOpen] = useState(false);
 
   const sendGuideMutation = useSendSessionGuide(
+    () => setToast("success"),
+    () => setToast("error"),
+  );
+
+  const sendProfileReminderMutation = useSendProfileReminder(
     () => setToast("success"),
     () => setToast("error"),
   );
@@ -39,14 +47,31 @@ export function UserCommunicationSection({
   }, [toast]);
 
   const handleSendFirstSessionGuide = useCallback(() => {
-    if (cooldown || sendGuideMutation.isPending) return;
+    if (guideCooldown || sendGuideMutation.isPending) return;
     sendGuideMutation.mutate(userId, {
       onSuccess: () => {
-        setCooldown(true);
-        window.setTimeout(() => setCooldown(false), 30_000);
+        setGuideCooldown(true);
+        window.setTimeout(() => setGuideCooldown(false), 30_000);
       },
     });
-  }, [userId, cooldown, sendGuideMutation]);
+  }, [userId, guideCooldown, sendGuideMutation]);
+
+  const handleSendProfileReminder = useCallback(() => {
+    if (!profileCompletionPending || profileCooldown || sendProfileReminderMutation.isPending) {
+      return;
+    }
+    sendProfileReminderMutation.mutate(userId, {
+      onSuccess: () => {
+        setProfileCooldown(true);
+        window.setTimeout(() => setProfileCooldown(false), 30_000);
+      },
+    });
+  }, [
+    userId,
+    profileCompletionPending,
+    profileCooldown,
+    sendProfileReminderMutation,
+  ]);
 
   return (
     <>
@@ -64,7 +89,7 @@ export function UserCommunicationSection({
             <Button
               type="button"
               variant="secondary"
-              disabled={cooldown || sendGuideMutation.isPending}
+              disabled={guideCooldown || sendGuideMutation.isPending}
               loading={sendGuideMutation.isPending}
               onClick={handleSendFirstSessionGuide}
               title={t("users.communication.firstSessionGuide.description")}
@@ -75,6 +100,28 @@ export function UserCommunicationSection({
               </span>
             </Button>
           ) : null}
+
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={
+              !profileCompletionPending ||
+              profileCooldown ||
+              sendProfileReminderMutation.isPending
+            }
+            loading={sendProfileReminderMutation.isPending}
+            onClick={handleSendProfileReminder}
+            title={
+              profileCompletionPending
+                ? t("users.communication.profileReminder.description")
+                : t("users.communication.profileReminder.alreadyComplete")
+            }
+          >
+            <span className="inline-flex items-center gap-2">
+              <UserRound className="h-4 w-4 text-[#D4A843]" aria-hidden />
+              {t("users.communication.profileReminder.button")}
+            </span>
+          </Button>
 
           <Button
             type="button"

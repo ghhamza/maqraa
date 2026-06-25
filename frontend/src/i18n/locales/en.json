@@ -335,6 +335,11 @@
         "button": "Session reminder",
         "description": "Email a short guide explaining the difference between a halaqah and a session, and how to create the first session."
       },
+      "profileReminder": {
+        "button": "Complete profile reminder",
+        "description": "Email a reminder to finish profile details.",
+        "alreadyComplete": "This user's profile is already complete."
+      },
       "customEmail": {
         "button": "Custom message",
         "description": "Write a personal message and send it with the standard email layout.",

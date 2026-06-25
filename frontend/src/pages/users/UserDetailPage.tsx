@@ -99,6 +99,7 @@ export function UserDetailPage() {
           userName={user.name}
           userEmail={user.email}
           role={user.role}
+          profileCompletionPending={user.profile_completion_pending}
         />
       ) : null}
 
