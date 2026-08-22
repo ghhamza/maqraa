@@ -47,6 +47,8 @@ pub struct AppConfig {
     /// Local hour (0–23 in APP_DISPLAY_TZ) when the daily new-signup digest may send.
     pub digest_send_hour: u32,
     pub notifications_enabled: bool,
+    /// Periodic teacher onboarding reminders (setup incomplete / share nudge).
+    pub onboarding_emails_enabled: bool,
     /// Google Identity Services client ID for Sign in with Google (optional).
     pub google_client_id: Option<String>,
 }
@@ -119,6 +121,9 @@ impl AppConfig {
             notifications_enabled: std::env::var("NOTIFICATIONS_ENABLED")
                 .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
                 .unwrap_or(false),
+            onboarding_emails_enabled: std::env::var("ONBOARDING_EMAILS_ENABLED")
+                .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
+                .unwrap_or(true),
             google_client_id: std::env::var("GOOGLE_CLIENT_ID")
                 .ok()
                 .map(|s| s.trim().to_string())

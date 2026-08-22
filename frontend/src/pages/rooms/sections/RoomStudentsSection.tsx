@@ -26,6 +26,8 @@ export interface RoomStudentsSectionProps {
   onRefresh: () => void;
   onEnrollOpen: () => void;
   onRemoveEnrollment: (e: Enrollment) => void;
+  /** Scroll/focus activation share card when empty. */
+  onShareFocus?: () => void;
 }
 
 export function RoomStudentsSection({
@@ -38,6 +40,7 @@ export function RoomStudentsSection({
   onRefresh,
   onEnrollOpen,
   onRemoveEnrollment,
+  onShareFocus,
 }: RoomStudentsSectionProps) {
   const { t } = useTranslation();
   const manage = canManage(user, room);
@@ -80,8 +83,18 @@ export function RoomStudentsSection({
               title={t("roomDetail.studentsEmptyTitle")}
               description={t("roomDetail.studentsEmptyDescription")}
               primaryAction={
-                !isArchived
-                  ? { label: t("enrollment.enrollStudent"), onClick: () => onEnrollOpen() }
+                !isArchived && onShareFocus
+                  ? { label: t("enrollment.emptyShare"), onClick: () => onShareFocus() }
+                  : !isArchived
+                    ? { label: t("enrollment.enrollStudent"), onClick: () => onEnrollOpen() }
+                    : undefined
+              }
+              secondaryAction={
+                !isArchived && onShareFocus
+                  ? {
+                      label: t("enrollment.addManually"),
+                      onClick: () => onEnrollOpen(),
+                    }
                   : undefined
               }
             />

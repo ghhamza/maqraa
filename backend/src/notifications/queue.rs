@@ -20,6 +20,34 @@ pub async fn enqueue_in_tx<'e, E>(
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
+    enqueue_with_attachment_in_tx(
+        executor,
+        config,
+        template_key,
+        locale,
+        recipient_email,
+        recipient_user_id,
+        vars,
+        None,
+        None,
+    )
+    .await
+}
+
+pub async fn enqueue_with_attachment_in_tx<'e, E>(
+    executor: E,
+    config: &AppConfig,
+    template_key: &str,
+    locale: &str,
+    recipient_email: &str,
+    recipient_user_id: Option<Uuid>,
+    vars: TemplateVars,
+    attachment_filename: Option<&str>,
+    attachment_content: Option<&[u8]>,
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     if !config.notifications_enabled {
         return Ok(());
     }
@@ -28,8 +56,9 @@ where
 
     sqlx::query(
         "INSERT INTO notifications \
-         (template_key, locale, recipient_email, recipient_user_id, subject, body_html, body_text) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+         (template_key, locale, recipient_email, recipient_user_id, subject, body_html, body_text, \
+          attachment_filename, attachment_content) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
     )
     .bind(template_key)
     .bind(locale)
@@ -38,6 +67,8 @@ where
     .bind(&rendered.subject)
     .bind(&rendered.html)
     .bind(&rendered.text)
+    .bind(attachment_filename)
+    .bind(attachment_content)
     .execute(executor)
     .await?;
 
@@ -59,6 +90,31 @@ pub async fn enqueue(
     recipient_user_id: Option<Uuid>,
     vars: TemplateVars,
 ) -> Result<(), sqlx::Error> {
+    enqueue_with_attachment(
+        pool,
+        config,
+        template_key,
+        locale,
+        recipient_email,
+        recipient_user_id,
+        vars,
+        None,
+        None,
+    )
+    .await
+}
+
+pub async fn enqueue_with_attachment(
+    pool: &PgPool,
+    config: &AppConfig,
+    template_key: &str,
+    locale: &str,
+    recipient_email: &str,
+    recipient_user_id: Option<Uuid>,
+    vars: TemplateVars,
+    attachment_filename: Option<&str>,
+    attachment_content: Option<&[u8]>,
+) -> Result<(), sqlx::Error> {
     if !config.notifications_enabled {
         tracing::info!(
             template_key = %template_key,
@@ -68,7 +124,7 @@ pub async fn enqueue(
         return Ok(());
     }
 
-    enqueue_in_tx(
+    enqueue_with_attachment_in_tx(
         pool,
         config,
         template_key,
@@ -76,6 +132,8 @@ pub async fn enqueue(
         recipient_email,
         recipient_user_id,
         vars,
+        attachment_filename,
+        attachment_content,
     )
     .await
 }

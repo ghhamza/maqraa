@@ -12,11 +12,19 @@ pub enum EmailError {
 }
 
 #[derive(Debug, Clone)]
+pub struct EmailAttachment {
+    pub filename: String,
+    pub content: Vec<u8>,
+    pub content_type: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct OutboundEmail {
     pub to: String,
     pub subject: String,
     pub html: String,
     pub text: String,
+    pub attachments: Vec<EmailAttachment>,
 }
 
 #[async_trait::async_trait]
@@ -41,11 +49,18 @@ impl ResendProvider {
 #[async_trait::async_trait]
 impl EmailProvider for ResendProvider {
     async fn send(&self, email: &OutboundEmail) -> Result<(), EmailError> {
-        use resend_rs::types::CreateEmailBaseOptions;
+        use resend_rs::types::{CreateAttachment, CreateEmailBaseOptions};
 
-        let opts = CreateEmailBaseOptions::new(&self.from, [&email.to], &email.subject)
+        let mut opts = CreateEmailBaseOptions::new(&self.from, [&email.to], &email.subject)
             .with_html(&email.html)
             .with_text(&email.text);
+
+        for att in &email.attachments {
+            let attachment = CreateAttachment::from_content(att.content.clone())
+                .with_filename(&att.filename)
+                .with_content_type(&att.content_type);
+            opts = opts.with_attachment(attachment);
+        }
 
         self.client
             .emails

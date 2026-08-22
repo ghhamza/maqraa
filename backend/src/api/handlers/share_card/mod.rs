@@ -67,9 +67,10 @@ pub async fn share_card_png(
     *res.status_mut() = StatusCode::OK;
     let h = res.headers_mut();
     h.insert(CONTENT_TYPE, HeaderValue::from_static("image/png"));
+    // Short TTL + versioned ETag so template/logo changes are not stuck for an hour.
     h.insert(
         CACHE_CONTROL,
-        HeaderValue::from_static("public, max-age=3600"),
+        HeaderValue::from_static("public, max-age=60, must-revalidate"),
     );
     if let Ok(v) = HeaderValue::from_str(&format!("\"{etag}\"")) {
         h.insert(ETAG, v);
@@ -77,8 +78,12 @@ pub async fn share_card_png(
     res
 }
 
+/// Bump when SVG templates / brand lockup / layout change so ETags invalidate.
+const CARD_RENDER_VERSION: &str = "v4-balance";
+
 fn card_etag(h: &PublicHalaqah, format: CardFormat) -> String {
     let mut hasher = Sha256::new();
+    hasher.update(CARD_RENDER_VERSION.as_bytes());
     hasher.update(h.token.as_bytes());
     hasher.update(format.as_str().as_bytes());
     hasher.update(h.name.as_bytes());

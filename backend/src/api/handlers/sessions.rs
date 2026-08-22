@@ -565,7 +565,7 @@ pub async fn create_session(
     }
     let days: Vec<i16> = days_set.into_iter().collect();
 
-    if !is_repeat && req.scheduled_at <= Utc::now() {
+    if !is_repeat && req.scheduled_at < Utc::now() - Duration::minutes(2) {
         return Err(json_err(StatusCode::BAD_REQUEST, "session_past"));
     }
 

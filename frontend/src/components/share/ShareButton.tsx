@@ -15,6 +15,14 @@ import {
   useShareLinks,
   type ShareTargetType,
 } from "../../data/share";
+import {
+  canNativeShare as detectCanNativeShare,
+  cardImageUrl,
+  copyShareUrl,
+  nativeShareText,
+  openEmailShare,
+  openWhatsAppShare,
+} from "../../lib/shareIntents";
 import { cn } from "@/lib/utils";
 
 interface ShareButtonProps {
@@ -23,6 +31,8 @@ interface ShareButtonProps {
   targetId?: string;
   /** When true, panel only shares an existing active link (no auto-create). */
   existingOnly?: boolean;
+  fullWidth?: boolean;
+  className?: string;
 }
 
 /** Prevents duplicate auto-creates for the same target while a request is in flight. */
@@ -132,7 +142,7 @@ function SharePanelContent({
     targetType === "instance"
       ? t("instanceInvite.subtitle")
       : t("share.inviteMessage", { name: displayName });
-  const canNativeShare = typeof navigator !== "undefined" && "share" in navigator;
+  const canNativeShare = detectCanNativeShare();
 
   useEffect(() => {
     if (!open) {
@@ -189,33 +199,26 @@ function SharePanelContent({
 
   async function handleCopy() {
     if (!shareUrl) return;
-    await navigator.clipboard.writeText(shareUrl);
+    await copyShareUrl(shareUrl);
     setCopied(true);
   }
 
   function openWhatsApp() {
-    const text = `${inviteMessage} ${shareUrl}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+    openWhatsAppShare(inviteMessage, shareUrl);
   }
 
   function openEmail() {
-    const subject = t("common.appName");
-    const body = `${inviteMessage} ${shareUrl}`;
-    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    openEmailShare(t("common.appName"), inviteMessage, shareUrl);
   }
 
   async function handleNativeShare() {
-    if (!canNativeShare || !shareUrl) return;
-    try {
-      await navigator.share({
-        title: t("common.appName"),
-        text: inviteMessage,
-        url: shareUrl,
-      });
-      onDone?.();
-    } catch {
-      // user cancelled
-    }
+    if (!shareUrl) return;
+    const ok = await nativeShareText({
+      title: t("common.appName"),
+      text: inviteMessage,
+      url: shareUrl,
+    });
+    if (ok) onDone?.();
   }
 
   const isAutoCreating =
@@ -265,6 +268,18 @@ function SharePanelContent({
         onEmail={openEmail}
         onNativeShare={handleNativeShare}
       />
+      {targetType === "halaqah" && activeLink?.token ? (
+        <Button
+          type="button"
+          variant="secondary"
+          fullWidth
+          onClick={() =>
+            window.open(cardImageUrl(activeLink.token, "og"), "_blank", "noopener,noreferrer")
+          }
+        >
+          {t("share.card")}
+        </Button>
+      ) : null}
       {!existingOnly ? (
         <>
           <button
@@ -311,15 +326,17 @@ export function ShareButton({
   targetId,
   displayName,
   existingOnly = false,
+  fullWidth = false,
+  className,
 }: ShareButtonProps) {
   const { t } = useTranslation();
   const mdUp = useMdUp();
   const [open, setOpen] = useState(false);
 
   const trigger = (
-    <Button type="button" variant="secondary">
+    <Button type="button" variant="secondary" fullWidth={fullWidth} className={className}>
       <span className="inline-flex items-center gap-2">
-        <Share2 className="h-4 w-4" />
+        <Share2 className="size-4" />
         {t("share.share")}
       </span>
     </Button>
@@ -352,9 +369,15 @@ export function ShareButton({
 
   return (
     <>
-      <Button type="button" variant="secondary" onClick={() => setOpen(true)}>
+      <Button
+        type="button"
+        variant="secondary"
+        fullWidth={fullWidth}
+        className={className}
+        onClick={() => setOpen(true)}
+      >
         <span className="inline-flex items-center gap-2">
-          <Share2 className="h-4 w-4" />
+          <Share2 className="size-4" />
           {t("share.share")}
         </span>
       </Button>

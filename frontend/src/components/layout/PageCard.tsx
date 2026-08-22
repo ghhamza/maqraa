@@ -11,8 +11,8 @@ export interface PageCardProps extends React.ComponentProps<"div"> {
 
 const paddingClass: Record<NonNullable<PageCardProps["padding"]>, string> = {
   none: "",
-  sm: "p-4",
-  md: "p-4 md:p-6",
+  sm: "p-5",
+  md: "p-5 md:p-6",
   lg: "p-5 md:p-8",
 };
 

@@ -28,17 +28,21 @@
     "createHalaqaTitle": "Créer une nouvelle halaqa",
     "stepHalaqa": "Halaqa",
     "stepSession": "Séance",
-    "stepStudents": "Étudiants",
     "next": "Suivant",
     "back": "Retour",
     "skip": "Passer",
     "finish": "Terminer",
-    "skipSessionHint": "Vous pourrez programmer des séances plus tard depuis la page de la halaqa",
-    "skipStudentsHint": "Vous pourrez inviter des étudiants plus tard depuis la page de la halaqa",
-    "addAnotherStudent": "Ajouter un autre étudiant",
     "stepHalaqaDone": "Halaqa créée",
     "stepSessionDone": "Première séance programmée",
-    "stepStudentsDone": "Étudiants inscrits"
+    "stepShare": "Partager",
+    "sessionTitle": "Quand commence {{name}} ?",
+    "sessionSubtitle": "Cette date apparaît dans le lien de partage pour que les élèves sachent quand rejoindre",
+    "sessionSubmit": "Fixer la date et continuer",
+    "sessionLocked": "Étape obligatoire — une halaqa sans date ne peut pas être partagée",
+    "shareTitle": "Votre halaqa est prête — partagez-la pour que les élèves la trouvent",
+    "shareSkip": "Déjà partagé — passer",
+    "shareDone": "Terminé — aller à la halaqa",
+    "firstSessionTitle": "Première séance"
   },
   "empty": {
     "genericTitle": "Rien ici pour l'instant",
@@ -137,7 +141,7 @@
     "instanceInvites": "Invitations"
   },
   "roomDetail": {
-    "studentsEmptyTitle": "Aucun élève inscrit",
+    "studentsEmptyTitle": "Aucun élève pour l'instant",
     "studentsEmptyDescription": "Inscrivez votre premier élève pour commencer cette halaqah.",
     "sessionsEmptyTitle": "Aucune séance planifiée",
     "sessionsEmptyDescription": "Planifiez la première séance pour cette halaqah.",
@@ -401,21 +405,6 @@
       }
     }
   },
-  "room": {
-    "gettingStarted": {
-      "title": "Lancez votre halaqah",
-      "subtitle": "Deux étapes pour démarrer votre halaqah",
-      "step1Title": "Inscrivez votre premier élève",
-      "step1Desc": "Invitez vos élèves pour qu'ils puissent réciter",
-      "step1Cta": "Inscrire un élève",
-      "step2Title": "Planifiez votre première séance",
-      "step2Desc": "Choisissez l'horaire de votre premier rendez-vous",
-      "step2Cta": "Ajouter une séance",
-      "skip": "Passer et terminer plus tard",
-      "dismissAria": "Fermer le guide",
-      "stepDone": "Fait"
-    }
-  },
   "rooms": {
     "title": "Halaqat",
     "addRoom": "Ajouter une halaqah",
@@ -636,7 +625,9 @@
     "rejectStudent": "Refuser",
     "noPendingRequests": "Aucune demande en attente",
     "pendingSectionTitle": "Demandes d'inscription en attente",
-    "requestDate": "Date de la demande"
+    "requestDate": "Date de la demande",
+    "emptyShare": "Partager le lien",
+    "addManually": "Ajouter un élève manuellement"
   },
   "language": {
     "ar": "العربية",
@@ -1185,7 +1176,19 @@
     "revokeConfirm": "Révoquer ce lien ? Il cessera de fonctionner.",
     "noLinks": "Aucun lien pour l'instant",
     "liveNow": "En direct",
-    "joinNow": "Rejoindre"
+    "joinNow": "Rejoindre",
+    "firstSession": "Première séance : {{date}}",
+    "meccaTime": "heure de La Mecque",
+    "telegram": "Telegram",
+    "shareImage": "Partager l'image…",
+    "downloadPng": "Télécharger le PNG",
+    "cardSquare": "Carré",
+    "cardStory": "Story",
+    "card": "Carte",
+    "qrOnly": "QR seul",
+    "inviteByEmail": "Inviter par e-mail",
+    "stats": "{{joined}}/{{max}} inscrits · {{visits}} visites",
+    "inviteMessageDated": "Rejoins la halaqa {{name}} ({{type}} · {{riwaya}}) sur Maqraa. Première séance {{date}}, heure de La Mecque."
   },
   "instanceInvite": {
     "title": "Inviter sur Al-Maqraa",
@@ -1344,5 +1347,17 @@
         "sessions": "Séances"
       }
     }
+  },
+  "activation": {
+    "noStudentsTitle": "Aucun élève — partagez le lien avant {{weekday}}",
+    "nextSession": "Prochaine séance",
+    "enrolledStartsIn": "{{count}} élèves inscrits · commence {{relative}}",
+    "start": "Démarrer la séance",
+    "startNow": "Démarrer",
+    "startLocked": "Activé 15 minutes avant l'heure",
+    "noUpcoming": "Aucune séance à venir",
+    "schedule": "Planifier une séance",
+    "upcoming": "Prochaine : {{date}}",
+    "counters": "{{sessions}} terminées · {{students}} élèves"
   }
 }

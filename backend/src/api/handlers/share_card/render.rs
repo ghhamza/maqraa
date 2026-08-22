@@ -21,6 +21,40 @@ const FONT_IBM_SEMIBOLD: &[u8] =
 const SVG_SQUARE: &str = include_str!("../../../../assets/card/card-square.svg");
 const SVG_STORY: &str = include_str!("../../../../assets/card/card-story.svg");
 const SVG_OG: &str = include_str!("../../../../assets/card/card-og.svg");
+const LOGO_AR_SVG: &str = include_str!("../../../../assets/card/logo-ar.svg");
+
+/// Inner markup of the Arabic lockup (paths only), shared across card formats.
+fn logo_ar_inner() -> &'static str {
+    static INNER: OnceLock<String> = OnceLock::new();
+    INNER
+        .get_or_init(|| {
+            let s = LOGO_AR_SVG;
+            let start = s
+                .find("<svg")
+                .and_then(|i| s[i..].find('>').map(|j| i + j + 1))
+                .unwrap_or(0);
+            let end = s.rfind("</svg>").unwrap_or(s.len());
+            s[start..end].trim().to_string()
+        })
+        .as_str()
+}
+
+fn inject_brand_logo(svg: &str, x: f64, y: f64, w: f64, h: f64) -> String {
+    // Nested SVG keeps the lockup's own viewBox; xMaxYMin pins it to the RTL start (right).
+    let logo = format!(
+        r#"<svg id="logo" x="{x}" y="{y}" width="{w}" height="{h}" viewBox="-24.00 -24.00 1151.42 492.20" preserveAspectRatio="xMaxYMin meet">{inner}</svg>"#,
+        inner = logo_ar_inner()
+    );
+    if let Some(pos) = svg.find(r#"<g id="logo-slot"/>"#) {
+        let end = pos + r#"<g id="logo-slot"/>"#.len();
+        let mut out = String::with_capacity(svg.len() + logo.len());
+        out.push_str(&svg[..pos]);
+        out.push_str(&logo);
+        out.push_str(&svg[end..]);
+        return out;
+    }
+    svg.to_string()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CardFormat {
@@ -59,6 +93,18 @@ impl CardFormat {
             Self::Square => (1080, 1080),
             Self::Story => (1080, 1920),
             Self::Og => (1200, 630),
+        }
+    }
+
+    /// Brand lockup box: (x, y, width, height) — top-start (right). Height ≈ 5% of card.
+    fn logo_box(self) -> (f64, f64, f64, f64) {
+        match self {
+            // Square: tightened under top margin, h≈5%
+            Self::Square => (860.0, 64.0, 134.0, 48.0),
+            // Story: top zone, tightened toward name
+            Self::Story => (800.0, 64.0, 194.0, 80.0),
+            // Og: text column top-start
+            Self::Og => (980.0, 48.0, 164.0, 52.0),
         }
     }
 }
@@ -196,6 +242,11 @@ pub fn build_svg(
             "بتوقيت مكة".to_string(),
         ),
     };
+    let rhythm_display = if rhythm_line == "بتوقيت مكة" {
+        rhythm_line.clone()
+    } else {
+        format!("بتوقيت مكة · {rhythm_line}")
+    };
 
     let short = short_display_url(public_base, &halaqah.token);
     let full_url = format!(
@@ -204,14 +255,16 @@ pub fn build_svg(
         halaqah.token
     );
 
-    svg = set_text_by_id(&svg, "logo", "المقرأة");
+    let (lx, ly, lw, lh) = format.logo_box();
+    svg = inject_brand_logo(&svg, lx, ly, lw, lh);
+
     svg = set_text_by_id(&svg, "tagline", "منصة تعليم القرآن");
     svg = set_text_by_id(&svg, "halaqah_name", &name);
     svg = set_text_by_id(&svg, "teacher", &teacher_line);
     svg = set_text_by_id(&svg, "type", htype);
     svg = set_text_by_id(&svg, "riwaya", riwaya);
     svg = set_text_by_id(&svg, "first_session", &date_line);
-    svg = set_text_by_id(&svg, "tz_and_rhythm", &rhythm_line);
+    svg = set_text_by_id(&svg, "tz_and_rhythm", &rhythm_display);
     svg = set_text_by_id(&svg, "short_url", &short);
     svg = set_text_by_id(&svg, "scan_hint", "امسح للانضمام");
 

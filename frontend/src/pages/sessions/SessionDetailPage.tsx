@@ -472,12 +472,25 @@ export function SessionDetailPage() {
       title={<span>{title}</span>}
       actions={
         manage ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <ShareButton targetType="session" targetId={detail.id} displayName={title} />
+          <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:flex-wrap md:items-center">
+            <ShareButton
+              targetType="session"
+              targetId={detail.id}
+              displayName={title}
+              fullWidth
+              className="md:w-auto"
+            />
             {canEditSession ? (
-              <Button type="button" variant="secondary" onClick={openSessionEdit}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="lg"
+                fullWidth
+                className="md:w-auto"
+                onClick={openSessionEdit}
+              >
                 <span className="inline-flex items-center gap-2">
-                  <Pencil className="h-4 w-4" />
+                  <Pencil className="size-5" />
                   {t("common.edit")}
                 </span>
               </Button>
@@ -510,9 +523,11 @@ export function SessionDetailPage() {
           <Button
             type="button"
             variant="primary"
+            size="xl"
+            fullWidth
             loading={actionLoading}
             onClick={handleStartClick}
-            className="min-h-14 w-full bg-[#1B5E20] text-base font-semibold hover:opacity-95 md:mx-auto md:max-w-md"
+            className="md:mx-auto md:max-w-md"
           >
             {t("liveSession.startSession")}
           </Button>
@@ -537,11 +552,11 @@ export function SessionDetailPage() {
           <p className="mt-2 text-sm text-[var(--color-text)]">{t("sessions.primaryLiveHelper")}</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link to={`/sessions/${detail.id}/live`}>
-              <Button type="button" variant="primary">
+              <Button type="button" variant="primary" size="lg">
                 {t("liveSession.enterLive")}
               </Button>
             </Link>
-            <Button type="button" variant="secondary" loading={actionLoading} onClick={() => void patchStatus("completed")}>
+            <Button type="button" variant="secondary" size="lg" loading={actionLoading} onClick={() => void patchStatus("completed")}>
               {t("sessions.complete")}
             </Button>
           </div>
@@ -553,7 +568,7 @@ export function SessionDetailPage() {
           <p className="text-sm text-[var(--color-text)]">{t("sessions.primaryLiveHelper")}</p>
           <div className="mt-4">
             <Link to={`/sessions/${detail.id}/live`}>
-              <Button type="button" variant="primary">
+              <Button type="button" variant="primary" size="lg">
                 {t("liveSession.enterLive")}
               </Button>
             </Link>
@@ -916,12 +931,23 @@ export function SessionDetailPage() {
             <AlertDialogDescription>{t("sessions.cancelSessionConfirm")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <Button type="button" variant="outline" onClick={() => setCancelConfirmOpen(false)} disabled={actionLoading}>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              fullWidth
+              className="sm:w-auto"
+              onClick={() => setCancelConfirmOpen(false)}
+              disabled={actionLoading}
+            >
               {t("common.cancel")}
             </Button>
             <Button
               type="button"
               variant="danger"
+              size="lg"
+              fullWidth
+              className="sm:w-auto"
               loading={actionLoading}
               onClick={() => {
                 setCancelConfirmOpen(false);

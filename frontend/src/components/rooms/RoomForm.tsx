@@ -197,7 +197,7 @@ export function RoomForm({
           rows={3}
           maxLength={2000}
           placeholder={t("rooms.descriptionPlaceholder")}
-          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[var(--color-text)] shadow-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-base text-[var(--color-text)] shadow-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] md:text-sm"
         />
         <p className="mt-1 text-xs text-[var(--color-text-muted)]">{t("rooms.descriptionHint")}</p>
       </div>
@@ -373,11 +373,25 @@ export function RoomForm({
       ) : null}
 
       {showFooter ? (
-        <div className="flex flex-wrap gap-3 pt-2">
-          <Button type="button" variant="secondary" className="min-w-0 flex-1" onClick={onCancel}>
+        <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:flex-wrap sm:gap-3">
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            fullWidth
+            className="sm:min-w-0 sm:flex-1 sm:w-auto"
+            onClick={onCancel}
+          >
             {t("common.cancel")}
           </Button>
-          <Button type="submit" variant="primary" className="min-w-0 flex-1" loading={loading}>
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            fullWidth
+            className="sm:min-w-0 sm:flex-1 sm:w-auto"
+            loading={loading}
+          >
             {t("common.save")}
           </Button>
         </div>

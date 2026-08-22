@@ -102,8 +102,11 @@ export interface Room {
   riwaya: QuranRiwaya;
   halaqah_type: HalaqahType;
   enrolled_count: number;
+  /** Alias for enrolled_count (approved). */
+  approved_enrolled_count?: number;
   /** Total session rows for this room (from API). */
   sessions_count?: number;
+  completed_sessions_count?: number;
   is_public: boolean;
   enrollment_open: boolean;
   requires_approval: boolean;
@@ -114,6 +117,17 @@ export interface Room {
   description: string | null;
   /** Optional ISO timestamp; null = continuous enrollment. */
   enrollment_deadline_at: string | null;
+  /** Null while teacher is still in first-session setup. */
+  setup_completed_at: string | null;
+  first_session?: RoomFirstSession | null;
+  share_token?: string | null;
+}
+
+export interface RoomFirstSession {
+  id: string;
+  scheduled_at: string;
+  duration_minutes: number;
+  status: string;
 }
 
 /** Schedule row as returned by `GET /api/rooms/{room_id}/schedules` (preview / list). */

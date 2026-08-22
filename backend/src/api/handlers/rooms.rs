@@ -12,10 +12,81 @@ use sqlx::QueryBuilder;
 use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
-use crate::api::types::{Paginated, RoomPublic, RoomStatsResponse, TeacherOption};
+use crate::api::types::{Paginated, RoomFirstSession, RoomPublic, RoomStatsResponse, TeacherOption};
 use crate::api::AppState;
 use crate::entitlements::EntitlementContext;
 use crate::riwaya::parse_riwaya;
+
+/// Next upcoming scheduled session, else most recent scheduled — same rule as share card.
+pub async fn fetch_first_session(
+    db: &sqlx::PgPool,
+    room_id: Uuid,
+) -> Result<Option<RoomFirstSession>, sqlx::Error> {
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        id: Uuid,
+        scheduled_at: DateTime<Utc>,
+        duration_minutes: i32,
+        status: String,
+    }
+
+    let upcoming: Option<Row> = sqlx::query_as(
+        "SELECT id, scheduled_at, duration_minutes, status::text AS status FROM sessions \
+         WHERE room_id = $1 AND status = 'scheduled' AND scheduled_at >= NOW() \
+         ORDER BY scheduled_at ASC LIMIT 1",
+    )
+    .bind(room_id)
+    .fetch_optional(db)
+    .await?;
+
+    let row = match upcoming {
+        Some(r) => Some(r),
+        None => {
+            sqlx::query_as(
+                "SELECT id, scheduled_at, duration_minutes, status::text AS status FROM sessions \
+                 WHERE room_id = $1 AND status = 'scheduled' \
+                 ORDER BY scheduled_at DESC LIMIT 1",
+            )
+            .bind(room_id)
+            .fetch_optional(db)
+            .await?
+        }
+    };
+
+    Ok(row.map(|r| RoomFirstSession {
+        id: r.id,
+        scheduled_at: r.scheduled_at,
+        duration_minutes: r.duration_minutes,
+        status: r.status,
+    }))
+}
+
+async fn fetch_primary_share_token(
+    db: &sqlx::PgPool,
+    room_id: Uuid,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT token FROM share_links \
+         WHERE target_id = $1 AND target_type IN ('halaqah', 'invite') \
+         AND revoked_at IS NULL \
+         AND (expires_at IS NULL OR expires_at > NOW()) \
+         AND (max_uses IS NULL OR use_count < max_uses) \
+         ORDER BY created_at ASC LIMIT 1",
+    )
+    .bind(room_id)
+    .fetch_optional(db)
+    .await
+}
+
+async fn enrich_room_detail(db: &sqlx::PgPool, mut room: RoomPublic) -> Result<RoomPublic, StatusCode> {
+    room.first_session = fetch_first_session(db, room.id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    room.share_token = fetch_primary_share_token(db, room.id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(room)
+}
 
 /// Distinguish "field absent" from "field present and null".
 /// Lets PUT requests express both "leave unchanged" and "clear to NULL".
@@ -331,7 +402,8 @@ pub async fn list_rooms(
                  r.is_public, r.enrollment_open, r.requires_approval, \
                  COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
                  e_my.status AS my_status, \
-                 r.description, r.enrollment_deadline_at \
+                 r.description, r.enrollment_deadline_at, r.setup_completed_at, \
+             COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count \
                  FROM rooms r \
                  INNER JOIN users u ON u.id = r.teacher_id \
                  LEFT JOIN enrollments e_my ON e_my.room_id = r.id AND e_my.student_id = ",
@@ -348,7 +420,8 @@ pub async fn list_rooms(
              r.is_public, r.enrollment_open, r.requires_approval, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
              CAST(NULL AS TEXT) AS my_status, \
-             r.description, r.enrollment_deadline_at \
+             r.description, r.enrollment_deadline_at, r.setup_completed_at, \
+             COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count \
              FROM rooms r \
              INNER JOIN users u ON u.id = r.teacher_id \
              WHERE 1=1",
@@ -390,7 +463,8 @@ pub async fn get_room(
              r.is_public, r.enrollment_open, r.requires_approval, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
              (SELECT e.status FROM enrollments e WHERE e.room_id = r.id AND e.student_id = $2 LIMIT 1) AS my_status, \
-             r.description, r.enrollment_deadline_at \
+             r.description, r.enrollment_deadline_at, r.setup_completed_at, \
+             COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count \
              FROM rooms r \
              INNER JOIN users u ON u.id = r.teacher_id \
              WHERE r.id = $1",
@@ -408,7 +482,8 @@ pub async fn get_room(
              r.is_public, r.enrollment_open, r.requires_approval, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
              CAST(NULL AS TEXT) AS my_status, \
-             r.description, r.enrollment_deadline_at \
+             r.description, r.enrollment_deadline_at, r.setup_completed_at, \
+             COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count \
              FROM rooms r \
              INNER JOIN users u ON u.id = r.teacher_id \
              WHERE r.id = $1",
@@ -439,7 +514,7 @@ pub async fn get_room(
         }
     }
 
-    Ok(Json(room))
+    Ok(Json(enrich_room_detail(&state.db, room).await?))
 }
 
 pub async fn create_room(
@@ -552,7 +627,8 @@ pub async fn create_room(
          r.is_public, r.enrollment_open, r.requires_approval, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
          CAST(NULL AS TEXT) AS my_status, \
-         r.description, r.enrollment_deadline_at \
+         r.description, r.enrollment_deadline_at, r.setup_completed_at, \
+             COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count \
          FROM rooms r \
          INNER JOIN users u ON u.id = r.teacher_id \
          WHERE r.id = $1",
@@ -579,7 +655,8 @@ pub async fn update_room(
          r.is_public, r.enrollment_open, r.requires_approval, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
          CAST(NULL AS TEXT) AS my_status, \
-         r.description, r.enrollment_deadline_at \
+         r.description, r.enrollment_deadline_at, r.setup_completed_at, \
+             COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count \
          FROM rooms r \
          INNER JOIN users u ON u.id = r.teacher_id \
          WHERE r.id = $1",
@@ -690,7 +767,8 @@ pub async fn update_room(
          r.is_public, r.enrollment_open, r.requires_approval, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
          CAST(NULL AS TEXT) AS my_status, \
-         r.description, r.enrollment_deadline_at \
+         r.description, r.enrollment_deadline_at, r.setup_completed_at, \
+             COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count \
          FROM rooms r \
          INNER JOIN users u ON u.id = r.teacher_id \
          WHERE r.id = $1",
@@ -738,4 +816,111 @@ pub async fn delete_room(
     }
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(serde::Serialize)]
+pub struct SetupCompleteResponse {
+    pub setup_completed_at: DateTime<Utc>,
+}
+
+#[derive(serde::Serialize)]
+pub struct SetupErrorBody {
+    pub code: &'static str,
+    pub message: &'static str,
+}
+
+/// Mark room setup complete once at least one session exists. Idempotent.
+pub async fn complete_room_setup(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<SetupCompleteResponse>, (StatusCode, Json<SetupErrorBody>)> {
+    let row: Option<(Uuid, Option<DateTime<Utc>>)> =
+        sqlx::query_as("SELECT teacher_id, setup_completed_at FROM rooms WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(SetupErrorBody {
+                        code: "server_error",
+                        message: "server error",
+                    }),
+                )
+            })?;
+
+    let Some((teacher_id, existing)) = row else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(SetupErrorBody {
+                code: "not_found",
+                message: "room not found",
+            }),
+        ));
+    };
+
+    if !can_manage_room(&auth, teacher_id) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(SetupErrorBody {
+                code: "forbidden",
+                message: "forbidden",
+            }),
+        ));
+    }
+
+    if let Some(at) = existing {
+        return Ok(Json(SetupCompleteResponse {
+            setup_completed_at: at,
+        }));
+    }
+
+    let session_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM sessions WHERE room_id = $1",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(SetupErrorBody {
+                code: "server_error",
+                message: "server error",
+            }),
+        )
+    })?;
+
+    if session_count < 1 {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(SetupErrorBody {
+                code: "no_session",
+                message: "schedule a session before completing setup",
+            }),
+        ));
+    }
+
+    let at: DateTime<Utc> = sqlx::query_scalar(
+        "UPDATE rooms SET setup_completed_at = NOW() \
+         WHERE id = $1 AND setup_completed_at IS NULL \
+         RETURNING setup_completed_at",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(SetupErrorBody {
+                code: "server_error",
+                message: "server error",
+            }),
+        )
+    })?;
+
+    Ok(Json(SetupCompleteResponse {
+        setup_completed_at: at,
+    }))
 }

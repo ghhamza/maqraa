@@ -288,7 +288,7 @@ export function AdminDashboardPage() {
 
       {/* Demographics — 2×2 chart cards, no tabs */}
       <section className="space-y-3">
-        <h3 className="text-base font-semibold text-[var(--color-text)]">
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">
           {t("admin.dashboard.demo.title")}
         </h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -342,7 +342,7 @@ export function AdminDashboardPage() {
 
       {/* Halaqat — 2×2 chart cards */}
       <section className="space-y-3">
-        <h3 className="text-base font-semibold text-[var(--color-text)]">
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">
           {t("admin.dashboard.halaqat.title")}
         </h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -401,7 +401,7 @@ export function AdminDashboardPage() {
 
       {/* Teaching — 2×2 chart cards, no tabs */}
       <section className="space-y-3">
-        <h3 className="text-base font-semibold text-[var(--color-text)]">
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">
           {t("admin.dashboard.teaching.title")}
         </h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -510,7 +510,7 @@ export function AdminDashboardPage() {
 
       {/* Trends — 2×2 chart cards, no tabs */}
       <section className="space-y-3">
-        <h3 className="text-base font-semibold text-[var(--color-text)]">
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">
           {t("admin.dashboard.series.title")}
         </h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

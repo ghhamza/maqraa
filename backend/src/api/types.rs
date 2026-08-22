@@ -95,6 +95,14 @@ pub struct SessionStatsResponse {
     pub avg_attendance_pct: f64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct RoomFirstSession {
+    pub id: Uuid,
+    pub scheduled_at: DateTime<Utc>,
+    pub duration_minutes: i32,
+    pub status: String,
+}
+
 #[derive(Debug, Clone, Serialize, FromRow)]
 pub struct RoomPublic {
     pub id: Uuid,
@@ -118,6 +126,16 @@ pub struct RoomPublic {
     pub description: Option<String>,
     /// Optional enrollment deadline. NULL means continuous (no deadline).
     pub enrollment_deadline_at: Option<DateTime<Utc>>,
+    /// When the teacher finished first-session setup; NULL = still in setup.
+    pub setup_completed_at: Option<DateTime<Utc>>,
+    /// Sessions with status = completed.
+    pub completed_sessions_count: i64,
+    /// Next (or latest) scheduled session — populated on GET detail.
+    #[sqlx(skip)]
+    pub first_session: Option<RoomFirstSession>,
+    /// Primary active halaqah share token — populated on GET detail.
+    #[sqlx(skip)]
+    pub share_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

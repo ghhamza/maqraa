@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { Archive, Pencil, RotateCcw, UserPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Enrollment, Room } from "../../types";
@@ -36,7 +36,7 @@ import {
   endOfMonth,
   startOfMonth,
 } from "../../lib/calendarUtils";
-import { GettingStartedBanner } from "../../components/room/GettingStartedBanner";
+import { ActivationCard } from "../../components/room/ActivationCard";
 import { roomKeys } from "../../lib/queryKeys";
 import { RoomOverviewSection } from "./sections/RoomOverviewSection";
 import { RoomStudentsSection } from "./sections/RoomStudentsSection";
@@ -206,6 +206,10 @@ export function RoomDetailPage() {
     );
   }
 
+  if (canManageRoom && room.setup_completed_at == null) {
+    return <Navigate to={`/rooms/${room.id}/setup`} replace />;
+  }
+
   return (
     <PageShell
       breadcrumb={[
@@ -230,31 +234,63 @@ export function RoomDetailPage() {
       }
       actions={
         showActions ? (
-          <div className="flex flex-wrap gap-2">
-            <ShareButton targetType="halaqah" targetId={room.id} displayName={room.name} />
-            <Button type="button" variant="secondary" onClick={() => setInviteOpen(true)}>
+          <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:flex-wrap">
+            <ShareButton
+              targetType="halaqah"
+              targetId={room.id}
+              displayName={room.name}
+              fullWidth
+              className="md:w-auto"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              fullWidth
+              className="md:w-auto"
+              onClick={() => setInviteOpen(true)}
+            >
               <span className="inline-flex items-center gap-2">
-                <UserPlus className="h-4 w-4" />
+                <UserPlus className="size-4" />
                 {t("invite.invite")}
               </span>
             </Button>
-            <Button type="button" variant="secondary" onClick={() => setFormOpen(true)}>
+            <Button
+              type="button"
+              variant="secondary"
+              fullWidth
+              className="md:w-auto"
+              onClick={() => setFormOpen(true)}
+            >
               <span className="inline-flex items-center gap-2">
-                <Pencil className="h-4 w-4" />
+                <Pencil className="size-4" />
                 {t("common.edit")}
               </span>
             </Button>
             {isArchived ? (
-              <Button type="button" variant="primary" loading={restoreLoading} onClick={() => void handleRestore()}>
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                fullWidth
+                className="md:w-auto"
+                loading={restoreLoading}
+                onClick={() => void handleRestore()}
+              >
                 <span className="inline-flex items-center gap-2">
-                  <RotateCcw className="h-4 w-4" />
+                  <RotateCcw className="size-5" />
                   {t("common.restore")}
                 </span>
               </Button>
             ) : (
-              <Button type="button" variant="secondary" onClick={() => setArchiveOpen(true)}>
+              <Button
+                type="button"
+                variant="secondary"
+                fullWidth
+                className="md:w-auto"
+                onClick={() => setArchiveOpen(true)}
+              >
                 <span className="inline-flex items-center gap-2 text-amber-800">
-                  <Archive className="h-4 w-4" />
+                  <Archive className="size-4" />
                   {t("common.archive")}
                 </span>
               </Button>
@@ -272,13 +308,10 @@ export function RoomDetailPage() {
         </div>
       ) : null}
 
-      {isRoomTeacher && !isArchived ? (
-        <GettingStartedBanner
-          roomId={room.id}
-          hasStudents={enrolledCount > 0}
-          hasSessions={(room?.sessions_count ?? 0) > 0 || sessions.length > 0}
-          onAddStudent={() => setEnrollOpen(true)}
-          onAddSession={() => {
+      {(isRoomTeacher || (user?.role === "admin" && showActions)) && !isArchived ? (
+        <ActivationCard
+          room={room}
+          onScheduleSession={() => {
             setSessionPrefillDate(null);
             setSessionPresetMorning(false);
             setSessionFormOpen(true);
@@ -310,6 +343,9 @@ export function RoomDetailPage() {
             }}
             onEnrollOpen={() => setEnrollOpen(true)}
             onRemoveEnrollment={(e) => setRemoveEnrollment(e)}
+            onShareFocus={() =>
+              document.getElementById("activation-card")?.scrollIntoView({ behavior: "smooth" })
+            }
           />
         ) : null}
 
@@ -452,6 +488,9 @@ export function RoomDetailPage() {
             <Button
               type="button"
               variant="outline"
+              size="lg"
+              fullWidth
+              className="sm:w-auto"
               onClick={() => setStudentConfirm(null)}
               disabled={studentActionLoading}
             >
@@ -460,6 +499,9 @@ export function RoomDetailPage() {
             <Button
               type="button"
               variant="danger"
+              size="lg"
+              fullWidth
+              className="sm:w-auto"
               loading={studentActionLoading}
               onClick={() => void confirmStudentWithdrawal()}
             >

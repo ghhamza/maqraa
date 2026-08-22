@@ -71,8 +71,8 @@ export function PageShell({
 }: PageShellProps) {
   const titleClasses =
     titleSize === "hero"
-      ? "text-3xl font-bold text-[var(--color-text)] md:text-4xl"
-      : "text-2xl font-bold text-[var(--color-text)] md:text-3xl";
+      ? "text-4xl font-bold text-[var(--color-text)] md:text-5xl"
+      : "text-3xl font-bold text-[var(--color-text)] md:text-4xl";
 
   return (
     <div className={cn("space-y-6", className)}>

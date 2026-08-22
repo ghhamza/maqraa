@@ -238,7 +238,7 @@ export function RegisterPage() {
                 </p>
               ) : null}
 
-              <Button type="submit" variant="primary" fullWidth loading={loading}>
+              <Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>
                 {t("auth.createAccount")}
               </Button>
             </form>

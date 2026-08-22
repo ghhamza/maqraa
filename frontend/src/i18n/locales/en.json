@@ -28,17 +28,21 @@
     "createHalaqaTitle": "Create a new halaqa",
     "stepHalaqa": "Halaqa",
     "stepSession": "Session",
-    "stepStudents": "Students",
     "next": "Next",
     "back": "Back",
     "skip": "Skip",
     "finish": "Finish",
-    "skipSessionHint": "You can schedule sessions later from the halaqa page",
-    "skipStudentsHint": "You can invite students later from the halaqa page",
-    "addAnotherStudent": "Add another student",
     "stepHalaqaDone": "Halaqa created",
     "stepSessionDone": "First session scheduled",
-    "stepStudentsDone": "Students enrolled"
+    "stepShare": "Share",
+    "sessionTitle": "When does {{name}} start?",
+    "sessionSubtitle": "This date appears in the share link so students know when to join",
+    "sessionSubmit": "Set the date and continue",
+    "sessionLocked": "This step can't be skipped — a halaqah without a date can't be shared",
+    "shareTitle": "Your halaqah is ready — share it so students can find it",
+    "shareSkip": "Already shared — skip",
+    "shareDone": "Done — go to the halaqah",
+    "firstSessionTitle": "First session"
   },
   "empty": {
     "genericTitle": "Nothing here yet",
@@ -137,7 +141,7 @@
     "instanceInvites": "Invites"
   },
   "roomDetail": {
-    "studentsEmptyTitle": "No students enrolled yet",
+    "studentsEmptyTitle": "No students yet",
     "studentsEmptyDescription": "Enroll your first student to start running this halaqah.",
     "sessionsEmptyTitle": "No sessions scheduled",
     "sessionsEmptyDescription": "Schedule the first session for this halaqah.",
@@ -401,21 +405,6 @@
       }
     }
   },
-  "room": {
-    "gettingStarted": {
-      "title": "Set up your halaqah",
-      "subtitle": "Two steps to get your halaqah running",
-      "step1Title": "Enroll your first student",
-      "step1Desc": "Invite students so they can recite",
-      "step1Cta": "Enroll student",
-      "step2Title": "Schedule your first session",
-      "step2Desc": "Pick the time of your first meeting on the calendar",
-      "step2Cta": "Add session",
-      "skip": "Skip and finish later",
-      "dismissAria": "Dismiss getting started",
-      "stepDone": "Done"
-    }
-  },
   "rooms": {
     "title": "Halaqat",
     "addRoom": "Add halaqah",
@@ -636,7 +625,9 @@
     "rejectStudent": "Reject",
     "noPendingRequests": "No pending requests",
     "pendingSectionTitle": "Pending enrollment requests",
-    "requestDate": "Request date"
+    "requestDate": "Request date",
+    "emptyShare": "Share the link",
+    "addManually": "Add a student manually"
   },
   "language": {
     "ar": "العربية",
@@ -1185,7 +1176,19 @@
     "revokeConfirm": "Revoke this link? It will stop working.",
     "noLinks": "No links yet",
     "liveNow": "Live now",
-    "joinNow": "Join now"
+    "joinNow": "Join now",
+    "firstSession": "First session: {{date}}",
+    "meccaTime": "Mecca time",
+    "telegram": "Telegram",
+    "shareImage": "Share image…",
+    "downloadPng": "Download PNG",
+    "cardSquare": "Square",
+    "cardStory": "Story",
+    "card": "Card",
+    "qrOnly": "QR only",
+    "inviteByEmail": "Invite by email",
+    "stats": "{{joined}}/{{max}} joined · {{visits}} link visits",
+    "inviteMessageDated": "Join the {{name}} halaqah ({{type}} · {{riwaya}}) on Maqraa. First session {{date}} Mecca time."
   },
   "instanceInvite": {
     "title": "Invite to Al-Maqraa",
@@ -1344,5 +1347,17 @@
         "sessions": "Sessions"
       }
     }
+  },
+  "activation": {
+    "noStudentsTitle": "No students yet — share the link before {{weekday}}",
+    "nextSession": "Next session",
+    "enrolledStartsIn": "{{count}} students enrolled · starts {{relative}}",
+    "start": "Start session",
+    "startNow": "Start now",
+    "startLocked": "Enabled 15 minutes before the start time",
+    "noUpcoming": "No upcoming session",
+    "schedule": "Schedule a session",
+    "upcoming": "Next: {{date}}",
+    "counters": "{{sessions}} completed · {{students}} students"
   }
 }

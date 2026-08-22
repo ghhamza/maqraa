@@ -20,4 +20,5 @@ pub struct Room {
     pub enrollment_open: bool,
     pub requires_approval: bool,
     pub created_at: DateTime<Utc>,
+    pub setup_completed_at: Option<DateTime<Utc>>,
 }

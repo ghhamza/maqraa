@@ -114,7 +114,7 @@ export function LoginPage() {
             </p>
           ) : null}
 
-          <Button type="submit" variant="primary" fullWidth loading={loading}>
+          <Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>
             {t("auth.enterButton")}
           </Button>
         </form>

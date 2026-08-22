@@ -20,6 +20,8 @@ struct NotificationRow {
     body_text: String,
     retry_count: i32,
     max_retries: i32,
+    attachment_filename: Option<String>,
+    attachment_content: Option<Vec<u8>>,
 }
 
 fn backoff_minutes(retry_count: i32) -> i64 {
@@ -76,17 +78,31 @@ async fn process_batch(
              FOR UPDATE SKIP LOCKED \
              LIMIT 20 \
          ) \
-         RETURNING id, recipient_email, subject, body_html, body_text, retry_count, max_retries",
+         RETURNING id, recipient_email, subject, body_html, body_text, retry_count, max_retries, \
+                   attachment_filename, attachment_content",
     )
     .fetch_all(pool)
     .await?;
 
     for row in rows {
+        let mut attachments = Vec::new();
+        if let (Some(filename), Some(content)) =
+            (row.attachment_filename.as_ref(), row.attachment_content.as_ref())
+        {
+            if !content.is_empty() {
+                attachments.push(super::provider::EmailAttachment {
+                    filename: filename.clone(),
+                    content: content.clone(),
+                    content_type: "image/png".to_string(),
+                });
+            }
+        }
         let email = OutboundEmail {
             to: row.recipient_email.clone(),
             subject: row.subject.clone(),
             html: row.body_html.clone(),
             text: row.body_text.clone(),
+            attachments,
         };
 
         match provider.send(&email).await {

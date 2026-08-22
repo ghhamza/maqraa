@@ -28,17 +28,21 @@
     "createHalaqaTitle": "أنشئ حلقة جديدة",
     "stepHalaqa": "الحلقة",
     "stepSession": "الحصة",
-    "stepStudents": "الطلاب",
     "next": "التالي",
     "back": "رجوع",
     "skip": "تخطّي",
     "finish": "إنهاء",
-    "skipSessionHint": "يمكنك جدولة الحصص لاحقًا من صفحة الحلقة",
-    "skipStudentsHint": "يمكنك دعوة الطلاب لاحقًا من صفحة الحلقة",
-    "addAnotherStudent": "إضافة طالب آخر",
     "stepHalaqaDone": "تم إنشاء الحلقة",
     "stepSessionDone": "تمت جدولة الحصة الأولى",
-    "stepStudentsDone": "تم تسجيل الطلاب"
+    "stepShare": "شارك",
+    "sessionTitle": "متى تبدأ {{name}}؟",
+    "sessionSubtitle": "سيظهر هذا الموعد في رابط المشاركة حتى يعرف الطلاب متى ينضمّون",
+    "sessionSubmit": "حدّد الموعد وتابع",
+    "sessionLocked": "لا يمكن تخطّي هذه الخطوة — الحلقة بلا موعد لا يمكن مشاركتها",
+    "shareTitle": "حلقتك جاهزة — شاركها الآن ليجدها طلابك",
+    "shareSkip": "شاركت بالفعل — تخطّ",
+    "shareDone": "تمّ — انتقل إلى الحلقة",
+    "firstSessionTitle": "الحصة الأولى"
   },
   "empty": {
     "genericTitle": "لا يوجد شيء هنا بعد",
@@ -137,7 +141,7 @@
     "instanceInvites": "دعوة إلى المقرأة"
   },
   "roomDetail": {
-    "studentsEmptyTitle": "لا يوجد طلاب مسجَّلون بعد",
+    "studentsEmptyTitle": "لا يوجد طلاب بعد",
     "studentsEmptyDescription": "سجّل أوّل طالب لتبدأ تشغيل هذه الحلقة.",
     "sessionsEmptyTitle": "لا توجد حصص مجدولة",
     "sessionsEmptyDescription": "جدوِل الحصة الأولى لهذه الحلقة.",
@@ -401,21 +405,6 @@
       }
     }
   },
-  "room": {
-    "gettingStarted": {
-      "title": "ابدأ حلقتك",
-      "subtitle": "خطوتان لتبدأ تشغيل الحلقة",
-      "step1Title": "سجِّل أوّل طالب",
-      "step1Desc": "ادعُ طلابك للحلقة لتبدأ التلاوة",
-      "step1Cta": "تسجيل طالب",
-      "step2Title": "جدول أوّل حصة",
-      "step2Desc": "حدّد موعد اللقاء الأوّل في تقويم الحلقة",
-      "step2Cta": "إضافة حصة",
-      "skip": "تخطّي وأكمل لاحقاً",
-      "dismissAria": "إخفاء الإرشاد",
-      "stepDone": "تم"
-    }
-  },
   "rooms": {
     "title": "الحلقات",
     "addRoom": "إضافة حلقة",
@@ -636,7 +625,9 @@
     "rejectStudent": "رفض",
     "noPendingRequests": "لا توجد طلبات معلقة",
     "pendingSectionTitle": "طلبات التسجيل المعلقة",
-    "requestDate": "تاريخ الطلب"
+    "requestDate": "تاريخ الطلب",
+    "emptyShare": "شارك الرابط",
+    "addManually": "إضافة طالب يدويًا"
   },
   "language": {
     "ar": "العربية",
@@ -1185,7 +1176,19 @@
     "revokeConfirm": "إبطال هذا الرابط؟ لن يعمل بعد ذلك.",
     "noLinks": "لا توجد روابط بعد",
     "liveNow": "مباشر الآن",
-    "joinNow": "انضمّ الآن"
+    "joinNow": "انضمّ الآن",
+    "firstSession": "الحصة الأولى: {{date}}",
+    "meccaTime": "بتوقيت مكة",
+    "telegram": "تليغرام",
+    "shareImage": "مشاركة الصورة…",
+    "downloadPng": "تحميل PNG",
+    "cardSquare": "مربّع",
+    "cardStory": "ستوري",
+    "card": "البطاقة",
+    "qrOnly": "QR فقط",
+    "inviteByEmail": "دعوة بالبريد",
+    "stats": "{{joined}}/{{max}} انضمّوا · {{visits}} زيارة للرابط",
+    "inviteMessageDated": "انضمّ إلى حلقة {{name}} ({{type}} · {{riwaya}}) على منصة المقرأة. الحصة الأولى {{date}} بتوقيت مكة."
   },
   "instanceInvite": {
     "title": "دعوة إلى المقرأة",
@@ -1344,5 +1347,17 @@
         "sessions": "الحصص"
       }
     }
+  },
+  "activation": {
+    "noStudentsTitle": "لا يوجد طلاب بعد — شارك الرابط قبل {{weekday}}",
+    "nextSession": "الحصة القادمة",
+    "enrolledStartsIn": "{{count}} طلاب مسجّلون · تبدأ {{relative}}",
+    "start": "ابدأ الحصة",
+    "startNow": "ابدأ الآن",
+    "startLocked": "يُفعَّل قبل الموعد بـ ١٥ دقيقة",
+    "noUpcoming": "لا توجد حصة قادمة",
+    "schedule": "جدولة حصة",
+    "upcoming": "القادمة: {{date}}",
+    "counters": "{{sessions}} حصص مكتملة · {{students}} طلاب"
   }
 }

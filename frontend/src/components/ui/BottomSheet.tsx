@@ -63,7 +63,11 @@ export function BottomSheet({ open, onOpenChange, title, children, className, fo
             </DialogPrimitive.Close>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">{children}</div>
-          {footer ? <div className="shrink-0 border-t border-gray-100 px-4 pt-3">{footer}</div> : null}
+          {footer ? (
+            <div className="shrink-0 border-t border-gray-100 px-4 pt-3 [&_[data-slot=button]]:min-h-12">
+              {footer}
+            </div>
+          ) : null}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

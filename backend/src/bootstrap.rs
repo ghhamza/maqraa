@@ -11,7 +11,7 @@ use crate::api::AppState;
 use crate::config::AppConfig;
 use crate::db::create_pool;
 use crate::media::LivekitClient;
-use crate::notifications::{build_provider, spawn_scheduler, spawn_worker};
+use crate::notifications::{build_provider, spawn_onboarding_emails, spawn_scheduler, spawn_worker};
 use crate::rooms::RoomManager;
 use crate::services::storage::StorageService;
 
@@ -69,6 +69,7 @@ pub fn spawn_background_tasks(state: AppState) -> Result<()> {
         let provider = build_provider(&state.config)?;
         spawn_worker(state.db.clone(), provider, state.config.clone());
         spawn_scheduler(state.db.clone(), state.config.clone());
+        spawn_onboarding_emails(state.clone());
     } else {
         if !state.config.resend_api_key.is_empty() {
             tracing::warn!(

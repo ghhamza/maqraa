@@ -353,21 +353,28 @@ export function RoomsPage() {
       title={t("rooms.title")}
       actions={
         isAdmin || canAddRoom(user) ? (
-          <>
+          <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:flex-wrap md:items-center">
             {isAdmin ? (
-              <Button type="button" variant="secondary" asChild>
+              <Button type="button" variant="secondary" fullWidth className="md:w-auto" asChild>
                 <Link to="/rooms/archived">{t("nav.archivedRooms")}</Link>
               </Button>
             ) : null}
             {canAddRoom(user) ? (
-              <Button type="button" variant="primary" onClick={openCreate}>
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                fullWidth
+                className="md:w-auto"
+                onClick={openCreate}
+              >
                 <span className="inline-flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
+                  <Plus className="size-5" />
                   {t("rooms.addRoom")}
                 </span>
               </Button>
             ) : null}
-          </>
+          </div>
         ) : undefined
       }
     >

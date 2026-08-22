@@ -136,6 +136,21 @@ export function useRoom(id: string | undefined) {
   });
 }
 
+export function useCompleteRoomSetup(roomId: string) {
+  const qc = useQueryClient();
+  return useApiMutation<{ setup_completed_at: string }, void>({
+    mutationFn: async () => {
+      const { data } = await api.put<{ setup_completed_at: string }>(
+        `rooms/${roomId}/setup-complete`,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: roomKeys.detail(roomId) });
+    },
+  });
+}
+
 export function useMyEnrollment(roomId: string | undefined, enabled = true) {
   return useQuery({
     queryKey: roomKeys.myEnrollment(roomId ?? ""),

@@ -18,6 +18,8 @@ export interface SessionFormProps {
   lockedRoomId?: string;
   /** Display name when {@link lockedRoomId} is set (wizard after room create). */
   lockedRoomName?: string;
+  /** Override create-mode title (defaults to lockedRoomName). */
+  defaultTitle?: string;
   defaultDatetime?: Date | null;
   presetMorningStart?: boolean;
   editScope?: "this" | "this_and_future" | "all";
@@ -35,6 +37,7 @@ export function SessionForm({
   defaultRoomId,
   lockedRoomId,
   lockedRoomName,
+  defaultTitle,
   defaultDatetime,
   presetMorningStart,
   editScope,
@@ -80,9 +83,15 @@ export function SessionForm({
       const dt = defaultDatetime ? new Date(defaultDatetime) : new Date();
       if (presetMorningStart) {
         dt.setHours(9, 0, 0, 0);
+      } else if (!defaultDatetime) {
+        // datetime-local has no seconds — ceil so "now" isn't already in the past on submit.
+        dt.setSeconds(0, 0);
+        if (dt.getTime() <= Date.now()) {
+          dt.setMinutes(dt.getMinutes() + 1);
+        }
       }
       setRoomId(effectiveDefaultRoomId ?? "");
-      setTitle("");
+      setTitle((defaultTitle ?? lockedRoomName)?.trim() ?? "");
       setDatetimeLocal(formatDatetimeLocalValue(dt));
       setDuration(60);
       setNotes("");
@@ -93,7 +102,16 @@ export function SessionForm({
       setRepeatEndDate("");
       setCreatedCount(null);
     }
-  }, [active, mode, session, effectiveDefaultRoomId, defaultDatetime, presetMorningStart]);
+  }, [
+    active,
+    mode,
+    session,
+    effectiveDefaultRoomId,
+    defaultDatetime,
+    presetMorningStart,
+    lockedRoomName,
+    defaultTitle,
+  ]);
 
   const roomsQuery = useRoomsList("session-form", undefined, {
     enabled: active && !lockedRoomId,
@@ -175,7 +193,13 @@ export function SessionForm({
       return;
     }
     const allowPastAnchor = mode === "create" && repeatEnabled && repeatDays.length > 0;
-    if (mode === "create" && scheduled.getTime() <= Date.now() && !allowPastAnchor) {
+    // Allow ~2 minutes of slack: datetime-local truncates seconds, so "now" can look past.
+    const pastGraceMs = 2 * 60 * 1000;
+    if (
+      mode === "create" &&
+      scheduled.getTime() < Date.now() - pastGraceMs &&
+      !allowPastAnchor
+    ) {
       setError(t("sessions.pastDate"));
       return;
     }
@@ -269,7 +293,7 @@ export function SessionForm({
         <input
           id="session-when"
           type="datetime-local"
-          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[var(--color-text)]"
+          className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-base text-[var(--color-text)] md:text-sm"
           value={datetimeLocal}
           onChange={(e) => setDatetimeLocal(e.target.value)}
           required
@@ -389,7 +413,7 @@ export function SessionForm({
         </label>
         <textarea
           id="session-notes"
-          className="min-h-[88px] w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[var(--color-text)]"
+          className="min-h-[88px] w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-base text-[var(--color-text)] md:text-sm"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
@@ -405,11 +429,25 @@ export function SessionForm({
       ) : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {showFooter ? (
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>
+        <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-end sm:gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            fullWidth
+            className="sm:w-auto"
+            onClick={onCancel}
+          >
             {t("common.cancel")}
           </Button>
-          <Button type="submit" variant="primary" disabled={loading || (!lockedRoomId && !roomId)}>
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            fullWidth
+            className="sm:w-auto"
+            disabled={loading || (!lockedRoomId && !roomId)}
+          >
             {loading ? t("common.loading") : t("common.save")}
           </Button>
         </div>

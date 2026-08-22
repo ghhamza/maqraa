@@ -32,7 +32,7 @@ export function ChartCard({
   return (
     <PageCard className={className}>
       <div className={cn("mb-3 flex flex-wrap items-center justify-between gap-3")}>
-        <h3 className="text-base font-semibold text-[var(--color-text)]">{title}</h3>
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">{title}</h3>
         {actions ? <div className="min-w-0 max-w-full">{actions}</div> : null}
       </div>
       {loading ? (

@@ -746,6 +746,132 @@ pub fn render(template_key: &str, locale: &str, vars: &TemplateVars) -> Rendered
                 text,
             }
         }
+        "setup_incomplete" => {
+            let (subject, greeting, body, note, cta_label) = match locale {
+                "ar" => (
+                    "حلقتك «{{halaqah_name}}» بانتظار موعد حصّتها الأولى",
+                    "السلام عليكم {{teacher_name}}،",
+                    "لا يمكن مشاركة الحلقة قبل تحديد موعد الحصة الأولى — يحتاج الطلاب إلى معرفة متى ينضمّون.",
+                    "يستغرق ذلك أقل من دقيقة.",
+                    "حدّد موعد الحصة الأولى",
+                ),
+                "fr" => (
+                    "Votre halaqa « {{halaqah_name}} » attend sa première séance",
+                    "Assalamou alaykoum {{teacher_name}},",
+                    "La halaqa ne peut pas être partagée avant qu'une date soit fixée — les élèves doivent savoir quand rejoindre.",
+                    "Cela prend moins d'une minute.",
+                    "Fixer la date de la première séance",
+                ),
+                _ => (
+                    "Your halaqah \"{{halaqah_name}}\" is waiting for its first session date",
+                    "Assalamu alaikum {{teacher_name}},",
+                    "The halaqah can't be shared before a date is set — students need to know when to join.",
+                    "It takes less than a minute.",
+                    "Set the first session date",
+                ),
+            };
+            let setup_url = vars.values.get("setup_url").cloned().unwrap_or_default();
+            let (html, text) = email_layout(
+                locale,
+                &sub(subject),
+                &[sub(greeting), sub(body), sub(note)],
+                Some((cta_label, &setup_url)),
+            );
+            RenderedEmail {
+                subject: sub(subject),
+                html,
+                text,
+            }
+        }
+        "share_nudge" => {
+            let (subject, greeting, date_line, body, url_label, wa_label, open_label) =
+                match locale {
+                    "ar" => (
+                        "حلقتك جاهزة — شارك الرابط قبل {{weekday}}",
+                        "السلام عليكم {{teacher_name}}،",
+                        "الحصة الأولى: <strong>{{session_date}}</strong>",
+                        "الطلاب لا يجدون الحلقة بأنفسهم — الرابط هو الطريقة الوحيدة.",
+                        "رابط المشاركة",
+                        "أرسل عبر واتساب",
+                        "افتح الحلقة",
+                    ),
+                    "fr" => (
+                        "Votre halaqa est prête — partagez le lien avant {{weekday}}",
+                        "Assalamou alaykoum {{teacher_name}},",
+                        "Première séance : <strong>{{session_date}}</strong>",
+                        "Les élèves ne trouvent pas la halaqa seuls — le lien est le seul moyen.",
+                        "Lien de partage",
+                        "Envoyer via WhatsApp",
+                        "Ouvrir la halaqa",
+                    ),
+                    _ => (
+                        "Your halaqah is ready — share the link before {{weekday}}",
+                        "Assalamu alaikum {{teacher_name}},",
+                        "First session: <strong>{{session_date}}</strong>",
+                        "Students won't find the halaqah on their own — the link is the only way.",
+                        "Share link",
+                        "Send via WhatsApp",
+                        "Open the halaqah",
+                    ),
+                };
+            let share_url = vars.values.get("share_url").cloned().unwrap_or_default();
+            let room_url = vars.values.get("room_url").cloned().unwrap_or_default();
+            let card_url = vars.values.get("card_url").cloned().unwrap_or_default();
+            let wa_url = vars.values.get("whatsapp_url").cloned().unwrap_or_default();
+            let card_img = if card_url.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    "<p style=\"margin:16px 0;text-align:center;\"><img src=\"{}\" width=\"320\" alt=\"\" style=\"max-width:100%;height:auto;border-radius:8px;\" /></p>",
+                    html_escape_attr(&card_url)
+                )
+            };
+            let buttons = format!(
+                "<div style=\"margin:24px 0;text-align:center;\">\
+                 <a href=\"{wa}\" style=\"display:inline-block;background:#25D366;color:#fff;text-decoration:none;\
+                 font-size:15px;font-weight:600;padding:12px 20px;border-radius:8px;margin:4px;\">{wa_label}</a>\
+                 <a href=\"{room}\" style=\"display:inline-block;background:#1B5E20;color:#fff;text-decoration:none;\
+                 font-size:15px;font-weight:600;padding:12px 20px;border-radius:8px;margin:4px;\">{open_label}</a>\
+                 </div>",
+                wa = html_escape_attr(&wa_url),
+                room = html_escape_attr(&room_url),
+            );
+            let url_block = format!(
+                "<p style=\"margin:0 0 8px;font-size:14px;color:#6B7280;\">{url_label}</p>\
+                 <p style=\"margin:0 0 16px;font-family:ui-monospace,Menlo,monospace;font-size:13px;\
+                 background:#FAFAF5;padding:12px;border-radius:8px;word-break:break-all;\">{url}</p>",
+                url = html_escape_body(&share_url),
+            );
+            let (html, _) = email_layout(
+                locale,
+                &sub(subject),
+                &[
+                    sub(greeting),
+                    sub(date_line),
+                    sub(body),
+                    url_block,
+                    card_img,
+                    buttons,
+                ],
+                None,
+            );
+            let text = format!(
+                "{}\n\n{}\n\n{}\n\n{}: {}\n\nWhatsApp: {}\n{}: {}",
+                sub(subject),
+                sub(greeting),
+                sub(body).replace("<strong>", "").replace("</strong>", ""),
+                url_label,
+                share_url,
+                wa_url,
+                open_label,
+                room_url,
+            );
+            RenderedEmail {
+                subject: sub(subject),
+                html,
+                text,
+            }
+        }
         "new_signup_digest" => {
             let (subject, heading, intro, cta_label) = match locale {
                 "ar" => (
