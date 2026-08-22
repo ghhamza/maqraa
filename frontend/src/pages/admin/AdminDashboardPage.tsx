@@ -102,22 +102,16 @@ export function AdminDashboardPage() {
     });
   }, [data, t]);
 
-  const countryBars = useMemo(() => {
+  const countryDonut = useMemo(() => {
     if (!data) return [];
     return data.demographics.countries.map((c) => {
-      const full =
+      const name =
         c.country_code === "unknown"
           ? t("admin.dashboard.demo.unknown")
           : `${flagEmoji(c.country_code)} ${getCountryName(c.country_code, locale)}`.trim();
-      return { label: full, users: c.users, __full: full };
+      return { key: c.country_code, name, value: c.users };
     });
   }, [data, locale, t]);
-
-  const countryFullLabels = useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const c of countryBars) m[c.label] = c.__full;
-    return m;
-  }, [countryBars]);
 
   const loginDonut = useMemo(() => {
     if (!data) return [];
