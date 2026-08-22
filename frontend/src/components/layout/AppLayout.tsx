@@ -1,62 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useEffect, useMemo, useState } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useMemo, type CSSProperties } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  BarChart3,
-  BookOpen,
-  Calendar,
-  DoorOpen,
-  Home,
-  Link2,
-  Menu,
-  Users,
-} from "lucide-react";
 import { useAuthStore } from "../../stores/authStore";
-import { Button } from "../ui/Button";
-import { Badge } from "../ui/Badge";
 import { LanguageSwitcher } from "../ui/LanguageSwitcher";
-import { roleTranslationKey } from "../../lib/roleLabels";
 import { cn } from "@/lib/utils";
-import {
-  NavigationMenu,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-} from "../ui/navigation-menu";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "../ui/sheet";
-import { ProfileMenu } from "./ProfileMenu";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "../ui/sidebar";
+import { AppSidebar } from "./AppSidebar";
 import { LiveSessionBanner } from "./LiveSessionBanner";
 import { LiveSessionsErrorToast } from "./LiveSessionsErrorToast";
 import { VerifyEmailBanner } from "../VerifyEmailBanner";
 import { DemographicsBanner } from "../DemographicsBanner";
 import { useRoomsStats } from "../../data/rooms";
 
-function roleBadgeVariant(role: string): "green" | "blue" | "gold" {
-  if (role === "teacher") return "blue";
-  if (role === "admin") return "gold";
-  return "green";
-}
-
-/** Route-driven active styles (pathname), so highlight survives refresh and Radix menu merges. */
-function navLinkClassName(isActive: boolean) {
-  return cn(
-    "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors outline-none",
-    isActive
-      ? "bg-primary/25 font-semibold text-primary"
-      : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
-  );
-}
-
-/** YouTube-style LIVE chip — colors from `.live-nav-chip` in `index.css` (beats Radix nav menu defaults). */
+/** YouTube-style LIVE chip — colors from `.live-nav-chip` in `index.css`. */
 function liveNavLinkClassName(isActive: boolean) {
   return cn(
     "live-nav-chip inline-flex min-h-8 min-w-[2.75rem] shrink-0 items-center justify-center rounded-sm px-3 py-1.5 text-xs font-bold shadow-sm outline-none transition-[box-shadow,transform] hover:scale-[1.02] active:scale-[0.98]",
@@ -84,322 +43,51 @@ export function AppLayout() {
   const { t, i18n } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const navigate = useNavigate();
   const location = useLocation();
   const isMushafRoute = location.pathname.startsWith("/mushaf");
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const roomStatsQuery = useRoomsStats(!!user);
-
   const pendingTotal = roomStatsQuery.data?.pending_count_total ?? null;
 
   const localeBase = (i18n.language || "ar").split("-")[0] ?? "ar";
   const isRtl = localeBase === "ar";
-  const logoSrc = localeBase === "ar" ? "/logo-ar.svg" : "/logo.svg";
-  const isAdmin = user?.role === "admin";
+  const contentDir = isRtl ? "rtl" : "ltr";
+  /** Physical side for shadcn (layout shell is forced LTR so flex does not reverse). */
+  const sidebarSide = isRtl ? "right" : "left";
+
   const showPendingDot =
     (user?.role === "teacher" || user?.role === "admin") && (pendingTotal ?? 0) > 0;
 
-  const navActive = useMemo(() => {
-    const p = location.pathname;
-    return {
-      home: p === "/" || p === "",
-      users: p.startsWith("/users"),
-      analytics: p.startsWith("/admin/dashboard"),
-      invites: p.startsWith("/admin/invites"),
-      rooms: p.startsWith("/rooms"),
-      calendar: p === "/calendar",
-      mushaf: p.startsWith("/mushaf"),
-      recitations: p === "/recitations",
-      live: p === "/live",
-      profile: p === "/profile",
-    };
-  }, [location.pathname]);
+  const liveActive = useMemo(() => location.pathname === "/live", [location.pathname]);
 
-  useEffect(() => {
-    setMobileNavOpen(false);
-  }, [location.pathname]);
-
-  const sheetSide = isRtl ? "right" : "left";
-
-  /** Centered reading width on large viewports; mushaf stays edge-to-edge for the book layout. */
+  /** Centered reading width on large viewports; mushaf stays edge-to-edge. */
   const contentShell = "mx-auto w-full min-w-0 max-w-7xl";
 
-  function renderNavLinks(orientation: "row" | "column") {
-    const stack = orientation === "column" ? "flex flex-col gap-1" : "";
-    const linkWrap = orientation === "column" ? "w-full" : "";
+  const sidebar = (
+    <AppSidebar
+      side={sidebarSide}
+      dir={contentDir}
+      user={user}
+      showPendingDot={showPendingDot}
+      onLogout={logout}
+    />
+  );
 
-    return (
-      <div className={cn(stack)}>
-        <NavLink
-          to="/"
-          end
-          className={cn(navLinkClassName(navActive.home), linkWrap)}
-          onClick={() => setMobileNavOpen(false)}
-        >
-          <span className="inline-flex items-center gap-2">
-            <Home className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-            {t("nav.home")}
-          </span>
-        </NavLink>
-        {isAdmin ? (
+  const main = (
+    <SidebarInset dir={contentDir} className="min-w-0 overflow-x-hidden bg-[var(--color-bg)]">
+      <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-[var(--color-surface)] ps-1.5 pe-3 shadow-sm sm:gap-3 sm:pe-4 md:pe-6">
+        <SidebarTrigger className="size-8 shrink-0" aria-label={t("common.openMenu")} />
+
+        <div className="ms-auto flex shrink-0 items-center gap-2 sm:gap-3">
           <NavLink
-            to="/users"
-            className={cn(navLinkClassName(navActive.users), linkWrap)}
-            onClick={() => setMobileNavOpen(false)}
+            to="/live"
+            className={liveNavLinkClassName(liveActive)}
+            aria-label={t("nav.live")}
+            title={t("nav.live")}
           >
-            <span className="inline-flex items-center gap-2">
-              <Users className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-              {t("nav.users")}
-            </span>
+            <LiveNavChipLabel />
           </NavLink>
-        ) : null}
-        {isAdmin ? (
-          <NavLink
-            to="/admin/dashboard"
-            className={cn(navLinkClassName(navActive.analytics), linkWrap)}
-            onClick={() => setMobileNavOpen(false)}
-          >
-            <span className="inline-flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-              {t("admin.dashboard.nav")}
-            </span>
-          </NavLink>
-        ) : null}
-        {isAdmin ? (
-          <NavLink
-            to="/admin/invites"
-            className={cn(navLinkClassName(navActive.invites), linkWrap)}
-            onClick={() => setMobileNavOpen(false)}
-          >
-            <span className="inline-flex items-center gap-2">
-              <Link2 className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-              {t("nav.instanceInvites")}
-            </span>
-          </NavLink>
-        ) : null}
-        <NavLink
-          to="/rooms"
-          className={cn(navLinkClassName(navActive.rooms), linkWrap)}
-          onClick={() => setMobileNavOpen(false)}
-        >
-          <span className="inline-flex items-center gap-2">
-            <DoorOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-            {t("nav.rooms")}
-          </span>
-        </NavLink>
-        <NavLink
-          to="/calendar"
-          className={cn(navLinkClassName(navActive.calendar), linkWrap)}
-          onClick={() => setMobileNavOpen(false)}
-        >
-          <span className="inline-flex items-center gap-2">
-            <Calendar className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-            {t("nav.calendar")}
-          </span>
-        </NavLink>
-        <NavLink
-          to="/recitations"
-          className={cn(navLinkClassName(navActive.recitations), linkWrap)}
-          onClick={() => setMobileNavOpen(false)}
-        >
-          <span className="inline-flex items-center gap-2">
-            <BookOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-            {t("nav.recitations")}
-          </span>
-        </NavLink>
-        <NavLink
-          to="/live"
-          className={cn(liveNavLinkClassName(navActive.live), linkWrap, orientation === "column" && "mt-2")}
-          aria-label={t("nav.live")}
-          title={t("nav.live")}
-          onClick={() => setMobileNavOpen(false)}
-        >
-          <LiveNavChipLabel />
-        </NavLink>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col bg-[var(--color-bg)]">
-      <header className="sticky top-0 z-50 w-full min-w-0 overflow-visible border-b border-border bg-[var(--color-surface)] shadow-sm">
-        <div
-          className={cn(
-            "flex min-w-0 flex-wrap items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 md:gap-4 md:px-6 lg:px-8",
-            contentShell,
-          )}
-        >
-          <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-none md:items-stretch">
-            <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-              <SheetTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 md:hidden"
-                  aria-label={t("common.openMenu")}
-                >
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side={sheetSide} className="flex w-[min(100%,20rem)] flex-col gap-0 bg-[var(--color-surface)] p-0">
-                <SheetHeader className="border-b border-border px-4 py-4 text-start">
-                  <SheetTitle className="sr-only">{t("common.appName")}</SheetTitle>
-                  <img
-                    src={logoSrc}
-                    alt=""
-                    decoding="async"
-                    className="h-8 w-auto max-w-[min(100%,12rem)] object-contain object-start"
-                  />
-                </SheetHeader>
-                <nav className="flex flex-1 flex-col gap-1 p-4" role="navigation">
-                  {renderNavLinks("column")}
-                </nav>
-                <div className="mt-auto border-t border-border p-4">
-                  <LanguageSwitcher fullWidth className="mb-4" />
-                  <div className="mb-3 flex flex-col gap-1">
-                    <span className="text-sm font-semibold text-foreground">{user?.name}</span>
-                    {user ? (
-                      <Badge variant={roleBadgeVariant(user.role)} className="w-fit">
-                        {t(roleTranslationKey(user.role))}
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    fullWidth
-                    onClick={() => {
-                      logout();
-                      navigate("/login", { replace: true });
-                      setMobileNavOpen(false);
-                    }}
-                  >
-                    {t("auth.logout")}
-                  </Button>
-                </div>
-              </SheetContent>
-            </Sheet>
-
-            <NavLink
-              to="/"
-              end
-              className="inline-flex min-w-0 shrink-0 items-center py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md"
-              aria-label={t("common.appName")}
-            >
-              <img
-                src={logoSrc}
-                alt=""
-                decoding="async"
-                className="h-7 w-auto max-w-[min(100%,11rem)] object-contain object-start sm:h-8 sm:max-w-[12rem]"
-              />
-            </NavLink>
-          </div>
-
-          <NavigationMenu
-            viewport={false}
-            className="pointer-events-none hidden max-w-none flex-1 justify-center md:flex"
-          >
-            <NavigationMenuList className="pointer-events-auto flex flex-wrap items-center justify-center gap-0.5">
-              <NavigationMenuItem>
-                <NavigationMenuLink asChild>
-                  <NavLink to="/" end className={navLinkClassName(navActive.home)}>
-                    <span className="inline-flex items-center gap-2">
-                      <Home className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-                      {t("nav.home")}
-                    </span>
-                  </NavLink>
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-              {isAdmin ? (
-                <NavigationMenuItem>
-                  <NavigationMenuLink asChild>
-                    <NavLink to="/users" className={navLinkClassName(navActive.users)}>
-                      <span className="inline-flex items-center gap-2">
-                        <Users className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-                        {t("nav.users")}
-                      </span>
-                    </NavLink>
-                  </NavigationMenuLink>
-                </NavigationMenuItem>
-              ) : null}
-              {isAdmin ? (
-                <NavigationMenuItem>
-                  <NavigationMenuLink asChild>
-                    <NavLink to="/admin/dashboard" className={navLinkClassName(navActive.analytics)}>
-                      <span className="inline-flex items-center gap-2">
-                        <BarChart3 className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-                        {t("admin.dashboard.nav")}
-                      </span>
-                    </NavLink>
-                  </NavigationMenuLink>
-                </NavigationMenuItem>
-              ) : null}
-              {isAdmin ? (
-                <NavigationMenuItem>
-                  <NavigationMenuLink asChild>
-                    <NavLink to="/admin/invites" className={navLinkClassName(navActive.invites)}>
-                      <span className="inline-flex items-center gap-2">
-                        <Link2 className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-                        {t("nav.instanceInvites")}
-                      </span>
-                    </NavLink>
-                  </NavigationMenuLink>
-                </NavigationMenuItem>
-              ) : null}
-              <NavigationMenuItem>
-                <NavigationMenuLink asChild>
-                  <NavLink to="/rooms" className={navLinkClassName(navActive.rooms)}>
-                    <span className="inline-flex items-center gap-2">
-                      <DoorOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-                      {t("nav.rooms")}
-                    </span>
-                  </NavLink>
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-              <NavigationMenuItem>
-                <NavigationMenuLink asChild>
-                  <NavLink to="/calendar" className={navLinkClassName(navActive.calendar)}>
-                    <span className="inline-flex items-center gap-2">
-                      <Calendar className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-                      {t("nav.calendar")}
-                    </span>
-                  </NavLink>
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-              <NavigationMenuItem>
-                <NavigationMenuLink asChild>
-                  <NavLink to="/recitations" className={navLinkClassName(navActive.recitations)}>
-                    <span className="inline-flex items-center gap-2">
-                      <BookOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-                      {t("nav.recitations")}
-                    </span>
-                  </NavLink>
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-              <NavigationMenuItem className="ms-3">
-                <NavLink
-                  to="/live"
-                  className={liveNavLinkClassName(navActive.live)}
-                  aria-label={t("nav.live")}
-                  title={t("nav.live")}
-                >
-                  <LiveNavChipLabel />
-                </NavLink>
-              </NavigationMenuItem>
-            </NavigationMenuList>
-          </NavigationMenu>
-
-          <div className="relative z-50 flex shrink-0 items-center gap-2 sm:gap-3">
-            <LanguageSwitcher className="shrink-0" />
-
-            <ProfileMenu
-              user={user}
-              showPendingDot={showPendingDot}
-              onLogout={logout}
-            />
-          </div>
+          <LanguageSwitcher className="shrink-0" />
         </div>
       </header>
 
@@ -408,12 +96,12 @@ export function AppLayout() {
       <DemographicsBanner />
       <LiveSessionBanner />
 
-      <main
+      <div
         className={cn(
           "w-full min-w-0 max-w-full flex-1",
-          isMushafRoute
-            ? "flex min-h-0 flex-col overflow-hidden p-1 sm:p-2 md:p-3 lg:p-4"
-            : "p-3 sm:p-4 md:p-6 lg:p-8",
+            isMushafRoute
+              ? "flex min-h-0 flex-col overflow-hidden p-1 sm:p-2 md:p-3 lg:p-4"
+              : "px-4 pb-4 pt-5 sm:p-4 md:p-6 lg:p-8",
         )}
       >
         {isMushafRoute ? (
@@ -423,7 +111,33 @@ export function AppLayout() {
             <Outlet />
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </SidebarInset>
+  );
+
+  return (
+    <SidebarProvider
+      defaultOpen
+      // Keep flex geometry physical (LTR). Content/sidebar restore locale dir below.
+      dir="ltr"
+      className="flex h-full min-h-0 w-full min-w-0 flex-1 bg-[var(--color-bg)] !min-h-0"
+      style={
+        {
+          minHeight: 0,
+        } as CSSProperties
+      }
+    >
+      {sidebarSide === "left" ? (
+        <>
+          {sidebar}
+          {main}
+        </>
+      ) : (
+        <>
+          {main}
+          {sidebar}
+        </>
+      )}
+    </SidebarProvider>
   );
 }

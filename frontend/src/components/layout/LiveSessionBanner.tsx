@@ -33,36 +33,39 @@ export function LiveSessionBanner() {
   return (
     <div
       role="status"
-      className="sticky top-16 z-30 flex h-12 w-full min-w-0 items-center gap-3 border-b border-border bg-background px-3 shadow-sm sm:px-4 md:px-6"
+      className="sticky top-14 z-30 w-full min-w-0 border-b border-[#1B5E20]/20 bg-[#E8F5E9] px-4 py-3.5 sm:px-6 sm:py-4 md:px-8"
     >
-      <div className="min-w-0 flex-1 text-start">
-        <p className="truncate text-xs font-semibold text-foreground sm:text-sm">
-          {t("liveSession.banner.title")}
-        </p>
-        <p className="truncate text-[0.7rem] text-muted-foreground sm:text-xs">
-          {title} · {primaryLiveSession.room_name} · {t("liveSession.banner.startedAgo", { minutes })}
-        </p>
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <Button
-          type="button"
-          size="sm"
-          variant="primary"
-          className="h-8 px-3 text-xs"
-          onClick={() => navigate(liveSessionPath(primaryLiveSession.id))}
-        >
-          {t("liveSession.banner.join")}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="shrink-0"
-          aria-label={t("liveSession.banner.dismiss")}
-          onClick={() => setDismissed(true)}
-        >
-          <X className="size-4" />
-        </Button>
+      <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <div className="min-w-0 flex-1 space-y-1 text-start">
+          <p className="text-sm font-semibold text-[var(--color-primary)]">
+            {t("liveSession.banner.title")}
+          </p>
+          <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
+            {title} · {primaryLiveSession.room_name} ·{" "}
+            {t("liveSession.banner.startedAgo", { minutes })}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 self-stretch sm:self-auto">
+          <Button
+            type="button"
+            size="sm"
+            variant="primary"
+            className="min-h-9 flex-1 sm:flex-none"
+            onClick={() => navigate(liveSessionPath(primaryLiveSession.id))}
+          >
+            {t("liveSession.banner.join")}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="shrink-0"
+            aria-label={t("liveSession.banner.dismiss")}
+            onClick={() => setDismissed(true)}
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );

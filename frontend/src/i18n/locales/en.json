@@ -130,6 +130,8 @@
     "users": "Users",
     "rooms": "Halaqat",
     "calendar": "Calendar",
+    "sessions": "Sessions",
+    "groupAdmin": "Administration",
     "recitations": "Recitations",
     "mushaf": "Mushaf",
     "archivedRooms": "Archived halaqat",

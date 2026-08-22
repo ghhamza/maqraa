@@ -13,7 +13,7 @@ export function AudioMigrationBanner() {
 
   return (
     <div
-      className="flex items-start gap-3 rounded-lg border border-[#EDEBDD] bg-[#FAFAF5] p-3 text-sm text-[#6B7280] md:p-4"
+      className="flex items-start gap-3 rounded-lg border border-[#EDEBDD] bg-[#FAFAF5] p-4 text-sm text-[#6B7280] md:gap-4 md:p-5"
       style={{ borderInlineStart: "3px solid #D4A843", fontFamily: "var(--font-ui)" }}
       role="status"
       aria-live="polite"

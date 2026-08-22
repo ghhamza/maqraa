@@ -39,10 +39,10 @@ export function DemographicsBanner() {
 
   return (
     <div
-      className="border-b border-[var(--color-primary)]/25 bg-[var(--color-primary)]/8 px-3 py-2.5 sm:px-4 md:px-6 lg:px-8"
+      className="border-b border-[var(--color-primary)]/25 bg-[var(--color-primary)]/8 px-4 py-3 sm:px-6 md:px-8"
       role="status"
     >
-      <div className="mx-auto flex w-full max-w-7xl min-w-0 items-center justify-between gap-3">
+      <div className="mx-auto flex w-full max-w-7xl min-w-0 items-center justify-between gap-3 sm:gap-4">
         <div className="flex min-w-0 items-center gap-2 text-sm text-[var(--color-text)]">
           <UserRound className="h-4 w-4 shrink-0 text-[var(--color-primary)]" aria-hidden />
           <span className="truncate">{t("profile.demographics.banner")}</span>
