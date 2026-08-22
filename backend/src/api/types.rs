@@ -14,9 +14,6 @@ pub struct UserResponse {
     pub name: String,
     pub email: String,
     pub role: String,
-    pub qf_linked: bool,
-    pub qf_email: Option<String>,
-    pub role_selection_pending: bool,
     pub profile_completion_pending: bool,
     pub gender: Option<String>,
     pub date_of_birth: Option<NaiveDate>,
@@ -26,6 +23,7 @@ pub struct UserResponse {
     pub qiraat_taught: Vec<String>,
     pub email_verified: bool,
     pub preferred_language: String,
+    pub has_password: bool,
 }
 
 /// Response for `GET /api/auth/me`. Flattens the user projection and the
@@ -55,9 +53,6 @@ pub struct UserAdminDetail {
     pub email: String,
     pub role: String,
     pub created_at: DateTime<Utc>,
-    pub qf_linked: bool,
-    pub qf_email: Option<String>,
-    pub role_selection_pending: bool,
     pub profile_completion_pending: bool,
     pub gender: Option<String>,
     pub date_of_birth: Option<NaiveDate>,
@@ -256,8 +251,6 @@ pub struct RecitationPublic {
     pub turn_type: String,
     pub pages_count: Option<f64>,
     pub star_rating: Option<i16>,
-    pub qf_synced_at: Option<DateTime<Utc>>,
-    pub qf_sync_error: Option<String>,
     pub order_index: i32,
     pub plan_status: Option<String>,
 }

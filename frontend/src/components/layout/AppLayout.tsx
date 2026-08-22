@@ -110,7 +110,6 @@ export function AppLayout() {
       recitations: p === "/recitations",
       live: p === "/live",
       profile: p === "/profile",
-      settings: p === "/settings",
     };
   }, [location.pathname]);
 

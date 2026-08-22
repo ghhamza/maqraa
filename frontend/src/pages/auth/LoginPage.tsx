@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BookOpen } from "lucide-react";
+import axios from "axios";
 import { api } from "../../lib/api";
 import { finishAuthNavigation, stashShareNext } from "../../lib/safeNext";
 import { useAuthStore } from "../../stores/authStore";
@@ -12,6 +12,8 @@ import type { AuthResponse } from "../../types";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LanguageSwitcher } from "../../components/ui/LanguageSwitcher";
+import { GoogleSignInButton } from "../../components/auth/GoogleSignInButton";
+import { AuthOrDivider, GoogleAuthSection } from "../../components/auth/GoogleAuthSection";
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -22,25 +24,10 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [qfError, setQfError] = useState<string | null>(null);
-  const [qfLoading, setQfLoading] = useState(false);
 
   useEffect(() => {
     stashShareNext(searchParams.get("next"));
   }, [searchParams]);
-
-  async function handleQfLogin() {
-    if (qfLoading) return;
-    setQfError(null);
-    setQfLoading(true);
-    try {
-      const res = await api.get<{ authorize_url: string }>("auth/qf/start");
-      window.location.href = res.data.authorize_url;
-    } catch {
-      setQfError(t("auth.qfCallback.failed"));
-      setQfLoading(false);
-    }
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,7 +50,14 @@ export function LoginPage() {
       }
       login(body.token, body.user);
       finishAuthNavigation(navigate, body.user);
-    } catch {
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const data = err.response?.data as { error?: string } | undefined;
+        if (data?.error === "use_google_login") {
+          setFormError(t("auth.errors.useGoogleLogin"));
+          return;
+        }
+      }
       setFormError(t("auth.loginFailed"));
     } finally {
       setLoading(false);
@@ -121,29 +115,14 @@ export function LoginPage() {
           <Button type="submit" variant="primary" fullWidth loading={loading}>
             {t("auth.enterButton")}
           </Button>
-
-          <div className="flex items-center gap-3 pt-1">
-            <div className="h-px flex-1 bg-[#6B7280]/30" />
-            <span className="text-sm text-[#6B7280]">{t("auth.or")}</span>
-            <div className="h-px flex-1 bg-[#6B7280]/30" />
-          </div>
-          <button
-            type="button"
-            onClick={() => void handleQfLogin()}
-            disabled={qfLoading}
-            className="w-full rounded-lg border border-[#2c5f7c] bg-white px-4 py-2.5 text-[#2c5f7c] transition hover:bg-[#2c5f7c]/5"
-          >
-            <span className="flex items-center justify-center gap-2">
-              <BookOpen size={18} />
-              {t("auth.continueWithQuranFoundation")}
-            </span>
-          </button>
-          {qfError ? (
-            <p className="text-center text-sm text-red-600" role="alert">
-              {qfError}
-            </p>
-          ) : null}
         </form>
+
+        <GoogleAuthSection>
+          <div className="mt-5 space-y-3">
+            <AuthOrDivider />
+            <GoogleSignInButton />
+          </div>
+        </GoogleAuthSection>
 
         <p className="mt-6 text-center text-sm text-[var(--color-text-muted)]">
           {t("auth.noAccount")}{" "}

@@ -57,10 +57,6 @@ export function finishAuthNavigation(
   navigate: (path: string, opts?: { replace?: boolean }) => void,
   user: User,
 ): void {
-  if (user.role_selection_pending) {
-    navigate("/auth/role-selection", { replace: true });
-    return;
-  }
   if (user.profile_completion_pending) {
     navigate("/profile/complete", { replace: true });
     return;

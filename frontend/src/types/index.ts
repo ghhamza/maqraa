@@ -6,9 +6,6 @@ export interface User {
   name: string;
   email: string;
   role: "student" | "teacher" | "admin";
-  qf_linked: boolean;
-  qf_email: string | null;
-  role_selection_pending: boolean;
   profile_completion_pending: boolean;
   gender: "male" | "female" | null;
   date_of_birth: string | null;
@@ -18,6 +15,8 @@ export interface User {
   qiraat_taught: string[];
   email_verified: boolean;
   preferred_language: string;
+  /** False for Google-only accounts until they set a password. */
+  has_password: boolean;
 }
 
 /** Resolved entitlements from /api/auth/me. Community: empty + unlimited. */
@@ -188,6 +187,7 @@ export interface Participant {
 export interface AuthResponse {
   token: string;
   user: User;
+  is_new?: boolean;
 }
 
 export type SessionStatus = "scheduled" | "in_progress" | "completed" | "cancelled";
@@ -279,8 +279,6 @@ export interface RecitationPublic {
   turn_type: TurnType;
   pages_count: number | null;
   star_rating: number | null;
-  qf_synced_at: string | null;
-  qf_sync_error: string | null;
   /** Display order for session plan rows (session-linked recitations). */
   order_index: number;
   /** Session plan lifecycle; null when not part of a session plan. */

@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { create } from "zustand";
-import { getApiBaseUrl } from "../lib/api";
-import type { Entitlements, User } from "../types";
+import axios from "axios";
+import { api, getApiBaseUrl } from "../lib/api";
+import type { AuthResponse, Entitlements, User } from "../types";
 import { normalizeUserFromApi } from "../lib/profileDetails";
 
 interface AuthState {
@@ -17,6 +18,10 @@ interface AuthState {
   loadUser: () => Promise<void>;
   /** Update cached user (e.g. after profile save). */
   setUser: (user: User) => void;
+  loginWithGoogle: (
+    credential: string,
+    role?: "student" | "teacher",
+  ) => Promise<AuthResponse>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -26,13 +31,36 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
   login: (token, user) => {
     localStorage.setItem("miqraa_token", token);
-    set({ token, user, entitlements: null });
+    set({ token, user: normalizeUserFromApi(user), entitlements: null });
   },
   logout: () => {
     localStorage.removeItem("miqraa_token");
     set({ token: null, user: null, entitlements: null });
   },
   setUser: (user) => set({ user }),
+  loginWithGoogle: async (credential, role) => {
+    try {
+      const { data } = await api.post<AuthResponse>("auth/google", {
+        credential,
+        ...(role ? { role } : {}),
+      });
+      if (!data?.token || !data?.user) {
+        throw new Error("invalid google auth response");
+      }
+      localStorage.setItem("miqraa_token", data.token);
+      set({
+        token: data.token,
+        user: normalizeUserFromApi(data.user),
+        entitlements: null,
+      });
+      return data;
+    } catch (err) {
+      // Avoid the global 401 interceptor wiping state on a failed Google attempt
+      // from the login page — axios interceptor already skips /login|/register.
+      if (axios.isAxiosError(err)) throw err;
+      throw err;
+    }
+  },
   loadUser: async () => {
     const token = localStorage.getItem("miqraa_token");
     if (!token) {

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 export type RoleChoice = "student" | "teacher";
 
 export interface RoleChoiceCardsProps {
-  /** Highlighted card; `null` means none selected (e.g. role-selection flow before choosing). */
+  /** Highlighted card; `null` means none selected. */
   selected: RoleChoice | null;
   onSelect: (role: RoleChoice) => void;
   className?: string;

@@ -49,6 +49,9 @@ export function ProfilePage() {
       setConfirmPassword("");
       setPasswordSuccess(true);
       window.setTimeout(() => setPasswordSuccess(false), 4000);
+      if (user && !user.has_password) {
+        setUser({ ...user, has_password: true });
+      }
     },
     (message) => setPasswordError(message),
   );
@@ -124,10 +127,14 @@ export function ProfilePage() {
       setPasswordError(t("auth.passwordMin"));
       return;
     }
+    if (user.has_password && !currentPassword) {
+      setPasswordError(t("errors.wrong_password"));
+      return;
+    }
     setPasswordLoading(true);
     updatePasswordMutation
       .mutateAsync({
-        current_password: currentPassword,
+        ...(user.has_password ? { current_password: currentPassword } : {}),
         new_password: newPassword,
       })
       .catch(() => {})
@@ -210,16 +217,23 @@ export function ProfilePage() {
       </PageCard>
 
       <PageCard>
-        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("profile.passwordSection")}</h2>
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">
+          {user.has_password ? t("profile.passwordSection") : t("settings.setPassword")}
+        </h2>
+        {!user.has_password ? (
+          <p className="mb-4 text-sm text-[var(--color-text-muted)]">{t("settings.setPasswordHint")}</p>
+        ) : null}
         <form onSubmit={handlePassword} className="space-y-4">
-          <Input
-            label={t("profile.currentPassword")}
-            name="current_password"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            autoComplete="current-password"
-          />
+          {user.has_password ? (
+            <Input
+              label={t("profile.currentPassword")}
+              name="current_password"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          ) : null}
           <Input
             label={t("profile.newPassword")}
             name="new_password"
@@ -246,8 +260,16 @@ export function ProfilePage() {
               {t("profile.passwordChanged")}
             </p>
           ) : null}
-          <Button type="submit" variant="secondary" disabled={passwordLoading || !currentPassword}>
-            {passwordLoading ? t("common.loading") : t("profile.changePassword")}
+          <Button
+            type="submit"
+            variant="secondary"
+            disabled={passwordLoading || (user.has_password && !currentPassword) || !newPassword}
+          >
+            {passwordLoading
+              ? t("common.loading")
+              : user.has_password
+                ? t("profile.changePassword")
+                : t("settings.setPassword")}
           </Button>
         </form>
       </PageCard>

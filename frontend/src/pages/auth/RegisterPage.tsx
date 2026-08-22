@@ -1,33 +1,46 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useState, useEffect, useMemo } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BookOpen } from "lucide-react";
 import { api } from "../../lib/api";
 import { finishAuthNavigation, resolveShareTokenForRegister, stashShareNext } from "../../lib/safeNext";
 import { useAuthStore } from "../../stores/authStore";
 import type { AuthResponse } from "../../types";
 import { RoleChoiceCards } from "../../components/auth/RoleChoiceCards";
+import { GoogleSignInButton } from "../../components/auth/GoogleSignInButton";
+import { AuthOrDivider, GoogleAuthSection } from "../../components/auth/GoogleAuthSection";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LanguageSwitcher } from "../../components/ui/LanguageSwitcher";
 
+type RegisterLocationState = {
+  googleCredential?: string;
+};
+
 export function RegisterPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const login = useAuthStore((s) => s.login);
+  const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
+  const pendingGoogleCredential =
+    (location.state as RegisterLocationState | null)?.googleCredential ?? null;
+  const fromGoogleRolePrompt = searchParams.get("google") === "1" && Boolean(pendingGoogleCredential);
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [role, setRole] = useState<"student" | "teacher">("student");
+  const [role, setRole] = useState<"student" | "teacher" | null>(
+    fromGoogleRolePrompt ? null : "student",
+  );
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [qfError, setQfError] = useState<string | null>(null);
-  const [qfLoading, setQfLoading] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const googleSignupStarted = useRef(false);
 
   useEffect(() => {
     stashShareNext(searchParams.get("next"));
@@ -38,20 +51,43 @@ export function RegisterPage() {
     [searchParams],
   );
 
-  async function handleQfLogin() {
-    if (qfLoading) return;
-    setQfError(null);
-    setQfLoading(true);
-    try {
-      const res = await api.get<{ authorize_url: string }>("auth/qf/start");
-      window.location.href = res.data.authorize_url;
-    } catch {
-      setQfError(t("auth.qfCallback.failed"));
-      setQfLoading(false);
-    }
-  }
+  useEffect(() => {
+    if (!fromGoogleRolePrompt || !pendingGoogleCredential || !role) return;
+    if (googleSignupStarted.current) return;
+    googleSignupStarted.current = true;
+    let cancelled = false;
+    setGoogleError(null);
+    setLoading(true);
+    void loginWithGoogle(pendingGoogleCredential, role)
+      .then((data) => {
+        if (cancelled) return;
+        navigate(location.pathname, { replace: true, state: {} });
+        finishAuthNavigation(navigate, data.user);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          googleSignupStarted.current = false;
+          setGoogleError(t("auth.errors.invalidGoogleToken"));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    fromGoogleRolePrompt,
+    pendingGoogleCredential,
+    role,
+    loginWithGoogle,
+    navigate,
+    location.pathname,
+    t,
+  ]);
 
   function validate(): string | null {
+    if (!role) return t("auth.chooseRoleFirst");
     if (!name.trim() || !email.trim() || !password || !confirm) {
       return t("auth.fillAll");
     }
@@ -72,6 +108,7 @@ export function RegisterPage() {
       setFormError(v);
       return;
     }
+    if (!role) return;
     setFormError(null);
     setLoading(true);
     try {
@@ -113,90 +150,94 @@ export function RegisterPage() {
         </h1>
         <p className="mt-2 text-center text-lg text-[var(--color-text-muted)]">{t("auth.newAccountSubtitle")}</p>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-          <Input
-            label={t("auth.name")}
-            name="name"
-            type="text"
-            autoComplete="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-          <Input
-            label={t("auth.email")}
-            name="email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <Input
-            label={t("auth.password")}
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-          <Input
-            label={t("auth.confirmPassword")}
-            name="confirm"
-            type="password"
-            autoComplete="new-password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            required
-          />
-
-          <fieldset className="space-y-2">
-            <legend
-              id="register-account-type-legend"
-              className="mb-2 text-sm font-medium text-[var(--color-text)]"
-            >
-              {t("auth.accountType")}
-            </legend>
-            <RoleChoiceCards
-              selected={role}
-              onSelect={setRole}
-              legendId="register-account-type-legend"
-            />
-          </fieldset>
-
-          {formError ? (
-            <p className="text-center text-sm text-red-600" role="alert">
-              {formError}
-            </p>
-          ) : null}
-
-          <Button type="submit" variant="primary" fullWidth loading={loading}>
-            {t("auth.createAccount")}
-          </Button>
-
-          <div className="flex items-center gap-3 pt-1">
-            <div className="h-px flex-1 bg-[#6B7280]/30" />
-            <span className="text-sm text-[#6B7280]">{t("auth.or")}</span>
-            <div className="h-px flex-1 bg-[#6B7280]/30" />
-          </div>
-          <button
-            type="button"
-            onClick={() => void handleQfLogin()}
-            disabled={qfLoading}
-            className="w-full rounded-lg border border-[#2c5f7c] bg-white px-4 py-2.5 text-[#2c5f7c] transition hover:bg-[#2c5f7c]/5"
+        {fromGoogleRolePrompt ? (
+          <p
+            className="mt-4 rounded-lg border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 px-3 py-2 text-sm text-[var(--color-text)]"
+            role="status"
           >
-            <span className="flex items-center justify-center gap-2">
-              <BookOpen size={18} />
-              {t("auth.continueWithQuranFoundation")}
-            </span>
-          </button>
-          {qfError ? (
-            <p className="text-center text-sm text-red-600" role="alert">
-              {qfError}
-            </p>
-          ) : null}
-        </form>
+            {t("auth.googleChooseRole")}
+          </p>
+        ) : null}
+
+        <fieldset className="mt-6 space-y-2">
+          <legend
+            id="register-account-type-legend"
+            className="mb-2 text-sm font-medium text-[var(--color-text)]"
+          >
+            {t("auth.accountType")}
+          </legend>
+          <RoleChoiceCards
+            selected={role}
+            onSelect={setRole}
+            legendId="register-account-type-legend"
+          />
+        </fieldset>
+
+        {googleError ? (
+          <p className="mt-3 text-center text-sm text-red-600" role="alert">
+            {googleError}
+          </p>
+        ) : null}
+
+        {!fromGoogleRolePrompt ? (
+          <>
+            <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+              <Input
+                label={t("auth.name")}
+                name="name"
+                type="text"
+                autoComplete="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+              <Input
+                label={t("auth.email")}
+                name="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+              <Input
+                label={t("auth.password")}
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <Input
+                label={t("auth.confirmPassword")}
+                name="confirm"
+                type="password"
+                autoComplete="new-password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                required
+              />
+
+              {formError ? (
+                <p className="text-center text-sm text-red-600" role="alert">
+                  {formError}
+                </p>
+              ) : null}
+
+              <Button type="submit" variant="primary" fullWidth loading={loading}>
+                {t("auth.createAccount")}
+              </Button>
+            </form>
+
+            <GoogleAuthSection>
+              <div className="mt-5 space-y-3">
+                <AuthOrDivider />
+                <GoogleSignInButton role={role ?? undefined} roleReady={role != null} />
+              </div>
+            </GoogleAuthSection>
+          </>
+        ) : null}
 
         <p className="mt-6 text-center text-sm text-[var(--color-text-muted)]">
           {t("auth.hasAccount")}{" "}

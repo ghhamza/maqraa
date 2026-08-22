@@ -106,27 +106,19 @@
       "rateLimited": "Veuillez attendre une minute avant de renvoyer",
       "failed": "Impossible d'envoyer l'e-mail de vérification"
     },
-    "or": "ou",
-    "continueWithQuranFoundation": "Continuer avec Quran.Foundation",
-    "qfCallback": {
-      "verifying": "Vérification de la connexion...",
-      "failed": "Échec de la connexion Quran.Foundation",
-      "linkedSuccess": "Compte Quran.Foundation lié",
-      "retry": "Réessayer",
-      "invalidState": "La demande de connexion a expiré, veuillez réessayer",
-      "nonceMismatch": "La connexion n'a pas pu être vérifiée",
-      "alreadyLinked": "Ce compte est déjà lié à un autre utilisateur"
-    },
     "roleSelection": {
-      "title": "Choisissez votre rôle dans Maqraa",
-      "subtitle": "Vous pourrez modifier ce choix plus tard depuis vos paramètres",
       "student": "Étudiant",
       "studentDesc": "Apprendre le Coran et suivre les cours des enseignants",
       "teacher": "Enseignant",
-      "teacherDesc": "Créer des halaqat et enseigner aux élèves",
-      "continue": "Continuer",
-      "selectFirst": "Veuillez choisir un rôle d'abord",
-      "saveFailed": "Impossible d'enregistrer votre choix, veuillez réessayer"
+      "teacherDesc": "Créer des halaqat et enseigner aux élèves"
+    },
+    "or": "ou",
+    "continueWithGoogle": "Continuer avec Google",
+    "chooseRoleFirst": "Choisissez d'abord le type de compte",
+    "googleChooseRole": "Aucun compte trouvé pour cet e-mail. Choisissez le type de compte pour terminer l'inscription avec Google.",
+    "errors": {
+      "useGoogleLogin": "Ce compte utilise la connexion Google. Utilisez le bouton Google.",
+      "invalidGoogleToken": "Impossible de vérifier votre compte Google. Réessayez."
     }
   },
   "nav": {
@@ -225,7 +217,6 @@
     "viewFullProgress": "Voir la progression complète",
     "myProgress": "Ma progression",
     "progressOverview": "Aperçu de la progression",
-    "qfStreak": "Série Quran.com",
     "surahsCoveredCount": "{{count}} / 114 sourates",
     "dayStreak": "{{days}} jours consécutifs",
     "lastGradeLabel": "Dernière note",
@@ -318,13 +309,10 @@
     "noMatchesTitle": "Aucun utilisateur ne correspond à la recherche",
     "noMatchesDescription": "Essayez d'ajuster votre recherche ou vos filtres.",
     "personalDetails": "Informations personnelles",
-    "integrations": "Intégrations",
     "notProvided": "Non renseigné",
     "profileStatus": "État du profil",
     "profileComplete": "Complet",
     "profileIncomplete": "Incomplet",
-    "qfLinked": "Lié à Quran.Foundation",
-    "qfNotLinked": "Non lié",
     "communication": {
       "title": "Communication",
       "description": "Envoyer des e-mails d'accueil et de soutien à cet enseignant.",
@@ -641,16 +629,6 @@
     "fr": "Français",
     "label": "Langue"
   },
-  "settings": {
-    "qf": {
-      "title": "Quran.Foundation",
-      "description": "Liez votre compte pour synchroniser vos séances de lecture et vos séries avec Quran.com",
-      "linkedAs": "Lié en tant que",
-      "link": "Lier le compte",
-      "unlink": "Délier",
-      "unlinkConfirm": "Êtes-vous sûr de vouloir délier votre compte Quran.Foundation ?"
-    }
-  },
   "errors": {
     "server_error": "Erreur serveur",
     "not_found": "Introuvable",
@@ -686,15 +664,6 @@
     "not_pending": "La demande n'est pas en attente",
     "weak_password": "Le mot de passe doit contenir au moins 8 caractères.",
     "wrong_password": "Le mot de passe actuel est incorrect.",
-    "qf_invalid_state": "La demande de connexion a expiré, veuillez réessayer",
-    "qf_nonce_mismatch": "La connexion n'a pas pu être vérifiée",
-    "qf_account_already_linked_to_other_user": "Ce compte est déjà lié à un autre utilisateur",
-    "role_selection_required": "Veuillez choisir votre rôle pour continuer",
-    "role_already_selected": "Le rôle a déjà été choisi",
-    "invalid_role": "Rôle sélectionné invalide",
-    "qf_upstream_error": "Impossible de contacter Quran Foundation, réessayez plus tard",
-    "qf_not_linked": "L'utilisateur n'a pas lié son compte Quran.com",
-    "qf_insufficient_scope": "Permissions insuffisantes, veuillez relier le compte",
     "invalid_chapter": "Numéro de sourate invalide",
     "invalid_recitation": "Récitateur sélectionné non disponible"
   },
@@ -946,10 +915,6 @@
     "deletedStudent": "Étudiant supprimé",
     "selectStudent": "Sélectionner un étudiant",
     "invalidRange": "Plage de versets invalide pour cette sourate",
-    "qfSynced": "Synchronisé avec Quran.com",
-    "qfSyncSuccess": "Synchronisé avec Quran.com",
-    "qfSyncFailed": "Impossible de synchroniser avec Quran.com",
-    "qfRelinkNeeded": "Re-liez votre compte Quran.com pour activer la synchronisation",
     "audio": {
       "listen": "Écouter",
       "stop": "Arrêter",
@@ -1249,5 +1214,9 @@
       "description": "L'affichage de la séance en direct a échoué de manière inattendue. Vous pouvez réessayer ou quitter la séance.",
       "leave": "Quitter la séance"
     }
+  },
+  "settings": {
+    "setPassword": "Définir un mot de passe",
+    "setPasswordHint": "Vous vous êtes inscrit via Google. Définissez un mot de passe pour vous connecter aussi par e-mail."
   }
 }

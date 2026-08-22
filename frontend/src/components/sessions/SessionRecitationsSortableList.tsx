@@ -18,7 +18,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, GripVertical } from "lucide-react";
+import { GripVertical } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../lib/api";
 import { useApiMutation } from "../../lib/useApiMutation";
@@ -262,15 +262,6 @@ function SortablePlanRow({
         )}
       </div>
       <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-        {plan.qf_synced_at ? (
-          <span
-            title={t("recitations.qfSynced")}
-            className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700"
-          >
-            <Check size={10} />
-            Quran.com
-          </span>
-        ) : null}
         <AyahRangeAudioButton surah={plan.surah} ayahStart={plan.ayah_start} ayahEnd={plan.ayah_end} variant="icon" />
         <GradeBadge grade={plan.grade} />
       </div>

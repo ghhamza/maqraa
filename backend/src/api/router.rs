@@ -27,6 +27,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/s/{token}/ics", get(handlers::share::share_ics))
         .route("/api/auth/register", post(handlers::auth::register))
         .route("/api/auth/login", post(handlers::auth::login))
+        .route("/api/auth/google", post(handlers::auth::google_auth))
+        .route("/api/config", get(handlers::auth::public_config))
         .route("/api/auth/verify-email", post(handlers::auth::verify_email))
         .route(
             "/api/auth/resend-verification",
@@ -40,23 +42,10 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/api/me/whats-new", get(handlers::auth::whats_new))
         .route("/api/auth/password", put(handlers::auth::change_password))
-        .route(
-            "/api/auth/role-selection",
-            post(handlers::auth::role_selection),
-        )
         .route("/api/profile", put(handlers::profile::complete_profile))
-        .route("/api/auth/qf/start", get(handlers::qf::start))
-        .route("/api/auth/qf/exchange", post(handlers::qf::exchange))
-        .route("/api/auth/qf/unlink", post(handlers::qf::unlink))
-        .route("/api/auth/qf/debug", get(handlers::qf::debug_qf))
-        .route("/api/qf/me/streak", get(handlers::qf::get_my_streak))
         .route(
             "/api/quran/recitations/{recitation_id}/by_chapter/{chapter}",
             get(handlers::qf::get_chapter_audio),
-        )
-        .route(
-            "/api/recitations/{id}/qf-sync",
-            get(handlers::qf::get_recitation_qf_sync),
         )
         .route("/api/users/stats", get(handlers::users::stats))
         .route(

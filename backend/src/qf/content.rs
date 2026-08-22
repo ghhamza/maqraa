@@ -217,26 +217,4 @@ impl ContentApiClient {
         tracing::debug!(chapter, count = map.len(), "QF audio chapter fetched");
         Ok(map)
     }
-
-    pub async fn debug_state(&self) -> serde_json::Value {
-        let token_guard = self.token.lock().await;
-        let token_cached = token_guard.is_some();
-        let token_expires_in = token_guard.as_ref().map(|t| {
-            t.expires_at
-                .checked_duration_since(Instant::now())
-                .map(|d| d.as_secs())
-                .unwrap_or(0)
-        });
-        drop(token_guard);
-
-        let cache_guard = self.chapter_cache.lock().await;
-        let chapters_cached: Vec<i32> = cache_guard.keys().map(|(ch, _)| *ch).collect();
-        serde_json::json!({
-            "content_api_token_cached": token_cached,
-            "content_api_token_expires_in_seconds": token_expires_in,
-            "audio_cdn_base_url": self.cfg.audio_cdn_base_url,
-            "chapters_cached": chapters_cached,
-            "default_recitation_id": DEFAULT_RECITATION_ID,
-        })
-    }
 }

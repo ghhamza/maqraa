@@ -13,7 +13,7 @@ fn load_dotenv() {
         tracing::warn!(
             path = %manifest_env.display(),
             error = %e,
-            "failed to parse backend/.env — quote values that contain spaces (e.g. QF_SCOPES)"
+            "failed to parse backend/.env — quote values that contain spaces"
         );
         dotenvy::dotenv().ok();
     }
@@ -29,8 +29,6 @@ pub struct AppConfig {
     pub qf_env: String,
     pub qf_client_id: String,
     pub qf_client_secret: String,
-    pub qf_redirect_uri: String,
-    pub qf_scopes: String,
     pub qf_audio_cdn_base_url: String,
     /// Selector for the media backend. Currently only `Livekit` is supported.
     /// Retained for future variants (e.g. a self-hosted mediasoup sidecar).
@@ -49,6 +47,8 @@ pub struct AppConfig {
     /// Local hour (0–23 in APP_DISPLAY_TZ) when the daily new-signup digest may send.
     pub digest_send_hour: u32,
     pub notifications_enabled: bool,
+    /// Google Identity Services client ID for Sign in with Google (optional).
+    pub google_client_id: Option<String>,
 }
 
 impl AppConfig {
@@ -81,9 +81,6 @@ impl AppConfig {
             qf_env: std::env::var("QF_ENV").unwrap_or_else(|_| "prelive".into()),
             qf_client_id: std::env::var("QF_CLIENT_ID").unwrap_or_default(),
             qf_client_secret: std::env::var("QF_CLIENT_SECRET").unwrap_or_default(),
-            qf_redirect_uri: std::env::var("QF_REDIRECT_URI").unwrap_or_default().trim().to_string(),
-            qf_scopes: std::env::var("QF_SCOPES")
-                .unwrap_or_else(|_| "openid offline_access reading_session streak activity_day user".into()),
             qf_audio_cdn_base_url: std::env::var("QF_AUDIO_CDN_BASE_URL")
                 .unwrap_or_else(|_| "https://audio.qurancdn.com".into()),
             media_backend: std::env::var("APP_MEDIA_BACKEND")
@@ -122,6 +119,10 @@ impl AppConfig {
             notifications_enabled: std::env::var("NOTIFICATIONS_ENABLED")
                 .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
                 .unwrap_or(false),
+            google_client_id: std::env::var("GOOGLE_CLIENT_ID")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty()),
         })
     }
 }

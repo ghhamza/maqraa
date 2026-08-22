@@ -107,13 +107,6 @@ export const recitationKeys = {
   detail: (id: string) => ["recitations", "detail", id] as const,
 };
 
-// ─── Quran Foundation ────────────────────────────────────────────────────
-
-export const qfKeys = {
-  streak: () => ["qf", "streak"] as const,
-  account: () => ["qf", "account"] as const,
-};
-
 // ─── Quran content (audio metadata, etc) ─────────────────────────────────
 
 export const quranKeys = {

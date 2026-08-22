@@ -227,8 +227,6 @@ RECORDINGS_PATH=/home/deploy/maqraa/backend/data/recordings
 QF_ENV=prelive
 QF_CLIENT_ID=<YOUR_QF_CLIENT_ID>
 QF_CLIENT_SECRET=<YOUR_QF_CLIENT_SECRET>
-QF_REDIRECT_URI=https://<APP_DOMAIN>/auth/qf/callback
-QF_SCOPES=openid offline_access reading_session streak activity_day user
 QF_AUDIO_CDN_BASE_URL=https://audio.qurancdn.com
 APP_MEDIA_BACKEND=livekit
 APP_LIVEKIT_URL=wss://<MEDIA_DOMAIN>
@@ -250,10 +248,9 @@ Notes:
   it is never publicly exposed.
 - The LiveKit key/secret generated here **must be identical** on the media
   server (Section 4). Save them.
-- `QF_*` values are only required for Quran Foundation login / streak sync. The
-  app runs without them; QF login simply won't work until they are set and the
-  redirect URI is registered with Quran Foundation. The `QF_REDIRECT_URI` must
-  exactly match a URI registered on the QF application.
+- `QF_*` values are only required for Quran Foundation Content API (reference
+  ayah audio). The app runs without them; audio playback simply won't work
+  until they are set.
 - `.env` is `chmod 600` so only the owner can read the DB password and JWT
   secret.
 
@@ -655,9 +652,8 @@ cd ~/livekit && sudo docker compose restart     # media server
 
 ## 7. Notes and caveats
 
-- **Quran Foundation login** requires valid `QF_CLIENT_ID` /
-  `QF_CLIENT_SECRET` and the `QF_REDIRECT_URI` to be registered, exactly, on
-  the QF application side. Until then, QF login and streak sync will not work;
+- **Quran Foundation Content API** (reference ayah audio) requires valid
+  `QF_CLIENT_ID` / `QF_CLIENT_SECRET`. Until then, audio playback will not work;
   the rest of the platform functions normally.
 - **Secret rotation:** if any secret (DB password, `JWT_SECRET`, LiveKit
   key/secret, QF secret) is ever exposed, rotate it. Rotating `JWT_SECRET`

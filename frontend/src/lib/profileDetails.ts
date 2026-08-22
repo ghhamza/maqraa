@@ -60,9 +60,6 @@ export function profileDetailsFromUser(user: User | null): ProfileDetailsValues 
 export function normalizeUserFromApi(data: User): User {
   return {
     ...data,
-    qf_linked: Boolean(data.qf_linked),
-    qf_email: data.qf_email ?? null,
-    role_selection_pending: Boolean(data.role_selection_pending),
     profile_completion_pending: Boolean(data.profile_completion_pending),
     gender: data.gender === "male" || data.gender === "female" ? data.gender : null,
     date_of_birth: data.date_of_birth ?? null,
@@ -72,6 +69,7 @@ export function normalizeUserFromApi(data: User): User {
     qiraat_taught: data.qiraat_taught ?? [],
     email_verified: Boolean(data.email_verified),
     preferred_language: data.preferred_language ?? "ar",
+    has_password: data.has_password !== false,
   };
 }
 

@@ -106,27 +106,19 @@
       "rateLimited": "يُرجى الانتظار دقيقة قبل إعادة الإرسال",
       "failed": "تعذّر إرسال رسالة التفعيل"
     },
-    "or": "أو",
-    "continueWithQuranFoundation": "المتابعة عبر Quran.Foundation",
-    "qfCallback": {
-      "verifying": "جارٍ التحقق من تسجيل الدخول...",
-      "failed": "فشل تسجيل الدخول عبر Quran.Foundation",
-      "linkedSuccess": "تم ربط حساب Quran.Foundation بنجاح",
-      "retry": "المحاولة مرة أخرى",
-      "invalidState": "انتهت صلاحية طلب تسجيل الدخول، يرجى المحاولة مرة أخرى",
-      "nonceMismatch": "تعذّر التحقق من تسجيل الدخول",
-      "alreadyLinked": "هذا الحساب مرتبط بمستخدم آخر"
-    },
     "roleSelection": {
-      "title": "اختر دورك في المَقْرَأَة",
-      "subtitle": "يمكنك تغيير ذلك لاحقاً من إعدادات حسابك",
       "student": "طالب",
       "studentDesc": "أتعلم القرآن وأتلقى الدروس من المعلمين",
       "teacher": "معلّم",
-      "teacherDesc": "أُنشئ حلقاتي وأقوم بتدريس الطلاب",
-      "continue": "متابعة",
-      "selectFirst": "يرجى اختيار دور أولاً",
-      "saveFailed": "تعذّر حفظ الاختيار، حاول مرة أخرى"
+      "teacherDesc": "أُنشئ حلقاتي وأقوم بتدريس الطلاب"
+    },
+    "or": "أو",
+    "continueWithGoogle": "المتابعة باستخدام Google",
+    "chooseRoleFirst": "اختر نوع الحساب أولاً",
+    "googleChooseRole": "لم يتم العثور على حساب بهذا البريد. اختر نوع الحساب لإكمال التسجيل عبر Google.",
+    "errors": {
+      "useGoogleLogin": "هذا الحساب مسجّل عبر Google. استخدم زر Google لتسجيل الدخول.",
+      "invalidGoogleToken": "تعذّر التحقق من حساب Google. حاول مجددًا."
     }
   },
   "nav": {
@@ -225,7 +217,6 @@
     "viewFullProgress": "عرض التقدّم الكامل",
     "myProgress": "تقدّمي",
     "progressOverview": "نظرة على التقدّم",
-    "qfStreak": "سلسلة Quran.com",
     "surahsCoveredCount": "{{count}} / ١١٤ سورة",
     "dayStreak": "{{days}} يومًا متتاليًا",
     "lastGradeLabel": "آخر تقييم",
@@ -318,13 +309,10 @@
     "noMatchesTitle": "لا يوجد مستخدمون يطابقون البحث",
     "noMatchesDescription": "حاول تعديل البحث أو المرشحات.",
     "personalDetails": "البيانات الشخصية",
-    "integrations": "الربط والتكامل",
     "notProvided": "غير متوفر",
     "profileStatus": "حالة الملف",
     "profileComplete": "مكتمل",
     "profileIncomplete": "غير مكتمل",
-    "qfLinked": "مرتبط بمؤسسة القرآن",
-    "qfNotLinked": "غير مرتبط",
     "communication": {
       "title": "التواصل",
       "description": "إرسال رسائل ترحيب ودعم إلى هذا المعلّم.",
@@ -641,16 +629,6 @@
     "fr": "Français",
     "label": "اللغة"
   },
-  "settings": {
-    "qf": {
-      "title": "Quran.Foundation",
-      "description": "اربط حسابك لمزامنة حصص القراءة والسلاسل مع Quran.com",
-      "linkedAs": "مرتبط بـ",
-      "link": "ربط الحساب",
-      "unlink": "إلغاء الربط",
-      "unlinkConfirm": "هل أنت متأكد من إلغاء ربط حساب Quran.Foundation؟"
-    }
-  },
   "errors": {
     "server_error": "خطأ في الخادم",
     "not_found": "غير موجود",
@@ -686,15 +664,6 @@
     "not_pending": "الطلب ليس قيد الانتظار",
     "weak_password": "كلمة المرور يجب أن تكون 8 أحرف على الأقل.",
     "wrong_password": "كلمة المرور الحالية غير صحيحة.",
-    "qf_invalid_state": "انتهت صلاحية طلب تسجيل الدخول، يرجى المحاولة مرة أخرى",
-    "qf_nonce_mismatch": "تعذّر التحقق من تسجيل الدخول",
-    "qf_account_already_linked_to_other_user": "هذا الحساب مرتبط بمستخدم آخر",
-    "role_selection_required": "يرجى اختيار دورك للمتابعة",
-    "role_already_selected": "تم اختيار الدور بالفعل",
-    "invalid_role": "الدور المحدد غير صالح",
-    "qf_upstream_error": "تعذّر الاتصال بمؤسسة القرآن، حاول لاحقاً",
-    "qf_not_linked": "هذا المستخدم لم يربط حساب Quran.com",
-    "qf_insufficient_scope": "الصلاحيات غير كافية، يرجى إعادة ربط الحساب",
     "invalid_chapter": "رقم السورة غير صالح",
     "invalid_recitation": "القارئ المختار غير متوفّر"
   },
@@ -946,10 +915,6 @@
     "deletedStudent": "طالب محذوف",
     "selectStudent": "اختر طالبًا",
     "invalidRange": "نطاق آيات غير صالح لهذه السورة",
-    "qfSynced": "تمت مزامنة هذه التلاوة مع Quran.com",
-    "qfSyncSuccess": "تمت المزامنة مع Quran.com",
-    "qfSyncFailed": "تعذّرت المزامنة مع Quran.com",
-    "qfRelinkNeeded": "يرجى إعادة ربط حساب Quran.com لتفعيل المزامنة",
     "audio": {
       "listen": "استمع",
       "stop": "إيقاف",
@@ -1249,5 +1214,9 @@
       "description": "تعطّل عرض الحصة المباشرة بشكل غير متوقع. يمكنك إعادة المحاولة أو مغادرة الحصة.",
       "leave": "مغادرة الحصة"
     }
+  },
+  "settings": {
+    "setPassword": "تعيين كلمة مرور",
+    "setPasswordHint": "سجّلت عبر Google. يمكنك تعيين كلمة مرور لتسجيل الدخول بالبريد أيضًا."
   }
 }

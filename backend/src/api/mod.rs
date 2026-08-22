@@ -12,9 +12,9 @@ pub mod ws;
 use crate::config::AppConfig;
 use crate::entitlements::{CommunityEntitlements, EntitlementsProvider};
 use crate::media::LivekitClient;
+use crate::auth::GoogleVerifier;
 use crate::qf::config::QfConfig;
 use crate::qf::content::ContentApiClient;
-use crate::qf::user_api::UserApiClient;
 use crate::rooms::RoomManager;
 use crate::services::storage::StorageService;
 use sqlx::PgPool;
@@ -27,10 +27,9 @@ pub struct AppState {
     #[allow(dead_code)]
     pub storage: StorageService,
     pub config: AppConfig,
-    pub qf_config: QfConfig,
-    pub http: reqwest::Client,
     pub content_api: Arc<ContentApiClient>,
-    pub user_api: Arc<UserApiClient>,
+    /// Present when `GOOGLE_CLIENT_ID` is configured.
+    pub google: Option<Arc<GoogleVerifier>>,
     pub rooms: Arc<RoomManager>,
     pub livekit: Arc<LivekitClient>,
     pub entitlements: Arc<dyn EntitlementsProvider>,
@@ -46,15 +45,16 @@ impl AppState {
     ) -> Self {
         let qf_config = QfConfig::from_app_config(&config);
         let http = reqwest::Client::new();
-        let content_api = Arc::new(ContentApiClient::new(qf_config.clone(), http.clone()));
-        let user_api = Arc::new(UserApiClient::new(qf_config.clone(), http.clone(), db.clone()));
+        let content_api = Arc::new(ContentApiClient::new(qf_config, http));
+        let google = config
+            .google_client_id
+            .as_ref()
+            .map(|id| Arc::new(GoogleVerifier::new(id.clone())));
         Self {
             db,
             storage,
-            qf_config,
-            http,
             content_api,
-            user_api,
+            google,
             config,
             rooms,
             livekit,

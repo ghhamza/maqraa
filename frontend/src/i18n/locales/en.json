@@ -106,27 +106,19 @@
       "rateLimited": "Please wait a minute before resending",
       "failed": "Could not send verification email"
     },
-    "or": "or",
-    "continueWithQuranFoundation": "Continue with Quran.Foundation",
-    "qfCallback": {
-      "verifying": "Verifying sign-in...",
-      "failed": "Quran.Foundation sign-in failed",
-      "linkedSuccess": "Quran.Foundation account linked",
-      "retry": "Try again",
-      "invalidState": "Sign-in request expired, please try again",
-      "nonceMismatch": "Sign-in could not be verified",
-      "alreadyLinked": "This account is already linked to another user"
-    },
     "roleSelection": {
-      "title": "Choose your role in Maqraa",
-      "subtitle": "You can change this later from your account settings",
       "student": "Student",
       "studentDesc": "Learn Quran and take lessons from teachers",
       "teacher": "Teacher",
-      "teacherDesc": "Create halaqat and teach students",
-      "continue": "Continue",
-      "selectFirst": "Please select a role first",
-      "saveFailed": "Could not save your choice, please try again"
+      "teacherDesc": "Create halaqat and teach students"
+    },
+    "or": "or",
+    "continueWithGoogle": "Continue with Google",
+    "chooseRoleFirst": "Choose your account type first",
+    "googleChooseRole": "No account found for this email. Choose your account type to finish signing up with Google.",
+    "errors": {
+      "useGoogleLogin": "This account uses Google sign-in. Use the Google button.",
+      "invalidGoogleToken": "Couldn't verify your Google account. Try again."
     }
   },
   "nav": {
@@ -225,7 +217,6 @@
     "viewFullProgress": "View full progress",
     "myProgress": "My progress",
     "progressOverview": "Progress overview",
-    "qfStreak": "Quran.com streak",
     "surahsCoveredCount": "{{count}} / 114 surahs",
     "dayStreak": "{{days}} day streak",
     "lastGradeLabel": "Last grade",
@@ -318,13 +309,10 @@
     "noMatchesTitle": "No users match your search",
     "noMatchesDescription": "Try adjusting your search or filters.",
     "personalDetails": "Personal details",
-    "integrations": "Integrations",
     "notProvided": "Not provided",
     "profileStatus": "Profile status",
     "profileComplete": "Complete",
     "profileIncomplete": "Incomplete",
-    "qfLinked": "Linked to Quran.Foundation",
-    "qfNotLinked": "Not linked",
     "communication": {
       "title": "Communication",
       "description": "Send onboarding and support emails to this teacher.",
@@ -641,16 +629,6 @@
     "fr": "Français",
     "label": "Language"
   },
-  "settings": {
-    "qf": {
-      "title": "Quran.Foundation",
-      "description": "Link your account to sync reading sessions and streaks with Quran.com",
-      "linkedAs": "Linked as",
-      "link": "Link account",
-      "unlink": "Unlink",
-      "unlinkConfirm": "Are you sure you want to unlink your Quran.Foundation account?"
-    }
-  },
   "errors": {
     "server_error": "Server error",
     "not_found": "Not found",
@@ -686,15 +664,6 @@
     "not_pending": "Request is not pending",
     "weak_password": "Password must be at least 8 characters.",
     "wrong_password": "Current password is incorrect.",
-    "qf_invalid_state": "Sign-in request expired, please try again",
-    "qf_nonce_mismatch": "Sign-in could not be verified",
-    "qf_account_already_linked_to_other_user": "This account is already linked to another user",
-    "role_selection_required": "Please select your role to continue",
-    "role_already_selected": "Role was already selected",
-    "invalid_role": "Invalid role selected",
-    "qf_upstream_error": "Could not reach Quran Foundation, please try again",
-    "qf_not_linked": "User has not linked their Quran.com account",
-    "qf_insufficient_scope": "Insufficient permissions, please re-link",
     "invalid_chapter": "Invalid surah number",
     "invalid_recitation": "Selected reciter not available"
   },
@@ -946,10 +915,6 @@
     "deletedStudent": "Deleted student",
     "selectStudent": "Select a student",
     "invalidRange": "Invalid ayah range for this surah",
-    "qfSynced": "Synced to Quran.com",
-    "qfSyncSuccess": "Synced to Quran.com",
-    "qfSyncFailed": "Could not sync to Quran.com",
-    "qfRelinkNeeded": "Re-link your Quran.com account to enable sync",
     "audio": {
       "listen": "Listen",
       "stop": "Stop",
@@ -1249,5 +1214,9 @@
       "description": "The live session view crashed unexpectedly. You can try again or leave the session.",
       "leave": "Leave session"
     }
+  },
+  "settings": {
+    "setPassword": "Set a password",
+    "setPasswordHint": "You signed up with Google. Set a password to also sign in with email."
   }
 }

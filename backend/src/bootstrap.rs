@@ -61,8 +61,8 @@ pub async fn build_app_state(config: AppConfig) -> Result<AppState> {
 }
 
 /// Spawn all long-running background tasks: notifications worker + scheduler
-/// (when enabled, else the same warn), QF content-token pre-warm, OAuth-state
-/// cleanup (300s), idle-session auto-complete (60s, via on_session_ended).
+/// (when enabled, else the same warn), QF content-token pre-warm, idle-session
+/// auto-complete (60s, via on_session_ended).
 /// Reads everything it needs from `state` (and `state.config`).
 pub fn spawn_background_tasks(state: AppState) -> Result<()> {
     if state.config.notifications_enabled {
@@ -86,23 +86,6 @@ pub fn spawn_background_tasks(state: AppState) -> Result<()> {
                 error = %e,
                 "QF content token pre-warm failed (will retry on first use)"
             ),
-        }
-    });
-    let cleanup_state = state.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
-        loop {
-            interval.tick().await;
-            match sqlx::query("DELETE FROM qf_oauth_states WHERE expires_at < NOW()")
-                .execute(&cleanup_state.db)
-                .await
-            {
-                Ok(done) => tracing::debug!(
-                    rows_deleted = done.rows_affected(),
-                    "deleted expired qf oauth states"
-                ),
-                Err(err) => tracing::debug!(error = %err, "failed to cleanup qf oauth states"),
-            }
         }
     });
 

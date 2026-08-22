@@ -113,13 +113,12 @@ maqraa/
 - `STORAGE_PATH`
 - `RUST_LOG`
 
-### Quran Foundation (optional; needed for OAuth login + streak sync)
+### Quran Foundation Content API (optional; needed for reference audio)
 
 - `QF_ENV`
 - `QF_CLIENT_ID`
 - `QF_CLIENT_SECRET`
-- `QF_REDIRECT_URI`
-- `QF_SCOPES`
+- `QF_AUDIO_CDN_BASE_URL` (optional)
 
 ### LiveKit (required for live sessions)
 

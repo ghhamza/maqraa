@@ -10,10 +10,7 @@ import { RegisterPage } from "./pages/auth/RegisterPage";
 import { ForgotPasswordPage } from "./pages/auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "./pages/auth/ResetPasswordPage";
 import { VerifyEmailPage } from "./pages/auth/VerifyEmailPage";
-import { QfCallbackPage } from "./pages/auth/QfCallbackPage";
-import { RoleSelectionPage } from "./pages/auth/RoleSelectionPage";
 import { ProtectedRoute } from "./components/ui/ProtectedRoute";
-import { RoleSelectionGuard } from "./components/auth/RoleSelectionGuard";
 import { ProfileCompletionGuard } from "./components/auth/ProfileCompletionGuard";
 import { AdminRoute } from "./components/ui/AdminRoute";
 import { AppLayout } from "./components/layout/AppLayout";
@@ -35,7 +32,6 @@ import { StudentProgressPage } from "./pages/recitations/StudentProgressPage";
 import { ProfilePage } from "./pages/profile/ProfilePage";
 import { ProfileCompletePage } from "./pages/profile/ProfileCompletePage";
 import { ShareAcceptPage } from "./pages/share/ShareAcceptPage";
-import { AccountLinksPage } from "./pages/settings/AccountLinksPage";
 import { MushafPage } from "./pages/mushaf/MushafPage";
 import { useAuthStore } from "./stores/authStore";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -73,22 +69,11 @@ const router = createBrowserRouter([
   { path: "/reset-password", element: <ResetPasswordPage /> },
   { path: "/verify-email/:token", element: <VerifyEmailPage /> },
   { path: "/verify-email", element: <VerifyEmailPage /> },
-  { path: "/auth/qf/callback", element: <QfCallbackPage /> },
-  {
-    path: "/auth/role-selection",
-    element: (
-      <ProtectedRoute>
-        <RoleSelectionPage />
-      </ProtectedRoute>
-    ),
-  },
   {
     path: "/profile/complete",
     element: (
       <ProtectedRoute>
-        <RoleSelectionGuard>
-          <ProfileCompletePage />
-        </RoleSelectionGuard>
+        <ProfileCompletePage />
       </ProtectedRoute>
     ),
   },
@@ -96,11 +81,9 @@ const router = createBrowserRouter([
     path: "/share/:token",
     element: (
       <ProtectedRoute>
-        <RoleSelectionGuard>
-          <ProfileCompletionGuard>
-            <ShareAcceptPage />
-          </ProfileCompletionGuard>
-        </RoleSelectionGuard>
+        <ProfileCompletionGuard>
+          <ShareAcceptPage />
+        </ProfileCompletionGuard>
       </ProtectedRoute>
     ),
   },
@@ -108,11 +91,9 @@ const router = createBrowserRouter([
     path: "/sessions/:id/live",
     element: (
       <ProtectedRoute>
-        <RoleSelectionGuard>
-          <ProfileCompletionGuard>
-            <LiveSessionPage />
-          </ProfileCompletionGuard>
-        </RoleSelectionGuard>
+        <ProfileCompletionGuard>
+          <LiveSessionPage />
+        </ProfileCompletionGuard>
       </ProtectedRoute>
     ),
   },
@@ -120,11 +101,9 @@ const router = createBrowserRouter([
     path: "/",
     element: (
       <ProtectedRoute>
-        <RoleSelectionGuard>
-          <ProfileCompletionGuard>
-            <AppLayout />
-          </ProfileCompletionGuard>
-        </RoleSelectionGuard>
+        <ProfileCompletionGuard>
+          <AppLayout />
+        </ProfileCompletionGuard>
       </ProtectedRoute>
     ),
     children: [
@@ -173,7 +152,6 @@ const router = createBrowserRouter([
       { path: "recitations", element: <RecitationsPage /> },
       { path: "live", element: <LiveSessionsPage /> },
       { path: "profile", element: <ProfilePage /> },
-      { path: "settings", element: <AccountLinksPage /> },
       { path: "students/:id/progress", element: <StudentProgressPage /> },
       { path: "mushaf", element: <Navigate to="/mushaf/1" replace /> },
       { path: "mushaf/:page", element: <MushafPage /> },

@@ -260,7 +260,7 @@ export function useResendUserNotification(userId: string, onError?: (message: st
 }
 
 interface UpdatePasswordInput {
-  current_password: string;
+  current_password?: string;
   new_password: string;
 }
 

@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Bell, Link as LinkIcon, LogOut, User } from "lucide-react";
+import { Bell, LogOut, User } from "lucide-react";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Badge } from "../ui/Badge";
 import { roleTranslationKey } from "../../lib/roleLabels";
@@ -147,15 +147,6 @@ export function ProfileMenu({ user, showPendingDot, onLogout }: ProfileMenuProps
           >
             <User className="h-4 w-4 shrink-0" />
             {t("nav.profile")}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-start text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-            onClick={() => go("/settings")}
-          >
-            <LinkIcon className="h-4 w-4 shrink-0" />
-            {t("settings.qf.title")}
           </button>
           <button
             type="button"

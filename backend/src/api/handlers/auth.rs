@@ -58,6 +58,24 @@ pub struct LoginRequest {
 pub struct AuthResponse {
     pub token: String,
     pub user: UserResponse,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_new: Option<bool>,
+}
+
+#[derive(Serialize)]
+pub struct AuthErrorBody {
+    pub error: &'static str,
+}
+
+#[derive(Serialize)]
+pub struct PublicConfigResponse {
+    pub google_client_id: Option<String>,
+}
+
+pub async fn public_config(State(state): State<AppState>) -> Json<PublicConfigResponse> {
+    Json(PublicConfigResponse {
+        google_client_id: state.config.google_client_id.clone(),
+    })
 }
 
 pub async fn register(
@@ -130,33 +148,69 @@ pub async fn register(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(Json(AuthResponse { token, user }))
+    Ok(Json(AuthResponse {
+        token,
+        user,
+        is_new: None,
+    }))
 }
 
 pub async fn login(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
-) -> Result<Json<AuthResponse>, StatusCode> {
+) -> Result<Json<AuthResponse>, (StatusCode, Json<AuthErrorBody>)> {
     let email = req.email.trim().to_lowercase();
     if email.is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(AuthErrorBody {
+                error: "bad_request",
+            }),
+        ));
     }
 
-    let row: (Uuid, String, String, String, String, bool) = sqlx::query_as(
-        "SELECT id, name, email, password_hash, role::text, role_selection_pending \
+    let row: (Uuid, String, String, Option<String>, String) = sqlx::query_as(
+        "SELECT id, name, email, password_hash, role::text \
          FROM users WHERE lower(trim(email)) = $1",
     )
     .bind(&email)
     .fetch_one(&state.db)
     .await
-    .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    .map_err(|_| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(AuthErrorBody {
+                error: "unauthorized",
+            }),
+        )
+    })?;
 
-    if !password::verify_password(&req.password, &row.3).unwrap_or(false) {
-        return Err(StatusCode::UNAUTHORIZED);
+    let Some(ref hash) = row.3 else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(AuthErrorBody {
+                error: "use_google_login",
+            }),
+        ));
+    };
+
+    if !password::verify_password(&req.password, hash).unwrap_or(false) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(AuthErrorBody {
+                error: "unauthorized",
+            }),
+        ));
     }
 
-    let token = jwt::create_token(row.0, &row.4, &state.config.jwt_secret)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let token = jwt::create_token(row.0, &row.4, &state.config.jwt_secret).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(AuthErrorBody {
+                error: "server_error",
+            }),
+        )
+    })?;
 
     let _ = sqlx::query(
         "UPDATE users SET prev_seen_at = last_seen_at, last_seen_at = NOW() WHERE id = $1",
@@ -165,11 +219,219 @@ pub async fn login(
     .execute(&state.db)
     .await;
 
-    let user = load_user_response(&state.db, row.0)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let user = load_user_response(&state.db, row.0).await.map_err(|_| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(AuthErrorBody {
+                error: "unauthorized",
+            }),
+        )
+    })?;
 
-    Ok(Json(AuthResponse { token, user }))
+    Ok(Json(AuthResponse {
+        token,
+        user,
+        is_new: None,
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct GoogleAuthRequest {
+    pub credential: String,
+    #[serde(default)]
+    pub role: Option<String>,
+}
+
+pub async fn google_auth(
+    State(state): State<AppState>,
+    Json(req): Json<GoogleAuthRequest>,
+) -> Result<Json<AuthResponse>, (StatusCode, Json<AuthErrorBody>)> {
+    let Some(verifier) = state.google.as_ref() else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(AuthErrorBody {
+                error: "not_found",
+            }),
+        ));
+    };
+
+    let credential = req.credential.trim();
+    if credential.is_empty() {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(AuthErrorBody {
+                error: "invalid_google_token",
+            }),
+        ));
+    }
+
+    let identity = verifier.verify_id_token(credential).await.map_err(|e| {
+        tracing::debug!(error = %e, "google token verification failed");
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(AuthErrorBody {
+                error: "invalid_google_token",
+            }),
+        )
+    })?;
+
+    let mut tx = state.db.begin().await.map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(AuthErrorBody {
+                error: "server_error",
+            }),
+        )
+    })?;
+
+    // 1) Existing Google-linked user
+    let by_sub: Option<(Uuid, String)> = sqlx::query_as(
+        "SELECT id, role::text FROM users WHERE google_sub = $1",
+    )
+    .bind(&identity.sub)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(AuthErrorBody {
+                error: "server_error",
+            }),
+        )
+    })?;
+
+    let (user_id, role, is_new) = if let Some((id, role)) = by_sub {
+        (id, role, false)
+    } else {
+        // 2) Link by email
+        let by_email: Option<(Uuid, String)> = sqlx::query_as(
+            "SELECT id, role::text FROM users WHERE lower(trim(email)) = $1",
+        )
+        .bind(&identity.email)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(AuthErrorBody {
+                    error: "server_error",
+                }),
+            )
+        })?;
+
+        if let Some((id, role)) = by_email {
+            sqlx::query(
+                "UPDATE users SET google_sub = $1, \
+                 email_verified_at = COALESCE(email_verified_at, NOW()) \
+                 WHERE id = $2",
+            )
+            .bind(&identity.sub)
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(AuthErrorBody {
+                        error: "server_error",
+                    }),
+                )
+            })?;
+            (id, role, false)
+        } else {
+            // 3) Create new user — role required
+            let role = match req.role.as_deref().map(str::trim) {
+                None | Some("") => {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        Json(AuthErrorBody {
+                            error: "role_required",
+                        }),
+                    ));
+                }
+                Some("admin") => {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        Json(AuthErrorBody {
+                            error: "invalid_role",
+                        }),
+                    ));
+                }
+                Some("student") | Some("teacher") => req.role.as_deref().unwrap().trim(),
+                Some(_) => {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        Json(AuthErrorBody {
+                            error: "invalid_role",
+                        }),
+                    ));
+                }
+            };
+
+            let user_id = Uuid::new_v4();
+            sqlx::query(
+                "INSERT INTO users (id, name, email, password_hash, role, google_sub, email_verified_at) \
+                 VALUES ($1, $2, $3, NULL, $4::user_role, $5, NOW())",
+            )
+            .bind(user_id)
+            .bind(&identity.name)
+            .bind(&identity.email)
+            .bind(role)
+            .bind(&identity.sub)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                tracing::warn!(error = %e, "google signup insert failed");
+                (
+                    StatusCode::CONFLICT,
+                    Json(AuthErrorBody {
+                        error: "conflict",
+                    }),
+                )
+            })?;
+            (user_id, role.to_string(), true)
+        }
+    };
+
+    let _ = sqlx::query(
+        "UPDATE users SET prev_seen_at = last_seen_at, last_seen_at = NOW() WHERE id = $1",
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await;
+
+    tx.commit().await.map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(AuthErrorBody {
+                error: "server_error",
+            }),
+        )
+    })?;
+
+    let token = jwt::create_token(user_id, &role, &state.config.jwt_secret).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(AuthErrorBody {
+                error: "server_error",
+            }),
+        )
+    })?;
+
+    let user = load_user_response(&state.db, user_id).await.map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(AuthErrorBody {
+                error: "server_error",
+            }),
+        )
+    })?;
+
+    Ok(Json(AuthResponse {
+        token,
+        user,
+        is_new: if is_new { Some(true) } else { None },
+    }))
 }
 
 #[derive(Serialize)]
@@ -339,84 +601,9 @@ pub async fn update_profile(
 }
 
 #[derive(Deserialize)]
-pub struct RoleSelectionRequest {
-    pub role: String,
-}
-
-pub async fn role_selection(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-    Json(req): Json<RoleSelectionRequest>,
-) -> Result<Json<UserResponse>, (StatusCode, Json<ApiMessage>)> {
-    let pending: bool = sqlx::query_scalar("SELECT role_selection_pending FROM users WHERE id = $1")
-        .bind(auth.id)
-        .fetch_one(&state.db)
-        .await
-        .map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiMessage {
-                    message: "خطأ في الخادم",
-                    code: "server_error",
-                }),
-            )
-        })?;
-
-    if !pending {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ApiMessage {
-                message: "Role already selected",
-                code: "role_already_selected",
-            }),
-        ));
-    }
-
-    let role = match req.role.as_str() {
-        "student" | "teacher" => req.role.as_str(),
-        _ => {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ApiMessage {
-                    message: "Invalid role",
-                    code: "invalid_role",
-                }),
-            ));
-        }
-    };
-
-    sqlx::query("UPDATE users SET role = $1::user_role, role_selection_pending = FALSE WHERE id = $2")
-        .bind(role)
-        .bind(auth.id)
-        .execute(&state.db)
-        .await
-        .map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiMessage {
-                    message: "خطأ في الخادم",
-                    code: "server_error",
-                }),
-            )
-        })?;
-
-    load_user_response(&state.db, auth.id)
-        .await
-        .map(Json)
-        .map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiMessage {
-                    message: "خطأ في الخادم",
-                    code: "server_error",
-                }),
-            )
-        })
-}
-
-#[derive(Deserialize)]
 pub struct ChangePasswordRequest {
-    pub current_password: String,
+    #[serde(default)]
+    pub current_password: Option<String>,
     pub new_password: String,
 }
 
@@ -435,7 +622,7 @@ pub async fn change_password(
         ));
     }
 
-    let hash: String = sqlx::query_scalar("SELECT password_hash FROM users WHERE id = $1")
+    let hash: Option<String> = sqlx::query_scalar("SELECT password_hash FROM users WHERE id = $1")
         .bind(auth.id)
         .fetch_one(&state.db)
         .await
@@ -449,15 +636,18 @@ pub async fn change_password(
             )
         })?;
 
-    if !password::verify_password(&req.current_password, &hash).unwrap_or(false) {
-        // Use 400 (not 401) so the client does not clear the session / redirect to login.
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ApiMessage {
-                message: "كلمة المرور الحالية غير صحيحة",
-                code: "wrong_password",
-            }),
-        ));
+    if let Some(ref existing) = hash {
+        let current = req.current_password.as_deref().unwrap_or("");
+        if !password::verify_password(current, existing).unwrap_or(false) {
+            // Use 400 (not 401) so the client does not clear the session / redirect to login.
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiMessage {
+                    message: "كلمة المرور الحالية غير صحيحة",
+                    code: "wrong_password",
+                }),
+            ));
+        }
     }
 
     let new_hash = password::hash_password(&req.new_password).map_err(|_| {

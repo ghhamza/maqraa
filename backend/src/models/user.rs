@@ -13,7 +13,7 @@ pub struct User {
     pub name: String,
     pub email: String,
     #[serde(skip_serializing)]
-    pub password_hash: String,
+    pub password_hash: Option<String>,
     pub role: UserRole,
     pub created_at: DateTime<Utc>,
     pub gender: Option<String>,
@@ -23,6 +23,8 @@ pub struct User {
     pub spoken_languages: Vec<String>,
     pub qiraat_taught: Vec<String>,
     pub profile_completion_pending: bool,
+    #[serde(skip_serializing)]
+    pub google_sub: Option<String>,
 }
 
 #[allow(dead_code)]

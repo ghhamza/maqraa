@@ -28,7 +28,6 @@ import { GettingStartedChecklist } from "../components/home/GettingStartedCheckl
 import { StudentEmptyHero } from "../components/home/StudentEmptyHero";
 import { TeacherEmptyHero } from "../components/home/TeacherEmptyHero";
 import { sessionNavigatePath } from "../lib/sessionNav";
-import { useQfStreak } from "../data/qf";
 import { useStudentProgress, useStudentRecitations, useUsersStats } from "../data/users";
 import { useRecitationsFeed, useRecitationsStats } from "../data/recitations";
 import { useRoomsList, useRoomsStats } from "../data/rooms";
@@ -366,7 +365,6 @@ function StudentDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
   const surahCount = progress?.surahs_covered.length ?? 0;
   const gradeSum =
     (gd?.excellent ?? 0) + (gd?.good ?? 0) + (gd?.needs_work ?? 0) + (gd?.weak ?? 0);
-  const { data: qfStreak, loading: qfStreakLoading } = useQfStreak(user.qf_linked === true);
 
   if (loading) {
     return (
@@ -515,12 +513,7 @@ function StudentDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
                 </p>
               </div>
             </div>
-            <CombinedStreakCard
-              maqraaStreakDays={progress.streak_days}
-              qfLinked={user.qf_linked}
-              qfStreak={qfStreak}
-              qfLoading={qfStreakLoading}
-            />
+            <CombinedStreakCard maqraaStreakDays={progress.streak_days} />
             <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
               <p className="text-sm text-[var(--color-text-muted)]">{t("home.totalRecitations")}</p>
               <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>

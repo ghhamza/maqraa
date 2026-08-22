@@ -106,27 +106,6 @@ export function UserDetailPage() {
 
       <UserNotificationsSection userId={user.id} />
 
-      <PageCard>
-        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("users.integrations")}</h2>
-        <dl className="space-y-3">
-          <div className="grid gap-1 sm:grid-cols-[minmax(0,11rem)_1fr] sm:gap-4">
-            <dt className="text-sm font-medium text-[var(--color-text-muted)]">{t("settings.qf.title")}</dt>
-            <dd className="text-sm text-[var(--color-text)]">
-              {user.qf_linked ? (
-                <span>
-                  {t("users.qfLinked")}
-                  {user.qf_email ? (
-                    <span className="mt-0.5 block text-[var(--color-text-muted)]">{user.qf_email}</span>
-                  ) : null}
-                </span>
-              ) : (
-                t("users.qfNotLinked")
-              )}
-            </dd>
-          </div>
-        </dl>
-      </PageCard>
-
       <UserFormModal
         open={formOpen}
         mode="edit"
