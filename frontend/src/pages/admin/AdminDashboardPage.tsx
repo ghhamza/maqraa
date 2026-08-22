@@ -325,14 +325,7 @@ export function AdminDashboardPage() {
           </ChartCard>
 
           <ChartCard title={t("admin.dashboard.tabs.countries")} loading={loading}>
-            <Bars
-              data={countryBars}
-              categoryKey="label"
-              layout="horizontal"
-              series={[{ dataKey: "users", name: t("admin.dashboard.kpi.users"), color: palette.primary }]}
-              fullLabels={countryFullLabels}
-              isRtl={isRtl}
-            />
+            <Donut data={countryDonut} height={180} />
           </ChartCard>
 
           <ChartCard title={t("admin.dashboard.tabs.login")} loading={loading}>
