@@ -4,7 +4,7 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { userKeys } from "../lib/queryKeys";
-import { normalizeUserPublic } from "../lib/profileDetails";
+import { normalizeUserFromApi, normalizeUserPublic } from "../lib/profileDetails";
 import { useApiMutation } from "../lib/useApiMutation";
 import type { Paginated, RecitationPublic, StudentProgress, User, UserNotificationItem, UserPublic, UserStats } from "../types";
 

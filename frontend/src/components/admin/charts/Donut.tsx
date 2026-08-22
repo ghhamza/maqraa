@@ -4,7 +4,7 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useTranslation } from "react-i18next";
 import { ChartTooltip } from "./ChartTooltip";
-import { chartFont, colorForKey, formatLatinNumber, palette } from "./chartTheme";
+import { chartFont, colorForKey, formatLatinNumber } from "./chartTheme";
 
 export interface DonutSlice {
   key: string;

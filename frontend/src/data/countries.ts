@@ -86,8 +86,8 @@ export function getGroupedCountries(locale: string): {
 } {
   const prioritySet = new Set<string>(PRIORITY_COUNTRY_CODES);
   const all = getSortedCountries(locale);
-  const priorityOrder = new Map(
-    PRIORITY_COUNTRY_CODES.map((code, i) => [code, i] as const),
+  const priorityOrder = new Map<string, number>(
+    PRIORITY_COUNTRY_CODES.map((code, i) => [code, i]),
   );
   const priority = all
     .filter((c) => prioritySet.has(c.code))
