@@ -8,6 +8,7 @@ import { api, userFacingApiError } from "../../lib/api";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LanguageSwitcher } from "../../components/ui/LanguageSwitcher";
+import { AuthBrandHeader } from "../../components/auth/AuthBrandHeader";
 
 export function ResetPasswordPage() {
   const { t } = useTranslation();
@@ -57,12 +58,7 @@ export function ResetPasswordPage() {
         <div className="absolute end-4 top-4">
           <LanguageSwitcher compact />
         </div>
-        <h1
-          className="text-center text-3xl font-bold text-[var(--color-text)]"
-          style={{ fontFamily: "var(--font-quran)" }}
-        >
-          {t("auth.resetPassword.title")}
-        </h1>
+        <AuthBrandHeader subtitle={t("auth.resetPassword.title")} />
 
         {invalidToken ? (
           <p className="mt-8 text-center text-sm text-red-600" role="alert">

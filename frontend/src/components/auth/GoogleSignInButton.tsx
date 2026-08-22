@@ -33,14 +33,57 @@ export function GoogleSignInButton({
   const containerRef = useRef<HTMLDivElement>(null);
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [width, setWidth] = useState(0);
   const roleRef = useRef(role);
   roleRef.current = role;
+  const onCredentialRef = useRef<(credential: string) => void>(() => {});
+
+  onCredentialRef.current = (credential: string) => {
+    void (async () => {
+      setError(null);
+      try {
+        const data = await loginWithGoogle(credential, roleRef.current);
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          finishAuthNavigation(navigate, data.user);
+        }
+      } catch (err) {
+        const code = googleErrorCode(err);
+        if (code === "role_required") {
+          navigate("/register?google=1", {
+            replace: true,
+            state: { googleCredential: credential },
+          });
+          return;
+        }
+        setError(t("auth.errors.invalidGoogleToken"));
+      }
+    })();
+  };
+
+  useEffect(() => {
+    if (!roleReady) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    const applyWidth = () => {
+      const next = Math.floor(el.getBoundingClientRect().width);
+      if (next > 0) setWidth(next);
+    };
+    applyWidth();
+
+    const ro = new ResizeObserver(() => applyWidth());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [roleReady]);
 
   useEffect(() => {
     if (!roleReady) {
       setEnabled(true);
       return;
     }
+    if (width < 1) return;
     const el = containerRef.current;
     if (!el) return;
     let cancelled = false;
@@ -49,33 +92,8 @@ export function GoogleSignInButton({
       try {
         const ok = await renderGoogleButton(el, {
           locale: i18n.language,
-          onCredential: (credential) => {
-            void (async () => {
-              setError(null);
-              try {
-                const data = await loginWithGoogle(credential, roleRef.current);
-                if (onSuccess) {
-                  onSuccess();
-                } else {
-                  finishAuthNavigation(navigate, data.user);
-                }
-              } catch (err) {
-                const code = googleErrorCode(err);
-                if (code === "role_required") {
-                  navigate("/register?google=1", {
-                    replace: true,
-                    state: { googleCredential: credential },
-                  });
-                  return;
-                }
-                if (code === "invalid_google_token") {
-                  setError(t("auth.errors.invalidGoogleToken"));
-                  return;
-                }
-                setError(t("auth.errors.invalidGoogleToken"));
-              }
-            })();
-          },
+          width,
+          onCredential: (credential) => onCredentialRef.current(credential),
         });
         if (!cancelled) setEnabled(ok);
       } catch {
@@ -87,7 +105,7 @@ export function GoogleSignInButton({
       cancelled = true;
       el.innerHTML = "";
     };
-  }, [i18n.language, roleReady, loginWithGoogle, navigate, onSuccess, t]);
+  }, [i18n.language, roleReady, width]);
 
   if (enabled === false) return null;
 
@@ -103,7 +121,7 @@ export function GoogleSignInButton({
     <div className="w-full space-y-2">
       <div
         ref={containerRef}
-        className="flex w-full justify-center"
+        className="w-full overflow-hidden"
         aria-label={t("auth.continueWithGoogle")}
       />
       {error ? (

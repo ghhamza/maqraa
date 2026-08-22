@@ -66,7 +66,7 @@ export async function renderGoogleButton(
   window.google.accounts.id.renderButton(el, {
     theme: "outline",
     size: "large",
-    shape: "pill",
+    shape: "rectangular",
     width: options.width ?? Math.min(el.clientWidth || 320, 400),
     locale: gsiLocale(options.locale),
   });

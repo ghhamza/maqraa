@@ -14,6 +14,7 @@ import { Input } from "../../components/ui/Input";
 import { LanguageSwitcher } from "../../components/ui/LanguageSwitcher";
 import { GoogleSignInButton } from "../../components/auth/GoogleSignInButton";
 import { AuthOrDivider, GoogleAuthSection } from "../../components/auth/GoogleAuthSection";
+import { AuthBrandHeader } from "../../components/auth/AuthBrandHeader";
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -73,15 +74,16 @@ export function LoginPage() {
         <div className="absolute end-4 top-4">
           <LanguageSwitcher compact />
         </div>
-        <h1
-          className="text-center text-4xl font-bold text-[var(--color-text)]"
-          style={{ fontFamily: "var(--font-quran)" }}
-        >
-          {t("common.appName")}
-        </h1>
-        <p className="mt-2 text-center text-lg text-[var(--color-text-muted)]">{t("auth.loginTitle")}</p>
+        <AuthBrandHeader subtitle={t("auth.loginTitle")} subtitleClassName="mt-4" />
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+        <GoogleAuthSection>
+          <div className="mt-6 space-y-3">
+            <GoogleSignInButton />
+            <AuthOrDivider />
+          </div>
+        </GoogleAuthSection>
+
+        <form onSubmit={handleSubmit} className="mt-5 space-y-5">
           <Input
             label={t("auth.email")}
             name="email"
@@ -116,13 +118,6 @@ export function LoginPage() {
             {t("auth.enterButton")}
           </Button>
         </form>
-
-        <GoogleAuthSection>
-          <div className="mt-5 space-y-3">
-            <AuthOrDivider />
-            <GoogleSignInButton />
-          </div>
-        </GoogleAuthSection>
 
         <p className="mt-6 text-center text-sm text-[var(--color-text-muted)]">
           {t("auth.noAccount")}{" "}

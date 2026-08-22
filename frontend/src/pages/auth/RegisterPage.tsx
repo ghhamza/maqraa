@@ -11,6 +11,7 @@ import type { AuthResponse } from "../../types";
 import { RoleChoiceCards } from "../../components/auth/RoleChoiceCards";
 import { GoogleSignInButton } from "../../components/auth/GoogleSignInButton";
 import { AuthOrDivider, GoogleAuthSection } from "../../components/auth/GoogleAuthSection";
+import { AuthBrandHeader } from "../../components/auth/AuthBrandHeader";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LanguageSwitcher } from "../../components/ui/LanguageSwitcher";
@@ -142,13 +143,7 @@ export function RegisterPage() {
         <div className="absolute end-4 top-4">
           <LanguageSwitcher compact />
         </div>
-        <h1
-          className="text-center text-4xl font-bold text-[var(--color-text)]"
-          style={{ fontFamily: "var(--font-quran)" }}
-        >
-          {t("common.appName")}
-        </h1>
-        <p className="mt-2 text-center text-lg text-[var(--color-text-muted)]">{t("auth.newAccountSubtitle")}</p>
+        <AuthBrandHeader subtitle={t("auth.newAccountSubtitle")} />
 
         {fromGoogleRolePrompt ? (
           <p
@@ -181,7 +176,14 @@ export function RegisterPage() {
 
         {!fromGoogleRolePrompt ? (
           <>
-            <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+            <GoogleAuthSection>
+              <div className="mt-6 space-y-3">
+                <GoogleSignInButton role={role ?? undefined} roleReady={role != null} />
+                <AuthOrDivider />
+              </div>
+            </GoogleAuthSection>
+
+            <form onSubmit={handleSubmit} className="mt-5 space-y-5">
               <Input
                 label={t("auth.name")}
                 name="name"
@@ -229,13 +231,6 @@ export function RegisterPage() {
                 {t("auth.createAccount")}
               </Button>
             </form>
-
-            <GoogleAuthSection>
-              <div className="mt-5 space-y-3">
-                <AuthOrDivider />
-                <GoogleSignInButton role={role ?? undefined} roleReady={role != null} />
-              </div>
-            </GoogleAuthSection>
           </>
         ) : null}
 
