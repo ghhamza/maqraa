@@ -35,8 +35,8 @@ fn require_admin(auth: &AuthenticatedUser) -> Result<(), StatusCode> {
 
 fn parse_range_days(raw: Option<i32>) -> i32 {
     match raw {
-        Some(30) | Some(90) | Some(365) => raw.unwrap(),
-        _ => 90,
+        Some(0) | Some(30) | Some(90) | Some(365) => raw.unwrap(),
+        _ => 0,
     }
 }
 

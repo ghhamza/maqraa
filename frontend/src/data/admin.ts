@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { adminKeys } from "../lib/queryKeys";
 
-export type DashboardRangeDays = 30 | 90 | 365;
+export type DashboardRangeDays = 0 | 30 | 90 | 365;
 
 export interface AdminDashboard {
   generated_at: string;

@@ -41,7 +41,7 @@ const loginColorMap: Record<string, string> = {
 
 export function AdminDashboardPage() {
   const { t, i18n } = useTranslation();
-  const [days, setDays] = useState<DashboardRangeDays>(90);
+  const [days, setDays] = useState<DashboardRangeDays>(0);
   const locale = intlLocaleForAppLanguage(i18n.language);
   const isRtl = i18n.dir() === "rtl";
   const query = useAdminDashboard(days);
@@ -226,7 +226,8 @@ export function AdminDashboardPage() {
       }
       actions={
         <Tabs value={String(days)} onValueChange={(v) => setDays(Number(v) as DashboardRangeDays)}>
-          <TabsList className="w-auto min-w-[14rem]">
+          <TabsList className="w-auto min-w-[18rem]">
+            <TabsTrigger value="0">{t("admin.dashboard.range.0")}</TabsTrigger>
             <TabsTrigger value="30">{t("admin.dashboard.range.30")}</TabsTrigger>
             <TabsTrigger value="90">{t("admin.dashboard.range.90")}</TabsTrigger>
             <TabsTrigger value="365">{t("admin.dashboard.range.365")}</TabsTrigger>

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 use axum::http::StatusCode;
-use chrono::{Datelike, Duration, NaiveDate, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
 use sqlx::FromRow;
 use std::collections::HashMap;
 
@@ -449,10 +449,14 @@ fn format_week(d: NaiveDate) -> String {
     d.format("%Y-%m-%d").to_string()
 }
 
-fn week_keys(range_days: i32) -> Vec<NaiveDate> {
+fn week_keys(range_days: i32, earliest: Option<NaiveDate>) -> Vec<NaiveDate> {
     let today = Utc::now().date_naive();
-    let start = week_start_monday(today - Duration::days(range_days as i64));
     let end = week_start_monday(today);
+    let start = if range_days == 0 {
+        week_start_monday(earliest.unwrap_or(today))
+    } else {
+        week_start_monday(today - Duration::days(range_days as i64))
+    };
     let mut weeks = Vec::new();
     let mut cur = start;
     while cur <= end {
@@ -466,8 +470,12 @@ pub async fn load_timeseries(
     db: &sqlx::PgPool,
     range_days: i32,
 ) -> Result<DashboardTimeseries, StatusCode> {
-    // Bind an explicit timestamptz lower bound — more reliable than make_interval via sqlx.
-    let since = Utc::now() - Duration::days(range_days as i64);
+    // 0 = all time (epoch). Otherwise bind an explicit timestamptz lower bound.
+    let since = if range_days == 0 {
+        DateTime::<Utc>::UNIX_EPOCH
+    } else {
+        Utc::now() - Duration::days(range_days as i64)
+    };
 
     let (signups_raw, sessions_raw, recitations_raw, annotations_raw) = tokio::try_join!(
         sqlx::query_as::<_, SignupDbRow>(
@@ -514,7 +522,17 @@ pub async fn load_timeseries(
     )
     .map_err(|e| map_err(e, "admin dashboard timeseries failed"))?;
 
-    let weeks = week_keys(range_days);
+    let earliest = [
+        signups_raw.first().map(|r| r.week),
+        sessions_raw.first().map(|r| r.week),
+        recitations_raw.first().map(|r| r.week),
+        annotations_raw.first().map(|r| r.week),
+    ]
+    .into_iter()
+    .flatten()
+    .min();
+
+    let weeks = week_keys(range_days, earliest);
 
     let signup_map: HashMap<NaiveDate, &SignupDbRow> = signups_raw
         .iter()

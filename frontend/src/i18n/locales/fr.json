@@ -1240,6 +1240,7 @@
       "title": "Tableau de bord analytique",
       "nav": "Analytique",
       "range": {
+        "0": "Tout",
         "30": "30 jours",
         "90": "90 jours",
         "365": "1 an"
