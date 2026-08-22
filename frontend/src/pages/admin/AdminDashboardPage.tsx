@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChartCard } from "../../components/admin/ChartCard";
+import { CountryDonutTable } from "../../components/admin/CountryDonutTable";
 import { KpiCard } from "../../components/admin/KpiCard";
 import { Bars, Donut, Trend, formatLatinNumber, gradeColors, palette, severityColors } from "../../components/admin/charts";
 import { PageShell } from "../../components/layout/PageShell";
@@ -324,8 +325,12 @@ export function AdminDashboardPage() {
             />
           </ChartCard>
 
-          <ChartCard title={t("admin.dashboard.tabs.countries")} loading={loading}>
-            <Donut data={countryDonut} height={180} />
+          <ChartCard
+            title={t("admin.dashboard.tabs.countries")}
+            loading={loading}
+            className="sm:col-span-2"
+          >
+            <CountryDonutTable data={countryDonut} />
           </ChartCard>
 
           <ChartCard title={t("admin.dashboard.tabs.login")} loading={loading}>

@@ -17,9 +17,23 @@ interface DonutProps {
   height?: number;
   /** Override colors by key (e.g. gender male/female). */
   colorMap?: Record<string, string>;
+  /** When false, only the ring is rendered (pair with an external table). Default true. */
+  showLegend?: boolean;
+  /** Highlight this slice; others are dimmed. */
+  activeKey?: string | null;
+  onActiveKeyChange?: (key: string | null) => void;
+  onSliceClick?: (key: string) => void;
 }
 
-export function Donut({ data, height = 140, colorMap }: DonutProps) {
+export function Donut({
+  data,
+  height = 140,
+  colorMap,
+  showLegend = true,
+  activeKey = null,
+  onActiveKeyChange,
+  onSliceClick,
+}: DonutProps) {
   const { t } = useTranslation();
   const total = data.reduce((s, d) => s + d.value, 0);
   const colored = data.map((d, i) => ({
@@ -38,6 +52,8 @@ export function Donut({ data, height = 140, colorMap }: DonutProps) {
     );
   }
 
+  const interactive = Boolean(onActiveKeyChange || onSliceClick);
+
   return (
     <div
       className="flex min-w-0 items-center justify-center gap-4"
@@ -54,10 +70,27 @@ export function Donut({ data, height = 140, colorMap }: DonutProps) {
               outerRadius="85%"
               paddingAngle={2}
               stroke="none"
+              onMouseEnter={(_, index) => onActiveKeyChange?.(colored[index]?.key ?? null)}
+              onMouseLeave={() => onActiveKeyChange?.(null)}
+              onClick={(_, index) => {
+                const key = colored[index]?.key;
+                if (key) onSliceClick?.(key);
+              }}
+              style={{ cursor: interactive ? "pointer" : undefined }}
             >
-              {colored.map((d) => (
-                <Cell key={d.key} fill={d.color} />
-              ))}
+              {colored.map((d) => {
+                const dimmed = activeKey != null && d.key !== activeKey;
+                const active = activeKey === d.key;
+                return (
+                  <Cell
+                    key={d.key}
+                    fill={d.color}
+                    fillOpacity={dimmed ? 0.28 : 1}
+                    stroke={active ? "#fff" : "none"}
+                    strokeWidth={active ? 2 : 0}
+                  />
+                );
+              })}
             </Pie>
             <Tooltip content={<ChartTooltip />} />
           </PieChart>
@@ -69,24 +102,33 @@ export function Donut({ data, height = 140, colorMap }: DonutProps) {
           <span className="text-[10px] text-[var(--color-text-muted)]">{t("admin.dashboard.total")}</span>
         </div>
       </div>
-      <ul className="min-w-0 max-w-[12rem] space-y-1.5 text-xs">
-        {colored.map((d) => {
-          const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
-          return (
-            <li key={d.key} className="flex min-w-0 items-center gap-2">
-              <span
-                className="size-2.5 shrink-0 rounded-sm"
-                style={{ background: d.color }}
-                aria-hidden
-              />
-              <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">{d.name}</span>
-              <span className="shrink-0 tabular-nums text-[var(--color-text-muted)]">
-                {formatLatinNumber(d.value, 0)} · {pct}%
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      {showLegend ? (
+        <ul className="min-w-0 max-w-[12rem] space-y-1.5 text-xs">
+          {colored.map((d) => {
+            const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
+            const dimmed = activeKey != null && d.key !== activeKey;
+            return (
+              <li
+                key={d.key}
+                className={`flex min-w-0 items-center gap-2 ${dimmed ? "opacity-40" : ""}`}
+                onMouseEnter={() => onActiveKeyChange?.(d.key)}
+                onMouseLeave={() => onActiveKeyChange?.(null)}
+                onClick={() => onSliceClick?.(d.key)}
+              >
+                <span
+                  className="size-2.5 shrink-0 rounded-sm"
+                  style={{ background: d.color }}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">{d.name}</span>
+                <span className="shrink-0 tabular-nums text-[var(--color-text-muted)]">
+                  {formatLatinNumber(d.value, 0)} · {pct}%
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </div>
   );
 }
