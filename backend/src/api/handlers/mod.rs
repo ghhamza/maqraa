@@ -13,5 +13,6 @@ pub mod rooms;
 pub mod schedules;
 pub mod sessions;
 pub mod share;
+pub mod share_card;
 pub mod users;
 pub mod qf;

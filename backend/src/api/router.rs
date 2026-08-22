@@ -24,6 +24,7 @@ pub fn build_router(state: AppState) -> Router {
             get(|| async { "بسم الله — Al-Maqraa is running" }),
         )
         .route("/s/{token}", get(handlers::share::share_landing))
+        .route("/s/{token}/card.png", get(handlers::share_card::share_card_png))
         .route("/s/{token}/ics", get(handlers::share::share_ics))
         .route("/api/auth/register", post(handlers::auth::register))
         .route("/api/auth/login", post(handlers::auth::login))
@@ -239,6 +240,10 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::rooms::get_room)
                 .put(handlers::rooms::update_room)
                 .delete(handlers::rooms::delete_room),
+        )
+        .route(
+            "/api/rooms/{id}/setup-complete",
+            put(handlers::rooms::complete_room_setup),
         )
         .route(
             "/api/ws/session/{session_id}",

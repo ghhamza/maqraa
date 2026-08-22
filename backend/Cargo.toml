@@ -62,3 +62,11 @@ figment = { version = "0.10", features = ["toml", "env"] }
 # CLI
 clap = { version = "4", features = ["derive"] }
 chrono-tz = "0.10"
+resvg = "0.45"
+qrcode = { version = "0.14", default-features = false }
+fontdb = "0.23"
+
+[dev-dependencies]
+rqrr = "0.10"
+image = { version = "0.25", default-features = false, features = ["png"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

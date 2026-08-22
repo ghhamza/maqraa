@@ -13,6 +13,10 @@ use serde::Deserialize;
 use super::{
     resolve_share, HalaqahTeaser, InstanceTeaser, SessionTeaser, ShareError, TeaserPayload,
 };
+use crate::api::handlers::share_card::{
+    self as share_card, arabic_riwaya_label, arabic_type_label, format_rhythm_ar, format_session_ar,
+    seats_available, PublicHalaqah,
+};
 use crate::api::AppState;
 
 const SITE_NAME: &str = "المقرأة";
@@ -47,8 +51,11 @@ pub async fn share_landing(
     );
     let base = state.config.public_base_url.trim_end_matches('/');
     let page_url = format!("{base}/s/{}", urlencoding_path_segment(&token));
-    let card_image = share_logo_url(base);
     let token_trimmed = token.trim();
+    let card_image = format!(
+        "{base}/s/{}/card.png?format=og",
+        urlencoding_path_segment(token_trimmed)
+    );
     let register_url = format!(
         "{base}/register?next={}",
         urlencoding_path_segment(&format!("/share/{token_trimmed}"))
@@ -60,12 +67,31 @@ pub async fn share_landing(
 
     match resolve_share(&state, &token, true).await {
         Ok(payload) => {
+            let use_card_og = matches!(
+                payload,
+                TeaserPayload::Halaqah { .. } | TeaserPayload::Invite { .. }
+            );
+            let image = if use_card_og {
+                card_image.as_str()
+            } else {
+                // Session/instance keep the logo until dedicated cards exist.
+                &share_logo_url(base)
+            };
+            let card_data = if use_card_og {
+                share_card::resolve_public_halaqah(&state, token_trimmed)
+                    .await
+                    .ok()
+            } else {
+                None
+            };
             let html = render_success_page(
                 &state,
                 &locale,
                 &payload,
                 &page_url,
-                &card_image,
+                image,
+                use_card_og,
+                card_data.as_ref(),
                 &register_url,
                 &login_url,
                 token_trimmed,
@@ -73,11 +99,11 @@ pub async fn share_landing(
             (StatusCode::OK, Html(html))
         }
         Err(ShareError::InvalidLink) => {
-            let html = render_invalid_page(&locale, &page_url, base, &card_image);
+            let html = render_invalid_page(&locale, &page_url, base, &share_logo_url(base));
             (StatusCode::OK, Html(html))
         }
         Err(ShareError::Db(_)) => {
-            let html = render_invalid_page(&locale, &page_url, base, &card_image);
+            let html = render_invalid_page(&locale, &page_url, base, &share_logo_url(base));
             (StatusCode::OK, Html(html))
         }
     }
@@ -283,10 +309,17 @@ fn page_shell(
     description: &str,
     page_url: &str,
     card_image: &str,
+    card_is_og_png: bool,
     body: &str,
     auth_redirect: Option<&str>,
 ) -> String {
     let redirect = auth_redirect.unwrap_or("");
+    let og_size = if card_is_og_png {
+        r#"<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">"#
+    } else {
+        ""
+    };
     format!(
         r#"<!DOCTYPE html>
 <html lang="{lang}" dir="{dir}">
@@ -299,6 +332,7 @@ fn page_shell(
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{description}">
 <meta property="og:image" content="{card_image}">
+{og_size}
 <meta property="og:url" content="{page_url}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="{site_name}">
@@ -362,12 +396,21 @@ body {{
 .status {{
   display: inline-block;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: 0.8rem;
   font-weight: 600;
 }}
 .status-open {{ background: #E8F5E9; color: #1B5E20; }}
-.status-full {{ background: #FEF3C7; color: #92400E; }}
+.status-full {{ background: #FEE2E2; color: #991B1B; }}
+.session-box {{
+  margin: 16px 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #FFF8E7;
+  border: 1px solid #D4A843;
+  font-size: 0.95rem;
+}}
+.session-box .rhythm {{ color: #6B7280; font-size: 0.85rem; margin-top: 4px; }}
 .ctas {{ display: flex; flex-direction: column; gap: 12px; margin-top: 28px; }}
 .btn {{
   display: block;
@@ -429,6 +472,7 @@ body {{
         title = html_escape(title),
         description = html_escape(description),
         card_image = html_escape(card_image),
+        og_size = og_size,
         page_url = html_escape(page_url),
         site_name = html_escape(SITE_NAME),
         logo_src = html_escape(SHARE_LOGO_PATH),
@@ -460,6 +504,7 @@ fn render_invalid_page(
         title,
         page_url,
         card_image,
+        false,
         &body,
         None,
     )
@@ -471,6 +516,8 @@ fn render_success_page(
     payload: &TeaserPayload,
     page_url: &str,
     card_image: &str,
+    card_is_og_png: bool,
+    card_data: Option<&PublicHalaqah>,
     register_url: &str,
     login_url: &str,
     token: &str,
@@ -480,8 +527,9 @@ fn render_success_page(
             teaser,
             description,
         } => {
-            let (t, d, b) = render_halaqah_body(locale, teaser, description.as_deref());
-            (t, d, b, "teaser.register")
+            let (t, d, b) =
+                render_halaqah_body(state, locale, teaser, description.as_deref(), card_data);
+            (t, d, b, "teaser.join_halaqah")
         }
         TeaserPayload::Invite {
             teaser,
@@ -498,8 +546,9 @@ fn render_success_page(
                 max_students: teaser.max_students,
                 enrolled_count: teaser.enrolled_count,
             };
-            let (t, d, b) = render_halaqah_body(locale, &base, description.as_deref());
-            (t, d, b, "teaser.register")
+            let (t, d, b) =
+                render_halaqah_body(state, locale, &base, description.as_deref(), card_data);
+            (t, d, b, "teaser.join_halaqah")
         }
         TeaserPayload::Session { teaser } => render_session_body(state, locale, teaser, token),
         TeaserPayload::Instance { teaser } => {
@@ -526,27 +575,41 @@ fn render_success_page(
         &description,
         page_url,
         card_image,
+        card_is_og_png,
         &full_body,
         Some(&auth_redirect_script(token)),
     )
 }
 
 fn render_halaqah_body(
+    state: &AppState,
     locale: &ShareLocale,
     teaser: &HalaqahTeaser,
     description: Option<&str>,
+    card_data: Option<&PublicHalaqah>,
 ) -> (String, String, String) {
     let name = html_escape(&teaser.name);
     let teacher = html_escape(&teaser.teacher_name);
     let riwaya = html_escape(riwaya_label(locale.lang, &teaser.riwaya));
     let htype = html_escape(halaqah_type_label(locale.lang, &teaser.halaqah_type));
-    let is_full = teaser.enrolled_count >= teaser.max_students as i64;
+    let seats = card_data
+        .map(seats_available)
+        .unwrap_or_else(|| (teaser.max_students as i64 - teaser.enrolled_count).max(0));
+    let is_full = seats == 0;
     let status_class = if is_full { "status-full" } else { "status-open" };
-    let status_label = html_escape(if is_full {
-        t(locale.lang, "teaser.full")
+    let status_label = if is_full {
+        html_escape(t(locale.lang, "teaser.full"))
     } else {
-        t(locale.lang, "teaser.available")
-    });
+        html_escape(&format!(
+            "{} {}",
+            to_arabic_indic_digits(&seats.to_string()),
+            if locale.lang == "ar" {
+                "مقعدًا متاحًا"
+            } else {
+                t(locale.lang, "teaser.available")
+            }
+        ))
+    };
 
     let heading = t(locale.lang, "teaser.join_halaqah");
 
@@ -554,6 +617,26 @@ fn render_halaqah_body(
         .filter(|d| !d.trim().is_empty())
         .map(|d| format!(r#"<p class="desc">{}</p>"#, html_escape(d)))
         .unwrap_or_default();
+
+    let tz = state.config.app_display_tz.as_str();
+    let session_block = match card_data.and_then(|c| c.first_session_at) {
+        Some(at) => {
+            let date = format_session_ar(at, tz);
+            let rhythm = card_data
+                .map(|c| format_rhythm_ar(&c.schedule_days))
+                .unwrap_or_else(|| "بتوقيت مكة".to_string());
+            format!(
+                r#"<div class="session-box">
+  <div><strong>{date}</strong></div>
+  <div class="rhythm">{rhythm}</div>
+</div>"#,
+                date = html_escape(&date),
+                rhythm = html_escape(&rhythm),
+            )
+        }
+        None => r#"<div class="session-box"><div><strong>المواعيد تُعلن قريبًا</strong></div></div>"#
+            .to_string(),
+    };
 
     let body = format!(
         r#"<p class="meta">{heading}</p>
@@ -564,6 +647,7 @@ fn render_halaqah_body(
   <span class="badge" style="background:#FAFAF5;color:#1A1A1A;border:1px solid #D4A843;">{htype}</span>
   <span class="status {status_class}">{status_label}</span>
 </div>
+{session_block}
 {desc_block}"#,
         heading = html_escape(heading),
         name = name,
@@ -574,20 +658,44 @@ fn render_halaqah_body(
         htype = htype,
         status_class = status_class,
         status_label = status_label,
+        session_block = session_block,
         desc_block = desc_block,
     );
 
-    let page_title = format!("«{}» — {}", teaser.name, SITE_NAME);
-    let meta_desc = match locale.lang {
-        "en" => format!("Join {} with teacher {}", teaser.name, teaser.teacher_name),
-        "fr" => format!(
-            "Rejoignez {} avec l'enseignant {}",
-            teaser.name, teaser.teacher_name
-        ),
-        _ => format!("انضمّ إلى {} مع المعلّم {}", teaser.name, teaser.teacher_name),
-    };
+    let type_ar = arabic_type_label(&teaser.halaqah_type);
+    let riwaya_ar = arabic_riwaya_label(&teaser.riwaya);
+    let page_title = format!("{} — {} · {}", teaser.name, type_ar, riwaya_ar);
+
+    let date_for_og = card_data
+        .and_then(|c| c.first_session_at)
+        .map(|at| format_session_ar(at, tz))
+        .unwrap_or_else(|| "قريبًا".to_string());
+    let meta_desc = format!(
+        "مع المعلّم {} · الحصة الأولى {} بتوقيت مكة · {} مقعدًا متاحًا",
+        teaser.teacher_name,
+        date_for_og,
+        to_arabic_indic_digits(&seats.to_string()),
+    );
 
     (page_title, meta_desc, body)
+}
+
+fn to_arabic_indic_digits(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '0' => '٠',
+            '1' => '١',
+            '2' => '٢',
+            '3' => '٣',
+            '4' => '٤',
+            '5' => '٥',
+            '6' => '٦',
+            '7' => '٧',
+            '8' => '٨',
+            '9' => '٩',
+            _ => c,
+        })
+        .collect()
 }
 
 fn render_session_body(
