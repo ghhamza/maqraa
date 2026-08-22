@@ -84,7 +84,7 @@ export function downloadPng(pngUrl: string, filename: string): void {
 }
 
 /** Bump when card PNG layout/branding changes so browsers skip stale cached images. */
-const CARD_IMAGE_VERSION = "v4";
+const CARD_IMAGE_VERSION = "v5";
 
 export function cardImageUrl(token: string, format: "square" | "story" | "og" = "square"): string {
   return `/s/${encodeURIComponent(token)}/card.png?format=${format}&v=${CARD_IMAGE_VERSION}`;

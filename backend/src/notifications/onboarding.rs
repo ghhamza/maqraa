@@ -262,7 +262,7 @@ async fn process_share_nudge(
             let locale = locale_of(&row.preferred_language);
             let share_url = format!("{base}/s/{token}");
             let room_url = format!("{base}/rooms/{}", row.room_id);
-            let card_url = format!("{base}/s/{token}/card.png?format=square&v=4");
+            let card_url = format!("{base}/s/{token}/card.png?format=square&v=5");
 
             let first = fetch_first_session(pool, row.room_id).await.ok().flatten();
             let session_date = first

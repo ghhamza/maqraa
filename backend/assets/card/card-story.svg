@@ -10,14 +10,14 @@
   <text id="halaqah_name" x="540" y="360" direction="rtl" text-anchor="middle"
         font-family="Amiri" font-size="144" font-weight="700" fill="#1A1A1A">حلقة النور</text>
 
-  <text id="teacher" x="540" y="416" direction="rtl" text-anchor="middle"
+  <text id="teacher" x="540" y="448" direction="rtl" text-anchor="middle"
         font-family="IBM Plex Sans Arabic" font-weight="500" font-size="54" fill="#6B7280">مع المعلّم أحمد</text>
 
-  <rect x="546" y="456" width="160" height="56" rx="28" fill="#E8F5E9"/>
-  <text id="type" x="626" y="494" direction="rtl" text-anchor="middle"
+  <rect x="546" y="488" width="160" height="56" rx="28" fill="#E8F5E9"/>
+  <text id="type" x="626" y="526" direction="rtl" text-anchor="middle"
         font-family="IBM Plex Sans Arabic" font-weight="600" font-size="46" fill="#1B5E20">حفظ</text>
-  <rect x="374" y="456" width="160" height="56" rx="28" fill="#E8F5E9"/>
-  <text id="riwaya" x="454" y="494" direction="rtl" text-anchor="middle"
+  <rect x="374" y="488" width="160" height="56" rx="28" fill="#E8F5E9"/>
+  <text id="riwaya" x="454" y="526" direction="rtl" text-anchor="middle"
         font-family="IBM Plex Sans Arabic" font-weight="600" font-size="46" fill="#1B5E20">حفص</text>
 
   <!-- Centre zone: QR 55% = 594, cy = 960 → y = 663 -->

@@ -53,7 +53,7 @@ pub async fn share_landing(
     let page_url = format!("{base}/s/{}", urlencoding_path_segment(&token));
     let token_trimmed = token.trim();
     let card_image = format!(
-        "{base}/s/{}/card.png?format=og&v=4",
+        "{base}/s/{}/card.png?format=og&v=5",
         urlencoding_path_segment(token_trimmed)
     );
     let register_url = format!(

@@ -79,7 +79,7 @@ pub async fn share_card_png(
 }
 
 /// Bump when SVG templates / brand lockup / layout change so ETags invalidate.
-const CARD_RENDER_VERSION: &str = "v4-balance";
+const CARD_RENDER_VERSION: &str = "v5-title-gap";
 
 fn card_etag(h: &PublicHalaqah, format: CardFormat) -> String {
     let mut hasher = Sha256::new();

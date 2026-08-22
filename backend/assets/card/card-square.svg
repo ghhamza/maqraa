@@ -11,25 +11,25 @@
   <text id="halaqah_name" x="540" y="250" direction="rtl" text-anchor="middle"
         font-family="Amiri" font-size="97" font-weight="700" fill="#1A1A1A">حلقة النور</text>
 
-  <text id="teacher" x="540" y="288" direction="rtl" text-anchor="middle"
+  <text id="teacher" x="540" y="310" direction="rtl" text-anchor="middle"
         font-family="IBM Plex Sans Arabic" font-weight="500" font-size="30" fill="#6B7280">مع المعلّم أحمد</text>
 
-  <rect x="546" y="316" width="120" height="44" rx="22" fill="#E8F5E9"/>
-  <text id="type" x="606" y="345" direction="rtl" text-anchor="middle"
+  <rect x="546" y="338" width="120" height="44" rx="22" fill="#E8F5E9"/>
+  <text id="type" x="606" y="367" direction="rtl" text-anchor="middle"
         font-family="IBM Plex Sans Arabic" font-weight="600" font-size="26" fill="#1B5E20">حفظ</text>
-  <rect x="414" y="316" width="120" height="44" rx="22" fill="#E8F5E9"/>
-  <text id="riwaya" x="474" y="345" direction="rtl" text-anchor="middle"
+  <rect x="414" y="338" width="120" height="44" rx="22" fill="#E8F5E9"/>
+  <text id="riwaya" x="474" y="367" direction="rtl" text-anchor="middle"
         font-family="IBM Plex Sans Arabic" font-weight="600" font-size="26" fill="#1B5E20">حفص</text>
 
-  <!-- QR 45% = 486, cy≈608 → y = 365 (clears badges) -->
-  <g id="qr" data-size="486" data-x="297" data-y="365" transform="translate(297 365)"/>
-  <text id="scan_hint" x="540" y="875" direction="rtl" text-anchor="middle"
+  <!-- QR 45% = 486, clear of badges ending ~382 -->
+  <g id="qr" data-size="486" data-x="297" data-y="390" transform="translate(297 390)"/>
+  <text id="scan_hint" x="540" y="900" direction="rtl" text-anchor="middle"
         font-family="IBM Plex Sans Arabic" font-size="22" fill="#6B7280">امسح للانضمام</text>
 
-  <rect x="516" y="900" width="48" height="2" fill="#D4A843"/>
-  <text id="first_session" x="540" y="940" direction="rtl" text-anchor="middle"
+  <rect x="516" y="920" width="48" height="2" fill="#D4A843"/>
+  <text id="first_session" x="540" y="958" direction="rtl" text-anchor="middle"
         font-family="IBM Plex Sans Arabic" font-weight="600" font-size="35" fill="#1B5E20">الثلاثاء ٢٥ أغسطس · ٨:٠٠ م</text>
-  <text id="tz_and_rhythm" x="540" y="974" direction="rtl" text-anchor="middle"
+  <text id="tz_and_rhythm" x="540" y="992" direction="rtl" text-anchor="middle"
         font-family="IBM Plex Sans Arabic" font-size="22" fill="#6B7280">بتوقيت مكة</text>
   <text id="short_url" x="540" y="1040" text-anchor="middle" direction="ltr"
         font-family="IBM Plex Sans Arabic" font-size="19" fill="#6B7280">app.maqraa.org/s/abcd1234</text>

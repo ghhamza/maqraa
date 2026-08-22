@@ -15,17 +15,17 @@
   <text id="halaqah_name" x="1144" y="210" direction="rtl" text-anchor="end"
         font-family="Amiri" font-size="62" font-weight="700" fill="#1A1A1A">حلقة النور</text>
 
-  <text id="teacher" x="1144" y="252" direction="rtl" text-anchor="end"
+  <text id="teacher" x="1144" y="268" direction="rtl" text-anchor="end"
         font-family="IBM Plex Sans Arabic" font-weight="500" font-size="22" fill="#6B7280">مع المعلّم أحمد</text>
 
-  <rect x="1020" y="280" width="124" height="36" rx="18" fill="#E8F5E9"/>
-  <text id="type" x="1082" y="305" direction="rtl" text-anchor="middle"
+  <rect x="1020" y="296" width="124" height="36" rx="18" fill="#E8F5E9"/>
+  <text id="type" x="1082" y="321" direction="rtl" text-anchor="middle"
         font-family="IBM Plex Sans Arabic" font-weight="600" font-size="18" fill="#1B5E20">حفظ</text>
-  <rect x="884" y="280" width="124" height="36" rx="18" fill="#E8F5E9"/>
-  <text id="riwaya" x="946" y="305" direction="rtl" text-anchor="middle"
+  <rect x="884" y="296" width="124" height="36" rx="18" fill="#E8F5E9"/>
+  <text id="riwaya" x="946" y="321" direction="rtl" text-anchor="middle"
         font-family="IBM Plex Sans Arabic" font-weight="600" font-size="18" fill="#1B5E20">حفص</text>
-  <rect x="668" y="280" width="204" height="36" rx="18" fill="#D4A843"/>
-  <text id="seats" x="770" y="305" direction="rtl" text-anchor="middle"
+  <rect x="668" y="296" width="204" height="36" rx="18" fill="#D4A843"/>
+  <text id="seats" x="770" y="321" direction="rtl" text-anchor="middle"
         font-family="IBM Plex Sans Arabic" font-weight="600" font-size="17" fill="#FFFFFF">١٧ مقعدًا متاحًا</text>
 
   <rect x="1096" y="370" width="48" height="2" fill="#D4A843"/>
