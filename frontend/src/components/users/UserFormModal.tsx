@@ -9,6 +9,13 @@ import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
 import { FormSelect } from "../ui/select";
 import { useCreateUser, useUpdateUser } from "../../data/users";
+import {
+  DemographicsFields,
+  demographicsFromUser,
+  demographicsPayload,
+  emptyDemographics,
+  type DemographicsValue,
+} from "./DemographicsFields";
 
 interface UserFormModalProps {
   open: boolean;
@@ -30,6 +37,7 @@ export function UserFormModal({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"student" | "teacher" | "admin">("student");
   const [password, setPassword] = useState("");
+  const [demographics, setDemographics] = useState<DemographicsValue>(emptyDemographics);
   const [error, setError] = useState<string | null>(null);
   const createMutation = useCreateUser(
     () => {
@@ -57,11 +65,13 @@ export function UserFormModal({
       setEmail(user.email);
       setRole(user.role);
       setPassword("");
+      setDemographics(demographicsFromUser(user));
     } else {
       setName("");
       setEmail("");
       setRole("student");
       setPassword("");
+      setDemographics(emptyDemographics());
     }
   }, [open, mode, user]);
 
@@ -69,6 +79,7 @@ export function UserFormModal({
     e.preventDefault();
     if (loading) return;
     setError(null);
+    const demo = demographicsPayload(demographics, { omitEmpty: true });
 
     if (mode === "create") {
       if (password.length < 8) {
@@ -80,6 +91,7 @@ export function UserFormModal({
         email: email.trim(),
         password,
         role,
+        ...demo,
       });
     } else if (user) {
       updateMutation.mutate({
@@ -87,6 +99,7 @@ export function UserFormModal({
         name: name.trim(),
         email: email.trim(),
         role,
+        ...demo,
       });
     }
   }
@@ -140,6 +153,7 @@ export function UserFormModal({
             autoComplete="new-password"
           />
         ) : null}
+        <DemographicsFields value={demographics} onChange={setDemographics} />
         {error ? (
           <p className="text-center text-sm text-red-600" role="alert">
             {error}

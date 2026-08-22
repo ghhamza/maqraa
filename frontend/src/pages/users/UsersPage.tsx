@@ -4,7 +4,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Pencil, Plus, Trash2, Users } from "lucide-react";
+import { Pencil, Plus, Trash2, Users, Mars, Venus } from "lucide-react";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import type { UserPublic } from "../../types";
@@ -95,6 +95,34 @@ export function UsersPage() {
         render: (row) => (
           <Badge variant={badgeVariant(row.role)}>{t(roleTranslationKey(row.role))}</Badge>
         ),
+      },
+      {
+        key: "gender",
+        header: t("profile.demographics.gender"),
+        render: (row) => {
+          if (row.gender === "male") {
+            return (
+              <span className="inline-flex items-center gap-1 text-[var(--color-text-muted)]" title={t("profile.demographics.gender_male")}>
+                <Mars className="h-4 w-4 text-[var(--color-primary)]" aria-hidden />
+                <span className="sr-only">{t("profile.demographics.gender_male")}</span>
+              </span>
+            );
+          }
+          if (row.gender === "female") {
+            return (
+              <span className="inline-flex items-center gap-1 text-[var(--color-text-muted)]" title={t("profile.demographics.gender_female")}>
+                <Venus className="h-4 w-4 text-[var(--color-gold)]" aria-hidden />
+                <span className="sr-only">{t("profile.demographics.gender_female")}</span>
+              </span>
+            );
+          }
+          return <span className="text-[var(--color-text-muted)]">—</span>;
+        },
+      },
+      {
+        key: "country_code",
+        header: t("profile.demographics.country"),
+        render: (row) => row.country_code ?? "—",
       },
       {
         key: "created_at",

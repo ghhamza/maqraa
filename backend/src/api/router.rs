@@ -40,6 +40,7 @@ pub fn build_router(state: AppState) -> Router {
             "/api/auth/me",
             get(handlers::auth::me).put(handlers::auth::update_profile),
         )
+        .route("/api/auth/profile", put(handlers::auth::update_auth_profile))
         .route("/api/me/whats-new", get(handlers::auth::whats_new))
         .route("/api/auth/password", put(handlers::auth::change_password))
         .route("/api/profile", put(handlers::profile::complete_profile))
@@ -48,6 +49,7 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::qf::get_chapter_audio),
         )
         .route("/api/users/stats", get(handlers::users::stats))
+        .route("/api/admin/dashboard", get(handlers::admin::dashboard))
         .route(
             "/api/users",
             get(handlers::users::list_users).post(handlers::users::create_user),

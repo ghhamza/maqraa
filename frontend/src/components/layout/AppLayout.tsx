@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
+  BarChart3,
   BookOpen,
   Calendar,
   DoorOpen,
@@ -36,6 +37,7 @@ import { ProfileMenu } from "./ProfileMenu";
 import { LiveSessionBanner } from "./LiveSessionBanner";
 import { LiveSessionsErrorToast } from "./LiveSessionsErrorToast";
 import { VerifyEmailBanner } from "../VerifyEmailBanner";
+import { DemographicsBanner } from "../DemographicsBanner";
 import { useRoomsStats } from "../../data/rooms";
 
 function roleBadgeVariant(role: string): "green" | "blue" | "gold" {
@@ -103,6 +105,7 @@ export function AppLayout() {
     return {
       home: p === "/" || p === "",
       users: p.startsWith("/users"),
+      analytics: p.startsWith("/admin/dashboard"),
       invites: p.startsWith("/admin/invites"),
       rooms: p.startsWith("/rooms"),
       calendar: p === "/calendar",
@@ -148,6 +151,18 @@ export function AppLayout() {
             <span className="inline-flex items-center gap-2">
               <Users className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
               {t("nav.users")}
+            </span>
+          </NavLink>
+        ) : null}
+        {isAdmin ? (
+          <NavLink
+            to="/admin/dashboard"
+            className={cn(navLinkClassName(navActive.analytics), linkWrap)}
+            onClick={() => setMobileNavOpen(false)}
+          >
+            <span className="inline-flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+              {t("admin.dashboard.nav")}
             </span>
           </NavLink>
         ) : null}
@@ -312,6 +327,18 @@ export function AppLayout() {
               {isAdmin ? (
                 <NavigationMenuItem>
                   <NavigationMenuLink asChild>
+                    <NavLink to="/admin/dashboard" className={navLinkClassName(navActive.analytics)}>
+                      <span className="inline-flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+                        {t("admin.dashboard.nav")}
+                      </span>
+                    </NavLink>
+                  </NavigationMenuLink>
+                </NavigationMenuItem>
+              ) : null}
+              {isAdmin ? (
+                <NavigationMenuItem>
+                  <NavigationMenuLink asChild>
                     <NavLink to="/admin/invites" className={navLinkClassName(navActive.invites)}>
                       <span className="inline-flex items-center gap-2">
                         <Link2 className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
@@ -378,6 +405,7 @@ export function AppLayout() {
 
       <LiveSessionsErrorToast />
       <VerifyEmailBanner />
+      <DemographicsBanner />
       <LiveSessionBanner />
 
       <main

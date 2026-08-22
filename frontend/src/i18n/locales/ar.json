@@ -198,7 +198,22 @@
     "errQiraat": "اختر قراءة واحدة على الأقل",
     "detailsSection": "البيانات الشخصية",
     "saveDetails": "حفظ البيانات",
-    "detailsSaved": "تم تحديث بياناتك."
+    "detailsSaved": "تم تحديث بياناتك.",
+    "demographics": {
+      "title": "البيانات الشخصية",
+      "gender": "الجنس",
+      "gender_male": "ذكر",
+      "gender_female": "أنثى",
+      "birth_year": "سنة الميلاد",
+      "country": "الدولة",
+      "optional": "اختياري",
+      "select_placeholder": "اختر",
+      "banner": "أكمل بياناتك الشخصية لتحسين تجربتك",
+      "banner_cta": "إكمال البيانات",
+      "saved": "تم حفظ البيانات",
+      "country_group_priority": "الدول الأكثر شيوعاً",
+      "country_group_other": "دول أخرى"
+    }
   },
   "home": {
     "welcome": "مرحبًا {{name}}",
@@ -665,7 +680,8 @@
     "weak_password": "كلمة المرور يجب أن تكون 8 أحرف على الأقل.",
     "wrong_password": "كلمة المرور الحالية غير صحيحة.",
     "invalid_chapter": "رقم السورة غير صالح",
-    "invalid_recitation": "القارئ المختار غير متوفّر"
+    "invalid_recitation": "القارئ المختار غير متوفّر",
+    "invalid_demographics": "بيانات غير صالحة"
   },
   "placeholder": {
     "calendar": "الجدول"
@@ -1218,5 +1234,114 @@
   "settings": {
     "setPassword": "تعيين كلمة مرور",
     "setPasswordHint": "سجّلت عبر Google. يمكنك تعيين كلمة مرور لتسجيل الدخول بالبريد أيضًا."
+  },
+  "admin": {
+    "dashboard": {
+      "title": "لوحة التحليلات",
+      "nav": "التحليلات",
+      "range": {
+        "30": "٣٠ يومًا",
+        "90": "٩٠ يومًا",
+        "365": "سنة"
+      },
+      "updated_at": "آخر تحديث",
+      "kpi": {
+        "users": "المستخدمون",
+        "students": "الطلاب",
+        "teachers": "المعلّمون",
+        "rooms_active": "الحلقات النشطة",
+        "sessions_completed": "الحصص المكتملة",
+        "recitations": "التلاوات",
+        "pages": "الصفحات المتلوّة",
+        "annotations_open": "تعليقات مفتوحة",
+        "delta_30d": "خلال ٣٠ يومًا"
+      },
+      "activity": {
+        "title": "النشاط",
+        "active_teachers": "معلّمون نشطون",
+        "active_students": "طلاب نشطون",
+        "avg_rating": "متوسط التقييم",
+        "avg_duration": "متوسط مدة الحصة",
+        "7d": "٧ أيام",
+        "30d": "٣٠ يومًا"
+      },
+      "demo": {
+        "title": "البيانات الديموغرافية",
+        "gender": "الجنس",
+        "age_title": "الفئة العمرية",
+        "countries": "الدول",
+        "login_method": "طريقة الدخول",
+        "male": "ذكر",
+        "female": "أنثى",
+        "unknown": "غير محدد",
+        "age": {
+          "under_12": "أقل من ١٢",
+          "12_17": "١٢–١٧",
+          "18_24": "١٨–٢٤",
+          "25_34": "٢٥–٣٤",
+          "35_44": "٣٥–٤٤",
+          "45_54": "٤٥–٥٤",
+          "55_plus": "٥٥+",
+          "unknown": "غير محدد"
+        },
+        "method": {
+          "password": "كلمة مرور",
+          "google": "Google",
+          "both": "كلاهما"
+        }
+      },
+      "halaqat": {
+        "title": "الحلقات",
+        "by_type": "حسب النوع",
+        "by_riwaya": "حسب الرواية",
+        "by_enrollment": "حسب التسجيل",
+        "fill_rate": "نسبة الامتلاء",
+        "enrollment": {
+          "closed": "مغلقة",
+          "public_open": "عامة · مفتوحة",
+          "public_approval": "عامة · بموافقة",
+          "private_open": "خاصة · مفتوحة",
+          "private_approval": "خاصة · بموافقة"
+        }
+      },
+      "teaching": {
+        "title": "التعليم",
+        "grades": "توزيع التقديرات",
+        "turn_type": "نوع التسميع",
+        "error_categories": "أكثر أخطاء التجويد",
+        "top_surahs": "أكثر السور تلاوةً",
+        "top_teachers": "أنشط المعلّمين"
+      },
+      "series": {
+        "title": "التطوّر الزمني",
+        "signups": "التسجيلات الأسبوعية",
+        "sessions": "الحصص الأسبوعية",
+        "recitations": "التلاوات الأسبوعية",
+        "annotations": "التعليقات الأسبوعية"
+      },
+      "empty": "لا توجد بيانات بعد",
+      "error": "تعذّر تحميل البيانات",
+      "retry": "إعادة المحاولة",
+      "tabs": {
+        "gender": "الجنس",
+        "age": "الفئة العمرية",
+        "countries": "الدول",
+        "login": "طريقة الدخول",
+        "grades": "التقديرات",
+        "errors": "أخطاء التجويد",
+        "surahs": "السور",
+        "teachers": "المعلّمون",
+        "signups": "التسجيلات",
+        "sessions": "الحصص",
+        "recitations": "التلاوات",
+        "annotations": "التعليقات"
+      },
+      "view_all": "عرض الكل",
+      "total": "المجموع",
+      "minutes_short": "د",
+      "teachers": {
+        "sessions": "الحصص"
+      }
+    }
   }
 }

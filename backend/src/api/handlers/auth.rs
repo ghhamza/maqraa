@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::api::demographics::{validate_demographics, DemographicsInput};
 use crate::api::extractors::AuthenticatedUser;
 use crate::api::handlers::share::try_attribute_instance_registration;
 use crate::api::types::{MeResponse, UserResponse};
@@ -35,6 +36,12 @@ pub struct RegisterRequest {
     pub locale: String,
     #[serde(default)]
     pub share_token: Option<String>,
+    #[serde(default)]
+    pub gender: Option<String>,
+    #[serde(default)]
+    pub birth_year: Option<i16>,
+    #[serde(default)]
+    pub country_code: Option<String>,
 }
 
 fn default_locale() -> String {
@@ -96,13 +103,21 @@ pub async fn register(
         return Err(StatusCode::BAD_REQUEST);
     }
 
+    let demo = validate_demographics(&DemographicsInput {
+        gender: req.gender.clone(),
+        birth_year: req.birth_year,
+        country_code: req.country_code.clone(),
+    })
+    .map_err(|_| StatusCode::BAD_REQUEST)?;
+
     let hash = password::hash_password(&req.password).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let user_id = Uuid::new_v4();
     let locale = normalize_locale(&req.locale);
 
     sqlx::query(
-        "INSERT INTO users (id, name, email, password_hash, role, preferred_language) \
-         VALUES ($1, $2, $3, $4, $5::user_role, $6)",
+        "INSERT INTO users (id, name, email, password_hash, role, preferred_language, \
+         gender, birth_year, country_code, country) \
+         VALUES ($1, $2, $3, $4, $5::user_role, $6, $7, $8, $9, $9)",
     )
     .bind(user_id)
     .bind(&req.name)
@@ -110,6 +125,9 @@ pub async fn register(
     .bind(&hash)
     .bind(role)
     .bind(locale)
+    .bind(&demo.gender)
+    .bind(demo.birth_year)
+    .bind(&demo.country_code)
     .execute(&state.db)
     .await
     .map_err(|_| StatusCode::CONFLICT)?;
@@ -240,6 +258,12 @@ pub struct GoogleAuthRequest {
     pub credential: String,
     #[serde(default)]
     pub role: Option<String>,
+    #[serde(default)]
+    pub gender: Option<String>,
+    #[serde(default)]
+    pub birth_year: Option<i16>,
+    #[serde(default)]
+    pub country_code: Option<String>,
 }
 
 pub async fn google_auth(
@@ -368,16 +392,34 @@ pub async fn google_auth(
                 }
             };
 
+            let demo = validate_demographics(&DemographicsInput {
+                gender: req.gender.clone(),
+                birth_year: req.birth_year,
+                country_code: req.country_code.clone(),
+            })
+            .map_err(|_| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(AuthErrorBody {
+                        error: "invalid_demographics",
+                    }),
+                )
+            })?;
+
             let user_id = Uuid::new_v4();
             sqlx::query(
-                "INSERT INTO users (id, name, email, password_hash, role, google_sub, email_verified_at) \
-                 VALUES ($1, $2, $3, NULL, $4::user_role, $5, NOW())",
+                "INSERT INTO users (id, name, email, password_hash, role, google_sub, email_verified_at, \
+                 gender, birth_year, country_code, country) \
+                 VALUES ($1, $2, $3, NULL, $4::user_role, $5, NOW(), $6, $7, $8, $8)",
             )
             .bind(user_id)
             .bind(&identity.name)
             .bind(&identity.email)
             .bind(role)
             .bind(&identity.sub)
+            .bind(&demo.gender)
+            .bind(demo.birth_year)
+            .bind(&demo.country_code)
             .execute(&mut *tx)
             .await
             .map_err(|e| {
@@ -593,6 +635,54 @@ pub async fn update_profile(
         .execute(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    load_user_response(&state.db, auth.id)
+        .await
+        .map(Json)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+#[derive(Deserialize)]
+pub struct UpdateAuthProfileRequest {
+    pub name: String,
+    #[serde(default)]
+    pub gender: Option<String>,
+    #[serde(default)]
+    pub birth_year: Option<i16>,
+    #[serde(default)]
+    pub country_code: Option<String>,
+}
+
+/// `PUT /api/auth/profile` — update display name + optional soft demographics.
+pub async fn update_auth_profile(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(req): Json<UpdateAuthProfileRequest>,
+) -> Result<Json<UserResponse>, StatusCode> {
+    let name = req.name.trim();
+    if name.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let demo = validate_demographics(&DemographicsInput {
+        gender: req.gender,
+        birth_year: req.birth_year,
+        country_code: req.country_code,
+    })?;
+
+    sqlx::query(
+        "UPDATE users SET name = $1, gender = $2, birth_year = $3, country_code = $4, \
+         country = CASE WHEN $4::char(2) IS NOT NULL THEN $4 ELSE country END \
+         WHERE id = $5",
+    )
+    .bind(name)
+    .bind(&demo.gender)
+    .bind(demo.birth_year)
+    .bind(&demo.country_code)
+    .bind(auth.id)
+    .execute(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     load_user_response(&state.db, auth.id)
         .await

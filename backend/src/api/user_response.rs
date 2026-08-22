@@ -17,6 +17,8 @@ struct UserProfileRow {
     gender: Option<String>,
     date_of_birth: Option<NaiveDate>,
     country: Option<String>,
+    birth_year: Option<i16>,
+    country_code: Option<String>,
     phone: Option<String>,
     spoken_languages: Vec<String>,
     qiraat_taught: Vec<String>,
@@ -28,7 +30,8 @@ struct UserProfileRow {
 pub async fn load_user_response(db: &PgPool, user_id: Uuid) -> Result<UserResponse, sqlx::Error> {
     let row = sqlx::query_as::<_, UserProfileRow>(
         "SELECT u.id, u.name, u.email, u.role::text, \
-         u.profile_completion_pending, u.gender, u.date_of_birth, u.country, u.phone, \
+         u.profile_completion_pending, u.gender, u.date_of_birth, u.country, \
+         u.birth_year, u.country_code, u.phone, \
          u.spoken_languages, u.qiraat_taught, u.email_verified_at, u.preferred_language, \
          (u.password_hash IS NOT NULL) AS has_password \
          FROM users u \
@@ -47,6 +50,8 @@ pub async fn load_user_response(db: &PgPool, user_id: Uuid) -> Result<UserRespon
         gender: row.gender,
         date_of_birth: row.date_of_birth,
         country: row.country,
+        birth_year: row.birth_year,
+        country_code: row.country_code,
         phone: row.phone,
         spoken_languages: row.spoken_languages,
         qiraat_taught: row.qiraat_taught,
@@ -67,6 +72,8 @@ struct UserAdminRow {
     gender: Option<String>,
     date_of_birth: Option<NaiveDate>,
     country: Option<String>,
+    birth_year: Option<i16>,
+    country_code: Option<String>,
     phone: Option<String>,
     spoken_languages: Vec<String>,
     qiraat_taught: Vec<String>,
@@ -76,7 +83,7 @@ pub async fn load_user_admin_detail(db: &PgPool, user_id: Uuid) -> Result<UserAd
     let row = sqlx::query_as::<_, UserAdminRow>(
         "SELECT u.id, u.name, u.email, u.role::text AS role, u.created_at, \
          u.profile_completion_pending, u.gender, u.date_of_birth, \
-         u.country, u.phone, u.spoken_languages, u.qiraat_taught \
+         u.country, u.birth_year, u.country_code, u.phone, u.spoken_languages, u.qiraat_taught \
          FROM users u \
          WHERE u.id = $1",
     )
@@ -94,6 +101,8 @@ pub async fn load_user_admin_detail(db: &PgPool, user_id: Uuid) -> Result<UserAd
         gender: row.gender,
         date_of_birth: row.date_of_birth,
         country: row.country,
+        birth_year: row.birth_year,
+        country_code: row.country_code,
         phone: row.phone,
         spoken_languages: row.spoken_languages,
         qiraat_taught: row.qiraat_taught,

@@ -127,3 +127,11 @@ export const homeKeys = {
   whatsNew: (userId: string, prevSeen: string | null) =>
     ["home", "whats-new", userId, prevSeen] as const,
 };
+
+// ─── Admin ───────────────────────────────────────────────────────────────
+
+export const adminKeys = {
+  all: ["admin"] as const,
+  dashboard: (days: number) => ["admin", "dashboard", days] as const,
+};
+

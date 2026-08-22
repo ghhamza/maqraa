@@ -66,3 +66,35 @@ export function getSortedCountries(locale: string): { code: string; name: string
     name: getCountryName(code, locale),
   })).sort((a, b) => a.name.localeCompare(b.name, locale));
 }
+
+/** Priority regions: Arab world + Maghreb + ID/PK/TR (+ common diaspora hubs). */
+const PRIORITY_COUNTRY_CODES = [
+  "SA", "AE", "BH", "KW", "OM", "QA", "YE",
+  "EG", "SD", "LY", "TN", "DZ", "MA", "MR",
+  "IQ", "JO", "LB", "SY", "PS",
+  "DJ", "SO", "KM",
+  "ID", "PK", "TR", "BD", "MY",
+] as const;
+
+/**
+ * Countries split into a priority optgroup (Arab/Maghreb/ID/PK/TR) then the rest,
+ * each sorted by localized display name.
+ */
+export function getGroupedCountries(locale: string): {
+  priority: { code: string; name: string }[];
+  rest: { code: string; name: string }[];
+} {
+  const prioritySet = new Set<string>(PRIORITY_COUNTRY_CODES);
+  const all = getSortedCountries(locale);
+  const priorityOrder = new Map(
+    PRIORITY_COUNTRY_CODES.map((code, i) => [code, i] as const),
+  );
+  const priority = all
+    .filter((c) => prioritySet.has(c.code))
+    .sort(
+      (a, b) =>
+        (priorityOrder.get(a.code) ?? 999) - (priorityOrder.get(b.code) ?? 999),
+    );
+  const rest = all.filter((c) => !prioritySet.has(c.code));
+  return { priority, rest };
+}

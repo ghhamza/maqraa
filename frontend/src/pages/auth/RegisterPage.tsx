@@ -12,6 +12,12 @@ import { RoleChoiceCards } from "../../components/auth/RoleChoiceCards";
 import { GoogleSignInButton } from "../../components/auth/GoogleSignInButton";
 import { AuthOrDivider, GoogleAuthSection } from "../../components/auth/GoogleAuthSection";
 import { AuthBrandHeader } from "../../components/auth/AuthBrandHeader";
+import {
+  DemographicsFields,
+  demographicsPayload,
+  emptyDemographics,
+  type DemographicsValue,
+} from "../../components/users/DemographicsFields";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LanguageSwitcher } from "../../components/ui/LanguageSwitcher";
@@ -38,6 +44,7 @@ export function RegisterPage() {
   const [role, setRole] = useState<"student" | "teacher" | null>(
     fromGoogleRolePrompt ? null : "student",
   );
+  const [demographics, setDemographics] = useState<DemographicsValue>(emptyDemographics);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
@@ -52,40 +59,27 @@ export function RegisterPage() {
     [searchParams],
   );
 
-  useEffect(() => {
-    if (!fromGoogleRolePrompt || !pendingGoogleCredential || !role) return;
+  async function completeGoogleSignup() {
+    if (!fromGoogleRolePrompt || !pendingGoogleCredential || !role || loading) return;
     if (googleSignupStarted.current) return;
     googleSignupStarted.current = true;
-    let cancelled = false;
     setGoogleError(null);
     setLoading(true);
-    void loginWithGoogle(pendingGoogleCredential, role)
-      .then((data) => {
-        if (cancelled) return;
-        navigate(location.pathname, { replace: true, state: {} });
-        finishAuthNavigation(navigate, data.user);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          googleSignupStarted.current = false;
-          setGoogleError(t("auth.errors.invalidGoogleToken"));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    fromGoogleRolePrompt,
-    pendingGoogleCredential,
-    role,
-    loginWithGoogle,
-    navigate,
-    location.pathname,
-    t,
-  ]);
+    try {
+      const data = await loginWithGoogle(
+        pendingGoogleCredential,
+        role,
+        demographicsPayload(demographics, { omitEmpty: true }),
+      );
+      navigate(location.pathname, { replace: true, state: {} });
+      finishAuthNavigation(navigate, data.user);
+    } catch {
+      googleSignupStarted.current = false;
+      setGoogleError(t("auth.errors.invalidGoogleToken"));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function validate(): string | null {
     if (!role) return t("auth.chooseRoleFirst");
@@ -123,6 +117,7 @@ export function RegisterPage() {
           role,
           locale: (i18n.language || "ar").split("-")[0],
           ...(shareToken ? { share_token: shareToken } : {}),
+          ...demographicsPayload(demographics, { omitEmpty: true }),
         },
       });
       login(data.token, data.user);
@@ -174,7 +169,21 @@ export function RegisterPage() {
           </p>
         ) : null}
 
-        {!fromGoogleRolePrompt ? (
+        {fromGoogleRolePrompt ? (
+          <div className="mt-5 space-y-5">
+            <DemographicsFields value={demographics} onChange={setDemographics} />
+            <Button
+              type="button"
+              variant="primary"
+              fullWidth
+              loading={loading}
+              disabled={!role}
+              onClick={() => void completeGoogleSignup()}
+            >
+              {t("auth.createAccount")}
+            </Button>
+          </div>
+        ) : (
           <>
             <GoogleAuthSection>
               <div className="mt-6 space-y-3">
@@ -221,6 +230,8 @@ export function RegisterPage() {
                 required
               />
 
+              <DemographicsFields value={demographics} onChange={setDemographics} />
+
               {formError ? (
                 <p className="text-center text-sm text-red-600" role="alert">
                   {formError}
@@ -232,7 +243,7 @@ export function RegisterPage() {
               </Button>
             </form>
           </>
-        ) : null}
+        )}
 
         <p className="mt-6 text-center text-sm text-[var(--color-text-muted)]">
           {t("auth.hasAccount")}{" "}

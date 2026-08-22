@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, QueryBuilder};
 use uuid::Uuid;
 
+use crate::api::demographics::{validate_demographics, DemographicsInput};
 use crate::api::extractors::AuthenticatedUser;
 use crate::api::types::{Paginated, UserAdminDetail, UserPublic, UserStatsResponse};
 use crate::api::user_response::load_user_admin_detail;
@@ -54,6 +55,12 @@ pub struct CreateUserRequest {
     pub email: String,
     pub password: String,
     pub role: String,
+    #[serde(default)]
+    pub gender: Option<String>,
+    #[serde(default)]
+    pub birth_year: Option<i16>,
+    #[serde(default)]
+    pub country_code: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -61,6 +68,12 @@ pub struct UpdateUserRequest {
     pub name: Option<String>,
     pub email: Option<String>,
     pub role: Option<String>,
+    #[serde(default)]
+    pub gender: Option<String>,
+    #[serde(default)]
+    pub birth_year: Option<i16>,
+    #[serde(default)]
+    pub country_code: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -142,7 +155,8 @@ pub async fn list_users(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut qb = QueryBuilder::new(
-        "SELECT id, name, email, role::text AS role, created_at FROM users WHERE 1=1",
+        "SELECT id, name, email, role::text AS role, created_at, gender, country_code \
+         FROM users WHERE 1=1",
     );
     push_user_filters(&mut qb, &params);
     qb.push(" ORDER BY created_at DESC");
@@ -194,17 +208,27 @@ pub async fn create_user(
         return Err(StatusCode::BAD_REQUEST);
     }
 
+    let demo = validate_demographics(&DemographicsInput {
+        gender: req.gender.clone(),
+        birth_year: req.birth_year,
+        country_code: req.country_code.clone(),
+    })?;
+
     let hash = password::hash_password(&req.password).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let id = Uuid::new_v4();
 
     sqlx::query(
-        "INSERT INTO users (id, name, email, password_hash, role) VALUES ($1, $2, $3, $4, $5::user_role)",
+        "INSERT INTO users (id, name, email, password_hash, role, gender, birth_year, country_code, country) \
+         VALUES ($1, $2, $3, $4, $5::user_role, $6, $7, $8, $8)",
     )
     .bind(id)
     .bind(req.name.trim())
     .bind(&email)
     .bind(&hash)
     .bind(role)
+    .bind(&demo.gender)
+    .bind(demo.birth_year)
+    .bind(&demo.country_code)
     .execute(&state.db)
     .await
     .map_err(|e| {
@@ -218,7 +242,8 @@ pub async fn create_user(
     })?;
 
     let user = sqlx::query_as::<_, UserPublic>(
-        "SELECT id, name, email, role::text AS role, created_at FROM users WHERE id = $1",
+        "SELECT id, name, email, role::text AS role, created_at, gender, country_code \
+         FROM users WHERE id = $1",
     )
     .bind(id)
     .fetch_one(&state.db)
@@ -237,7 +262,8 @@ pub async fn update_user(
     require_admin(&auth)?;
 
     let existing = sqlx::query_as::<_, UserPublic>(
-        "SELECT id, name, email, role::text AS role, created_at FROM users WHERE id = $1",
+        "SELECT id, name, email, role::text AS role, created_at, gender, country_code \
+         FROM users WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(&state.db)
@@ -245,9 +271,16 @@ pub async fn update_user(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::NOT_FOUND)?;
 
-    if req.name.is_none() && req.email.is_none() && req.role.is_none() {
+    let has_demo = req.gender.is_some() || req.birth_year.is_some() || req.country_code.is_some();
+    if req.name.is_none() && req.email.is_none() && req.role.is_none() && !has_demo {
         return Err(StatusCode::BAD_REQUEST);
     }
+
+    let demo = validate_demographics(&DemographicsInput {
+        gender: req.gender.clone(),
+        birth_year: req.birth_year,
+        country_code: req.country_code.clone(),
+    })?;
 
     let name = req.name.map(|n| n.trim().to_string()).unwrap_or(existing.name.clone());
     let email = req
@@ -279,18 +312,27 @@ pub async fn update_user(
     }
 
     sqlx::query(
-        "UPDATE users SET name = $1, email = $2, role = $3::user_role WHERE id = $4",
+        "UPDATE users SET name = $1, email = $2, role = $3::user_role, \
+         gender = COALESCE($4, gender), \
+         birth_year = COALESCE($5, birth_year), \
+         country_code = COALESCE($6, country_code), \
+         country = COALESCE($6, country) \
+         WHERE id = $7",
     )
     .bind(&name)
     .bind(&email)
     .bind(&role_str)
+    .bind(&demo.gender)
+    .bind(demo.birth_year)
+    .bind(&demo.country_code)
     .bind(id)
     .execute(&state.db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let updated = sqlx::query_as::<_, UserPublic>(
-        "SELECT id, name, email, role::text AS role, created_at FROM users WHERE id = $1",
+        "SELECT id, name, email, role::text AS role, created_at, gender, country_code \
+         FROM users WHERE id = $1",
     )
     .bind(id)
     .fetch_one(&state.db)

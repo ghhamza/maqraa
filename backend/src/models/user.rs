@@ -19,6 +19,8 @@ pub struct User {
     pub gender: Option<String>,
     pub date_of_birth: Option<NaiveDate>,
     pub country: Option<String>,
+    pub birth_year: Option<i16>,
+    pub country_code: Option<String>,
     pub phone: Option<String>,
     pub spoken_languages: Vec<String>,
     pub qiraat_taught: Vec<String>,

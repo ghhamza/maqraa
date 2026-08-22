@@ -99,7 +99,9 @@ pub async fn complete_profile(
 
     sqlx::query(
         "UPDATE users SET gender = $1, date_of_birth = $2, country = $3, phone = $4, \
-         spoken_languages = $5, qiraat_taught = $6, profile_completion_pending = false \
+         spoken_languages = $5, qiraat_taught = $6, profile_completion_pending = false, \
+         birth_year = EXTRACT(YEAR FROM $2::date)::SMALLINT, \
+         country_code = $3 \
          WHERE id = $7",
     )
     .bind(gender)

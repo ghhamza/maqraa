@@ -10,6 +10,8 @@ export interface User {
   gender: "male" | "female" | null;
   date_of_birth: string | null;
   country: string | null;
+  birth_year: number | null;
+  country_code: string | null;
   phone: string | null;
   spoken_languages: string[];
   qiraat_taught: string[];

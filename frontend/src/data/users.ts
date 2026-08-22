@@ -6,7 +6,7 @@ import { api } from "../lib/api";
 import { userKeys } from "../lib/queryKeys";
 import { normalizeUserPublic } from "../lib/profileDetails";
 import { useApiMutation } from "../lib/useApiMutation";
-import type { Paginated, RecitationPublic, StudentProgress, UserNotificationItem, UserPublic, UserStats } from "../types";
+import type { Paginated, RecitationPublic, StudentProgress, User, UserNotificationItem, UserPublic, UserStats } from "../types";
 
 type RoleFilter = "" | "student" | "teacher" | "admin";
 
@@ -97,6 +97,9 @@ interface CreateUserInput {
   email: string;
   password: string;
   role: "student" | "teacher" | "admin";
+  gender?: "male" | "female" | null;
+  birth_year?: number | null;
+  country_code?: string | null;
 }
 
 export function useCreateUser(onSuccess?: () => void, onError?: (message: string) => void) {
@@ -113,6 +116,9 @@ interface UpdateUserInput {
   name: string;
   email: string;
   role: "student" | "teacher" | "admin";
+  gender?: "male" | "female" | null;
+  birth_year?: number | null;
+  country_code?: string | null;
 }
 
 export function useUpdateUser(onSuccess?: () => void, onError?: (message: string) => void) {
@@ -126,6 +132,9 @@ export function useUpdateUser(onSuccess?: () => void, onError?: (message: string
           name: input.name,
           email: input.email,
           role: input.role,
+          gender: input.gender,
+          birth_year: input.birth_year,
+          country_code: input.country_code,
         },
       }),
     invalidates: [userKeys.lists(), userKeys.stats()],
@@ -273,6 +282,31 @@ export function useUpdatePassword(onSuccess?: () => void, onError?: (message: st
         data: input,
       }),
     onSuccess: () => onSuccess?.(),
+    onError: (message) => onError?.(message),
+  });
+}
+
+export interface UpdateAuthProfileInput {
+  name: string;
+  gender?: "male" | "female" | null;
+  birth_year?: number | null;
+  country_code?: string | null;
+}
+
+export function useUpdateProfile(
+  onSuccess?: (user: User) => void,
+  onError?: (message: string) => void,
+) {
+  return useApiMutation<User, UpdateAuthProfileInput>({
+    mutationFn: async (input) => {
+      const { data } = await api.request<User>({
+        method: "put",
+        url: "auth/profile",
+        data: input,
+      });
+      return normalizeUserFromApi(data);
+    },
+    onSuccess: (user) => onSuccess?.(user),
     onError: (message) => onError?.(message),
   });
 }

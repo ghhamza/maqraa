@@ -18,6 +18,8 @@ pub struct UserResponse {
     pub gender: Option<String>,
     pub date_of_birth: Option<NaiveDate>,
     pub country: Option<String>,
+    pub birth_year: Option<i16>,
+    pub country_code: Option<String>,
     pub phone: Option<String>,
     pub spoken_languages: Vec<String>,
     pub qiraat_taught: Vec<String>,
@@ -44,6 +46,8 @@ pub struct UserPublic {
     pub email: String,
     pub role: String,
     pub created_at: DateTime<Utc>,
+    pub gender: Option<String>,
+    pub country_code: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -57,6 +61,8 @@ pub struct UserAdminDetail {
     pub gender: Option<String>,
     pub date_of_birth: Option<NaiveDate>,
     pub country: Option<String>,
+    pub birth_year: Option<i16>,
+    pub country_code: Option<String>,
     pub phone: Option<String>,
     pub spoken_languages: Vec<String>,
     pub qiraat_taught: Vec<String>,

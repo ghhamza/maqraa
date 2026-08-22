@@ -58,12 +58,18 @@ export function profileDetailsFromUser(user: User | null): ProfileDetailsValues 
 }
 
 export function normalizeUserFromApi(data: User): User {
+  const countryCode =
+    (typeof data.country_code === "string" && data.country_code.trim()) ||
+    (typeof data.country === "string" && data.country.trim()) ||
+    null;
   return {
     ...data,
     profile_completion_pending: Boolean(data.profile_completion_pending),
     gender: data.gender === "male" || data.gender === "female" ? data.gender : null,
     date_of_birth: data.date_of_birth ?? null,
     country: data.country ?? null,
+    birth_year: typeof data.birth_year === "number" ? data.birth_year : null,
+    country_code: countryCode ? countryCode.toUpperCase() : null,
     phone: data.phone ?? null,
     spoken_languages: data.spoken_languages ?? [],
     qiraat_taught: data.qiraat_taught ?? [],

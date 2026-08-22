@@ -17,6 +17,7 @@ import { AppLayout } from "./components/layout/AppLayout";
 import { HomePage } from "./pages/HomePage";
 import { UsersPage } from "./pages/users/UsersPage";
 import { InstanceInvitesPage } from "./pages/admin/InstanceInvitesPage";
+import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
 import { UserDetailPage } from "./pages/users/UserDetailPage";
 import { RoomsPage } from "./pages/rooms/RoomsPage";
 import { ArchivedRoomsPage } from "./pages/rooms/ArchivedRoomsPage";
@@ -113,6 +114,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute>
             <UsersPage />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/dashboard",
+        element: (
+          <AdminRoute>
+            <AdminDashboardPage />
           </AdminRoute>
         ),
       },

@@ -21,6 +21,11 @@ interface AuthState {
   loginWithGoogle: (
     credential: string,
     role?: "student" | "teacher",
+    demographics?: {
+      gender?: "male" | "female" | null;
+      birth_year?: number | null;
+      country_code?: string | null;
+    },
   ) => Promise<AuthResponse>;
 }
 
@@ -38,11 +43,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ token: null, user: null, entitlements: null });
   },
   setUser: (user) => set({ user }),
-  loginWithGoogle: async (credential, role) => {
+  loginWithGoogle: async (credential, role, demographics) => {
     try {
       const { data } = await api.post<AuthResponse>("auth/google", {
         credential,
         ...(role ? { role } : {}),
+        ...(demographics?.gender ? { gender: demographics.gender } : {}),
+        ...(demographics?.birth_year != null
+          ? { birth_year: demographics.birth_year }
+          : {}),
+        ...(demographics?.country_code
+          ? { country_code: demographics.country_code }
+          : {}),
       });
       if (!data?.token || !data?.user) {
         throw new Error("invalid google auth response");
