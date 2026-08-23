@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus, Trash2, Users, Mars, Venus } from "lucide-react";
@@ -11,14 +11,20 @@ import type { UserPublic } from "../../types";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import { Table, type TableColumn } from "../../components/ui/Table";
+import { ListPagination } from "../../components/ui/ListPagination";
+import { Table, type TableColumn, type TableSortState } from "../../components/ui/Table";
 import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { UserFormModal } from "../../components/users/UserFormModal";
 import { DeleteConfirmModal } from "../../components/users/DeleteConfirmModal";
 import { roleTranslationKey } from "../../lib/roleLabels";
-import { useUsersList, useUsersStats } from "../../data/users";
+import {
+  USERS_PAGE_SIZE,
+  useUsersList,
+  useUsersStats,
+  type UsersListSortKey,
+} from "../../data/users";
 
 type RoleFilter = "" | "student" | "teacher" | "admin";
 
@@ -28,6 +34,15 @@ function badgeVariant(role: UserPublic["role"]): "green" | "blue" | "gold" {
   return "green";
 }
 
+const SORTABLE_KEYS = new Set<string>([
+  "name",
+  "email",
+  "role",
+  "gender",
+  "country_code",
+  "created_at",
+]);
+
 export function UsersPage() {
   const { t } = useTranslation();
   const { mediumTime } = useLocaleDate();
@@ -35,6 +50,8 @@ export function UsersPage() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("");
+  const [offset, setOffset] = useState(0);
+  const [sort, setSort] = useState<TableSortState>({ key: "created_at", order: "desc" });
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
@@ -43,12 +60,35 @@ export function UsersPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<UserPublic | null>(null);
 
-  const usersQuery = useUsersList(debouncedSearch, roleFilter);
+  useEffect(() => {
+    setOffset(0);
+  }, [debouncedSearch, roleFilter, sort.key, sort.order]);
+
+  const sortKey = (SORTABLE_KEYS.has(sort.key) ? sort.key : "created_at") as UsersListSortKey;
+
+  const usersQuery = useUsersList({
+    search: debouncedSearch,
+    role: roleFilter,
+    limit: USERS_PAGE_SIZE,
+    offset,
+    sort: sortKey,
+    order: sort.order,
+  });
   const statsQuery = useUsersStats();
 
-  const users = usersQuery.data ?? [];
+  const page = usersQuery.data;
+  const users = page?.items ?? [];
+  const total = page?.total ?? 0;
   const stats = statsQuery.data ?? null;
   const loading = usersQuery.isPending && !usersQuery.isPlaceholderData;
+  const fetching = usersQuery.isFetching;
+
+  useEffect(() => {
+    if (total <= 0) return;
+    if (offset >= total) {
+      setOffset(Math.max(0, Math.floor((total - 1) / USERS_PAGE_SIZE) * USERS_PAGE_SIZE));
+    }
+  }, [total, offset]);
 
   const openCreate = useCallback(() => {
     setFormMode("create");
@@ -75,6 +115,7 @@ export function UsersPage() {
   const clearUserFilters = useCallback(() => {
     setSearch("");
     setRoleFilter("");
+    setOffset(0);
   }, []);
 
   const columns: TableColumn<UserPublic>[] = useMemo(
@@ -82,16 +123,18 @@ export function UsersPage() {
       {
         key: "name",
         header: t("users.name"),
+        sortable: true,
         render: (row) => (
           <Link to={`/users/${row.id}`} className="font-medium text-[var(--color-primary)] hover:underline">
             {row.name}
           </Link>
         ),
       },
-      { key: "email", header: t("users.email"), render: (row) => row.email },
+      { key: "email", header: t("users.email"), sortable: true, render: (row) => row.email },
       {
         key: "role",
         header: t("users.role"),
+        sortable: true,
         render: (row) => (
           <Badge variant={badgeVariant(row.role)}>{t(roleTranslationKey(row.role))}</Badge>
         ),
@@ -99,6 +142,7 @@ export function UsersPage() {
       {
         key: "gender",
         header: t("profile.demographics.gender"),
+        sortable: true,
         render: (row) => {
           if (row.gender === "male") {
             return (
@@ -122,11 +166,13 @@ export function UsersPage() {
       {
         key: "country_code",
         header: t("profile.demographics.country"),
+        sortable: true,
         render: (row) => row.country_code ?? "—",
       },
       {
         key: "created_at",
         header: t("users.registrationDate"),
+        sortable: true,
         render: (row) => mediumTime(row.created_at),
       },
       {
@@ -246,7 +292,23 @@ export function UsersPage() {
           primaryAction={{ label: t("rooms.clearFilters"), onClick: clearUserFilters }}
         />
       ) : (
-        <Table columns={columns} data={users} rowKey={(r) => r.id} emptyMessage="" />
+        <div className="space-y-4">
+          <Table
+            columns={columns}
+            data={users}
+            rowKey={(r) => r.id}
+            emptyMessage=""
+            sort={sort}
+            onSortChange={setSort}
+          />
+          <ListPagination
+            total={total}
+            limit={USERS_PAGE_SIZE}
+            offset={offset}
+            onOffsetChange={setOffset}
+            disabled={fetching}
+          />
+        </div>
       )}
 
       <UserFormModal

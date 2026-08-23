@@ -25,6 +25,10 @@ pub struct ListUsersQuery {
     pub search: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    /// Whitelisted: name | email | role | gender | country_code | created_at
+    pub sort: Option<String>,
+    /// asc | desc (default depends on sort; created_at defaults to desc)
+    pub order: Option<String>,
 }
 
 fn push_user_filters<'a>(qb: &mut QueryBuilder<'a, Postgres>, params: &'a ListUsersQuery) {
@@ -46,6 +50,38 @@ fn push_user_filters<'a>(qb: &mut QueryBuilder<'a, Postgres>, params: &'a ListUs
             qb.push_bind(pattern);
             qb.push(")");
         }
+    }
+}
+
+/// Safe ORDER BY clause from whitelist (never interpolate raw user input into identifiers).
+fn users_order_by(sort: Option<&str>, order: Option<&str>) -> &'static str {
+    let col = match sort.map(str::trim).unwrap_or("created_at") {
+        "name" => "name",
+        "email" => "email",
+        "role" => "role",
+        "gender" => "gender",
+        "country_code" => "country_code",
+        _ => "created_at",
+    };
+    let default_desc = col == "created_at";
+    let desc = match order.map(|o| o.trim().to_ascii_lowercase()).as_deref() {
+        Some("asc") => false,
+        Some("desc") => true,
+        _ => default_desc,
+    };
+    match (col, desc) {
+        ("name", false) => " ORDER BY name ASC NULLS LAST, id ASC",
+        ("name", true) => " ORDER BY name DESC NULLS LAST, id DESC",
+        ("email", false) => " ORDER BY email ASC NULLS LAST, id ASC",
+        ("email", true) => " ORDER BY email DESC NULLS LAST, id DESC",
+        ("role", false) => " ORDER BY role ASC, id ASC",
+        ("role", true) => " ORDER BY role DESC, id DESC",
+        ("gender", false) => " ORDER BY gender ASC NULLS LAST, id ASC",
+        ("gender", true) => " ORDER BY gender DESC NULLS LAST, id DESC",
+        ("country_code", false) => " ORDER BY country_code ASC NULLS LAST, id ASC",
+        ("country_code", true) => " ORDER BY country_code DESC NULLS LAST, id DESC",
+        ("created_at", false) => " ORDER BY created_at ASC, id ASC",
+        _ => " ORDER BY created_at DESC, id DESC",
     }
 }
 
@@ -159,7 +195,7 @@ pub async fn list_users(
          FROM users WHERE 1=1",
     );
     push_user_filters(&mut qb, &params);
-    qb.push(" ORDER BY created_at DESC");
+    qb.push(users_order_by(params.sort.as_deref(), params.order.as_deref()));
     qb.push(" LIMIT ");
     qb.push_bind(limit);
     qb.push(" OFFSET ");

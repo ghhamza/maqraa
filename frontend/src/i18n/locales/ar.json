@@ -22,7 +22,13 @@
     "archive": "أرشفة",
     "restore": "استعادة",
     "continue": "متابعة",
-    "dismiss": "إخفاء"
+    "dismiss": "إخفاء",
+    "sortBy": "ترتيب حسب {{column}}",
+    "pagination": {
+      "showing": "عرض {{from}}–{{to}} من {{total}}",
+      "previous": "السابق",
+      "next": "التالي"
+    }
   },
   "wizard": {
     "createHalaqaTitle": "أنشئ حلقة جديدة",

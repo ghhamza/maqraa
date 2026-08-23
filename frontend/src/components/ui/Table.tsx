@@ -2,13 +2,24 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { Fragment, type ReactNode } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+
+export type TableSortOrder = "asc" | "desc";
+
+export interface TableSortState {
+  key: string;
+  order: TableSortOrder;
+}
 
 export interface TableColumn<T> {
   key: string;
   header: string;
   render: (row: T) => ReactNode;
   className?: string;
+  /** When true, header becomes a sort toggle (requires `sort` + `onSortChange` on Table). */
+  sortable?: boolean;
 }
 
 interface TableProps<T> {
@@ -26,6 +37,8 @@ interface TableProps<T> {
   /** Embedded inside another card — no outer chrome / fixed min-width. */
   variant?: "card" | "plain";
   className?: string;
+  sort?: TableSortState | null;
+  onSortChange?: (next: TableSortState) => void;
 }
 
 export function Table<T>({
@@ -42,7 +55,11 @@ export function Table<T>({
   renderExpandedRow,
   variant = "card",
   className,
+  sort,
+  onSortChange,
 }: TableProps<T>) {
+  const { t } = useTranslation();
+
   if (data.length === 0) {
     return (
       <div
@@ -59,6 +76,15 @@ export function Table<T>({
     );
   }
 
+  function toggleSort(key: string) {
+    if (!onSortChange) return;
+    if (sort?.key === key) {
+      onSortChange({ key, order: sort.order === "asc" ? "desc" : "asc" });
+      return;
+    }
+    onSortChange({ key, order: key === "created_at" ? "desc" : "asc" });
+  }
+
   const table = (
     <table
       className={cn(
@@ -68,18 +94,54 @@ export function Table<T>({
     >
       <thead>
         <tr className="border-b border-gray-100 bg-gray-50/80">
-          {columns.map((col) => (
-            <th
-              key={col.key}
-              className={cn(
-                "font-semibold text-[var(--color-text)]",
-                variant === "plain" ? "px-2 py-2 text-xs" : "px-4 py-3",
-                col.className,
-              )}
-            >
-              {col.header}
-            </th>
-          ))}
+          {columns.map((col) => {
+            const active = sort?.key === col.key;
+            const sortable = Boolean(col.sortable && onSortChange);
+            return (
+              <th
+                key={col.key}
+                scope="col"
+                aria-sort={
+                  sortable && active
+                    ? sort.order === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : sortable
+                      ? "none"
+                      : undefined
+                }
+                className={cn(
+                  "font-semibold text-[var(--color-text)]",
+                  variant === "plain" ? "px-2 py-2 text-xs" : "px-4 py-3",
+                  col.className,
+                )}
+              >
+                {sortable ? (
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex max-w-full items-center gap-1.5 rounded-md text-start outline-none",
+                      "hover:text-[var(--color-primary)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]/30",
+                      active && "text-[var(--color-primary)]",
+                    )}
+                    onClick={() => toggleSort(col.key)}
+                    aria-label={t("common.sortBy", { column: col.header })}
+                  >
+                    <span className="truncate">{col.header}</span>
+                    {active && sort.order === "asc" ? (
+                      <ArrowUp className="size-3.5 shrink-0 opacity-80" aria-hidden />
+                    ) : active && sort.order === "desc" ? (
+                      <ArrowDown className="size-3.5 shrink-0 opacity-80" aria-hidden />
+                    ) : (
+                      <ArrowUpDown className="size-3.5 shrink-0 opacity-40" aria-hidden />
+                    )}
+                  </button>
+                ) : (
+                  col.header
+                )}
+              </th>
+            );
+          })}
         </tr>
       </thead>
       <tbody>

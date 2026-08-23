@@ -22,7 +22,13 @@
     "archive": "Archiver",
     "restore": "Restaurer",
     "continue": "Continuer",
-    "dismiss": "Fermer"
+    "dismiss": "Fermer",
+    "sortBy": "Trier par {{column}}",
+    "pagination": {
+      "showing": "Affichage de {{from}}–{{to}} sur {{total}}",
+      "previous": "Précédent",
+      "next": "Suivant"
+    }
   },
   "wizard": {
     "createHalaqaTitle": "Créer une nouvelle halaqa",

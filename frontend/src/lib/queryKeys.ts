@@ -55,8 +55,14 @@ export const userKeys = {
   all: ["users"] as const,
   stats: () => ["users", "stats"] as const,
   lists: () => ["users", "list"] as const,
-  list: (filters: { search: string; role?: string }) =>
-    ["users", "list", filters] as const,
+  list: (filters: {
+    search: string;
+    role?: string;
+    limit?: number;
+    offset?: number;
+    sort?: string;
+    order?: string;
+  }) => ["users", "list", filters] as const,
   detail: (id: string) => ["users", "detail", id] as const,
   studentRecitations: (id: string) => ["users", id, "recitations"] as const,
   studentProgress: (id: string) => ["users", id, "progress"] as const,

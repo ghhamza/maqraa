@@ -10,26 +10,64 @@ import type { Paginated, RecitationPublic, StudentProgress, User, UserNotificati
 
 type RoleFilter = "" | "student" | "teacher" | "admin";
 
-export function useUsersList(search: string, role: RoleFilter) {
+export type UsersListSortKey =
+  | "name"
+  | "email"
+  | "role"
+  | "gender"
+  | "country_code"
+  | "created_at";
+
+export type UsersListSortOrder = "asc" | "desc";
+
+export interface UsersListParams {
+  search: string;
+  role: RoleFilter;
+  limit?: number;
+  offset?: number;
+  sort?: UsersListSortKey;
+  order?: UsersListSortOrder;
+}
+
+const USERS_PAGE_SIZE = 20;
+
+export function useUsersList({
+  search,
+  role,
+  limit = USERS_PAGE_SIZE,
+  offset = 0,
+  sort = "created_at",
+  order = "desc",
+}: UsersListParams) {
   const trimmedSearch = search.trim();
   return useQuery({
     queryKey: userKeys.list({
       search: trimmedSearch,
       role: role || undefined,
+      limit,
+      offset,
+      sort,
+      order,
     }),
     queryFn: async ({ signal }) => {
       const { data } = await api.get<Paginated<UserPublic>>("users", {
         signal,
         params: {
+          limit,
+          offset,
+          sort,
+          order,
           ...(role ? { role } : {}),
           ...(trimmedSearch ? { search: trimmedSearch } : {}),
         },
       });
-      return data.items;
+      return data;
     },
     placeholderData: keepPreviousData,
   });
 }
+
+export { USERS_PAGE_SIZE };
 
 export function useUsersStats() {
   return useQuery({
