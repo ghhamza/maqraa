@@ -1518,6 +1518,7 @@ function LiveSessionPageInner() {
               page={page}
               totalPages={totalPages}
               canNavigate={mushafNavigate}
+              riwaya={riwaya}
               showPager={!isBoardMode}
               isTeacher={isTeacher}
               handRaised={sessionState.raisedHands.includes(user?.id ?? "")}

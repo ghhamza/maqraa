@@ -273,6 +273,27 @@ export function getPageForSurahStart(surah: number, riwaya: Riwaya = "hafs"): nu
 }
 
 /**
+ * Jump to an adjacent surah start from the current Mushaf page.
+ * - Next: start of the surah after the last one on this page (no-op on an-Nās).
+ * - Prev: start of the first surah on this page if mid-surah; otherwise previous surah start.
+ */
+export function getAdjacentSurahStartPage(
+  page: number,
+  direction: -1 | 1,
+  riwaya: Riwaya = "hafs",
+): number {
+  const { startSurah, endSurah } = getSurahRangeOnPage(page, riwaya);
+  if (direction === 1) {
+    if (endSurah >= 114) return page;
+    return getPageForSurahStart(endSurah + 1, riwaya);
+  }
+  const currentStart = getPageForSurahStart(startSurah, riwaya);
+  if (page > currentStart) return currentStart;
+  if (startSurah <= 1) return page;
+  return getPageForSurahStart(startSurah - 1, riwaya);
+}
+
+/**
  * Al-Fatiha’s page and Al-Baqarah’s opening page are laid out centered in the mushaf column
  * (vertically in the reader UI, matching common print presentation).
  */

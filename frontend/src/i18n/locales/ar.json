@@ -548,6 +548,8 @@
     "goToJuz": "الذهاب إلى جزء",
     "prevPage": "الصفحة السابقة",
     "nextPage": "الصفحة التالية",
+    "prevSurah": "السورة السابقة",
+    "nextSurah": "السورة التالية",
     "jumpTitle": "الانتقال إلى موضع",
     "jumpOpen": "انتقال",
     "navigator": {

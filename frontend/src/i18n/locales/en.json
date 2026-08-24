@@ -548,6 +548,8 @@
     "goToJuz": "Go to juz",
     "prevPage": "Previous page",
     "nextPage": "Next page",
+    "prevSurah": "Previous surah",
+    "nextSurah": "Next surah",
     "jumpTitle": "Go to location",
     "jumpOpen": "Jump",
     "navigator": {

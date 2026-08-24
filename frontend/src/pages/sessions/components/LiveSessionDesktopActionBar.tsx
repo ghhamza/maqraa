@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Hand,
   MessageSquare,
   Mic,
@@ -16,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { MicError } from "@/hooks/useLivekitConnection";
 import { formatLocaleNumber } from "@/lib/formatLocaleNumber";
+import { getAdjacentSurahStartPage, type Riwaya } from "@/lib/quranService";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const DOCK_BTN =
@@ -29,6 +32,7 @@ export interface LiveSessionDesktopActionBarProps {
   page: number;
   totalPages: number;
   canNavigate: boolean;
+  riwaya: Riwaya;
   /** Hide page controls in board mode. */
   showPager?: boolean;
   isTeacher?: boolean;
@@ -56,6 +60,7 @@ export function LiveSessionDesktopActionBar(props: LiveSessionDesktopActionBarPr
     page,
     totalPages,
     canNavigate,
+    riwaya,
     showPager = true,
     isTeacher = false,
     handRaised = false,
@@ -74,11 +79,29 @@ export function LiveSessionDesktopActionBar(props: LiveSessionDesktopActionBarPr
 
   const PrevIcon = isRtl ? ChevronRight : ChevronLeft;
   const NextIcon = isRtl ? ChevronLeft : ChevronRight;
+  const PrevSurahIcon = isRtl ? ChevronsRight : ChevronsLeft;
+  const NextSurahIcon = isRtl ? ChevronsLeft : ChevronsRight;
+
+  const prevSurahPage = getAdjacentSurahStartPage(page, -1, riwaya);
+  const nextSurahPage = getAdjacentSurahStartPage(page, 1, riwaya);
+  const canPrevSurah = canNavigate && prevSurahPage !== page;
+  const canNextSurah = canNavigate && nextSurahPage !== page;
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 hidden justify-center gap-4 p-3.5 md:flex">
       {showPager ? (
         <div className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-[rgba(15,23,42,0.10)] bg-white p-2 shadow-[0_8px_30px_rgba(0,0,0,0.10)]">
+          <DockTip label={t("mushaf.prevSurah")}>
+            <button
+              type="button"
+              className={cn(DOCK_BTN, "size-10 rounded-[10px]")}
+              disabled={!canPrevSurah}
+              aria-label={t("mushaf.prevSurah")}
+              onClick={() => onPageChange(prevSurahPage)}
+            >
+              <PrevSurahIcon className="size-[19px]" strokeWidth={2} aria-hidden />
+            </button>
+          </DockTip>
           <DockTip label={t("mushaf.prevPage")}>
             <button
               type="button"
@@ -107,6 +130,17 @@ export function LiveSessionDesktopActionBar(props: LiveSessionDesktopActionBarPr
               onClick={() => onPageChange(Math.min(totalPages, page + 1))}
             >
               <NextIcon className="size-[19px]" strokeWidth={2} aria-hidden />
+            </button>
+          </DockTip>
+          <DockTip label={t("mushaf.nextSurah")}>
+            <button
+              type="button"
+              className={cn(DOCK_BTN, "size-10 rounded-[10px]")}
+              disabled={!canNextSurah}
+              aria-label={t("mushaf.nextSurah")}
+              onClick={() => onPageChange(nextSurahPage)}
+            >
+              <NextSurahIcon className="size-[19px]" strokeWidth={2} aria-hidden />
             </button>
           </DockTip>
           <div className="mx-0.5 h-6 w-px bg-[rgba(15,23,42,0.10)]" aria-hidden />
