@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
 import { useQuranPage } from "../../hooks/useQuranPage";
 import { getPageFontFamily, loadPageFont, preloadAdjacentPages } from "../../lib/mushafFontLoader";
 import { getSurahName, isMushafOpeningCenterPage } from "../../lib/quranService";
@@ -115,7 +116,8 @@ export function QCFPageRenderer({
   const { t } = useTranslation();
   const { data, loading, error, reload } = useQuranPage(pageNumber, riwaya);
   const [fontReady, setFontReady] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  /** Fills the card content area — measured for two-constraint font (not the hugged text column). */
+  const measureRef = useRef<HTMLDivElement>(null);
   const [fontSizePx, setFontSizePx] = useState(28);
 
   useCancellableEffect(
@@ -145,29 +147,49 @@ export function QCFPageRenderer({
   );
 
   useEffect(() => {
-    if (!fontReady || !containerRef.current) return;
-    const el = containerRef.current;
-    const applyFromWidth = () => {
-      const w = el.clientWidth;
-      if (w < 64) return;
-      // Divisor tuned empirically so the widest QCF line (15 words, full-justified) fits with
-      // ~3% slack. Clamp: mobile minimum legibility (16px) through desktop cap (34px - beyond
-      // this the line height and letter size make the page feel oversized).
-      const next = Math.max(16, Math.min(34, (w - 2) / 16));
+    if (!fontReady || !measureRef.current || !data?.lines?.length) return;
+    const el = measureRef.current;
+    const lineCount = Math.max(1, data.lines.length);
+    /** Madina pages are laid out on a 15-line grid; cap short pages to this scale. */
+    const STANDARD_LINES = 15;
+    const LINE_HEIGHT = 1.65;
+    const FONT_MIN = 16;
+    const FONT_MAX = 48;
+
+    const applyFit = () => {
+      const usableW = el.clientWidth;
+      const usableH = el.clientHeight;
+      if (usableW < 64) return;
+
+      const fontW = (usableW - 2) / 16;
+      const card = el.closest("[data-mushaf-card]");
+      const heightBounded = card?.getAttribute("data-mushaf-fit") === "1";
+
+      let next: number;
+      if (heightBounded && usableH >= 48) {
+        // Height-first: full page visible. Cap short pages at the 15-line scale.
+        const fontH = (usableH - 2) / lineCount / LINE_HEIGHT;
+        const fontHCap = (usableH - 2) / STANDARD_LINES / LINE_HEIGHT;
+        next = Math.min(fontH, fontHCap, fontW);
+      } else {
+        // Standalone / unbounded height: width-only (avoid content-height feedback loops).
+        next = fontW;
+      }
+      next = Math.max(FONT_MIN, Math.min(FONT_MAX, next));
       setFontSizePx((prev) => (Math.abs(prev - next) < 0.25 ? prev : next));
     };
 
     const ro = new ResizeObserver(() => {
-      /* Double rAF so CSS has committed the new card width before we read it. */
-      requestAnimationFrame(() => requestAnimationFrame(applyFromWidth));
+      /* Double rAF so CSS has committed the new card size before we read it. */
+      requestAnimationFrame(() => requestAnimationFrame(applyFit));
     });
     ro.observe(el);
+    const card = el.closest("[data-mushaf-card]");
+    if (card instanceof HTMLElement && card !== el) ro.observe(card);
 
-    /* Prime once in case the element was already at its final width at effect-setup time. */
-    requestAnimationFrame(() => requestAnimationFrame(applyFromWidth));
-
+    requestAnimationFrame(() => requestAnimationFrame(applyFit));
     return () => ro.disconnect();
-  }, [fontReady]);
+  }, [fontReady, data?.lines?.length, pageNumber]);
 
   useEffect(() => {
     if (fontReady) preloadAdjacentPages(pageNumber);
@@ -176,7 +198,7 @@ export function QCFPageRenderer({
   useEffect(() => {
     if (!highlightRange || !fontReady) return;
     requestAnimationFrame(() => {
-      const firstHighlighted = containerRef.current?.querySelector(".mushaf-word--highlighted");
+      const firstHighlighted = measureRef.current?.querySelector(".mushaf-word--highlighted");
       if (firstHighlighted) {
         firstHighlighted.scrollIntoView({ behavior: "smooth", block: "center" });
       }
@@ -254,34 +276,41 @@ export function QCFPageRenderer({
     t,
   };
 
-  const safeFontPx = Math.min(34, Math.max(16, Number.isFinite(fontSizePx) ? fontSizePx : 28));
+  const safeFontPx = Math.min(48, Math.max(16, Number.isFinite(fontSizePx) ? fontSizePx : 28));
+  /** Widest justified QCF line ≈ 16em; hug that width and center in the card. */
+  const textColMaxPx = safeFontPx * 16;
+  const lineCount = data.lines.length;
+  const centerShort = centerInColumn || lineCount < 15;
 
-  if (centerInColumn) {
-    const { head, body } = partitionOpeningHeadBody(data.lines);
-    const bodyCenter = trimAyahLinesForCentering(body);
-    const centeredLines = [...head, ...bodyCenter];
-    return (
-      <div
-        ref={containerRef}
-        className="flex w-full flex-1 flex-col justify-center text-[var(--color-text)]"
-        style={{ fontSize: safeFontPx, lineHeight: 1.65 }}
-      >
-        {centeredLines.map((line) => (
-          <LineView key={line.lineNumber} line={line} {...lineProps} />
-        ))}
-      </div>
-    );
-  }
+  const textClass = cn(
+    "mx-auto flex w-full flex-col text-[var(--color-text)]",
+    centerShort && "flex-1 justify-center",
+  );
+  const textStyle = {
+    fontSize: safeFontPx,
+    lineHeight: 1.65 as const,
+    maxWidth: textColMaxPx,
+  };
+
+  const lines = (() => {
+    if (centerInColumn) {
+      const { head, body } = partitionOpeningHeadBody(data.lines);
+      const bodyCenter = trimAyahLinesForCentering(body);
+      return [...head, ...bodyCenter];
+    }
+    return data.lines;
+  })();
 
   return (
     <div
-      ref={containerRef}
-      className="flex w-full flex-col text-[var(--color-text)]"
-      style={{ fontSize: safeFontPx, lineHeight: 1.65 }}
+      ref={measureRef}
+      className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col"
     >
-      {data.lines.map((line) => (
-        <LineView key={line.lineNumber} line={line} {...lineProps} />
-      ))}
+      <div className={textClass} style={textStyle}>
+        {lines.map((line) => (
+          <LineView key={line.lineNumber} line={line} {...lineProps} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -314,16 +343,24 @@ function LineView({
   if (line.lineType === "surah_name" && line.surahNumber != null) {
     const sn = line.surahNumber;
     return (
-      <div className="mushaf-line mushaf-line--centered flex justify-center w-full py-[0.2rem]">
-        <SurahNameSvg surah={sn} className="h-[calc(2.5em*2/3*0.8)] w-auto max-w-full" />
+      <div className="mushaf-line mushaf-line--centered flex w-full items-center justify-center gap-3 py-[0.05em]">
+        <span
+          className="h-px max-w-[96px] flex-1 bg-[color-mix(in_srgb,var(--mushaf-surah-title-color)_22%,transparent)]"
+          aria-hidden
+        />
+        <SurahNameSvg surah={sn} className="h-[1.25em] w-auto max-w-[min(100%,11em)] shrink-0" />
+        <span
+          className="h-px max-w-[96px] flex-1 bg-[color-mix(in_srgb,var(--mushaf-surah-title-color)_22%,transparent)]"
+          aria-hidden
+        />
       </div>
     );
   }
 
   if (line.lineType === "basmallah") {
     return (
-      <div className="mushaf-line mushaf-line--centered flex justify-center py-1">
-        <MushafBasmalahSvg className="h-9 w-auto max-w-full text-[var(--color-text)]" />
+      <div className="mushaf-line mushaf-line--centered flex justify-center py-[0.05em]">
+        <MushafBasmalahSvg className="h-[1.35em] w-auto max-w-full text-[var(--color-text)]" />
       </div>
     );
   }

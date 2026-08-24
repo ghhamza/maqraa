@@ -529,20 +529,20 @@
     "juz": "Juz",
     "hizb": "Hizb",
     "riwaya": "Riwaya",
-    "hafs": "Hafs",
-    "shubah": "Shuʿbah",
-    "warsh": "Warsh",
-    "qalun": "Qālūn",
-    "qunbul": "Qunbul",
-    "bazzi": "al-Bazzī",
-    "doori": "al-Dūrī (Abū ʿAmr)",
-    "susi": "al-Sūsī",
-    "hisham": "Hishām",
-    "ibn_dhakwan": "Ibn Dhakwān",
-    "khalaf": "Khalaf",
-    "khallad": "Khallād",
-    "doori_kisai": "al-Dūrī (al-Kisāʾī)",
-    "abu_harith": "Abū al-Ḥārith",
+    "hafs": "Hafs ‘an ‘Asim",
+    "shubah": "Shu‘bah ‘an ‘Asim",
+    "warsh": "Warsh ‘an Nafi‘",
+    "qalun": "Qalun ‘an Nafi‘",
+    "qunbul": "Qunbul ‘an Ibn Kathir",
+    "bazzi": "al-Bazzi ‘an Ibn Kathir",
+    "doori": "al-Duri ‘an Abu ‘Amr",
+    "susi": "al-Susi ‘an Abu ‘Amr",
+    "hisham": "Hisham ‘an Ibn ‘Amir",
+    "ibn_dhakwan": "Ibn Dhakwan ‘an Ibn ‘Amir",
+    "khalaf": "Khalaf ‘an Hamzah",
+    "khallad": "Khallad ‘an Hamzah",
+    "doori_kisai": "al-Duri ‘an al-Kisai",
+    "abu_harith": "Abu al-Harith ‘an al-Kisai",
     "goToPage": "Go to page",
     "goToSurah": "Go to surah",
     "goToJuz": "Go to juz",
@@ -999,6 +999,10 @@
     "prevAyah": "Previous ayah",
     "following": "Following",
     "freeBrowse": "Free browse",
+    "autoFollow": {
+      "on": "Students follow your page",
+      "off": "Auto-follow paused"
+    },
     "gradeRecitation": "Grade recitation",
     "gradeRecitationModalDescription": "Evaluate the recitation and review grades from this session.",
     "reciter": "Reciter",
@@ -1040,6 +1044,54 @@
     "reconnected": "Reconnected",
     "connectedFromAnotherTab": "You're already connected from another tab or window.",
     "refreshPage": "Refresh page",
+    "authExpired": {
+      "title": "Session expired",
+      "body": "Your login expired during the session. Sign in again, then rejoin the class.",
+      "action": "Back to session page"
+    },
+    "turn": {
+      "noReciter": "No reciter",
+      "giveTurn": "Give the turn",
+      "endRecitation": "End recitation",
+      "recitingNow": "Reciting now"
+    },
+    "chatComingSoon": "Chat — coming soon",
+    "tools": {
+      "rail": "Drawing tools",
+      "hand": "Pan",
+      "annotate": "Word annotation",
+      "pen": "Pen",
+      "highlighter": "Highlighter",
+      "undo": "Undo",
+      "clearAll": "Clear all",
+      "clearConfirmTitle": "Clear all drawings?",
+      "clearConfirmBody": "Drawings on this surface will be cleared for everyone."
+    },
+    "dragToMove": "Drag to move",
+    "hand": {
+      "raise": "Raise hand",
+      "lower": "Lower hand",
+      "raisedGroup": "Raised hands",
+      "passTurn": "Pass the turn"
+    },
+    "drawer": {
+      "recitingGroup": "Reciting now",
+      "othersGroup": "In the halaqah"
+    },
+    "grading": {
+      "openAnnotationsNote_one": "{{count}} open annotation will be saved as homework",
+      "openAnnotationsNote_other": "{{count}} open annotations will be saved as homework"
+    },
+    "mode": {
+      "toggle": "Content mode",
+      "mushaf": "Mushaf",
+      "board": "Board"
+    },
+    "board": {
+      "emptyTitle": "Blank board — the student recites from memory",
+      "emptyHint": "Write with the pen from the tool rail",
+      "annotateUnavailable": "Word annotation is available in Mushaf mode only"
+    },
     "leaveSessionConfirm": "Leave the session?",
     "navigationLeaveHint": "You have an active live session. Leave and disconnect?",
     "stay": "Stay",
@@ -1092,6 +1144,9 @@
       "camera": "Camera options (coming soon).",
       "overflowMore": "More options: full connection status, tools, and follow settings.",
       "autoFollowSwitch": "When on, your Mushaf follows the teacher’s page. When off, you can browse on your own.",
+      "pageBroadcastSwitch": "When on, students follow your Mushaf page. When off, only you change pages.",
+      "modeMushaf": "Show the Mushaf page",
+      "modeBoard": "Show a blank board for memory recitation",
       "endSessionShort": "End the session for everyone. You will be asked to confirm."
     }
   },

@@ -24,13 +24,15 @@
   --mushaf-page-paper: #ffffff;
   --mushaf-page-border: rgba(15, 23, 42, 0.12);
   --mushaf-page-chrome: #1e293b;
+  /* Live session warm stage behind the paper card (Miqraa sage — not quran.space tan) */
+  --mushaf-canvas: #EAECE2;
   /* Mushaf: default = --color-text (#1A1A1A); ayah range = Blue 600; hover & clicked word = gold */
   --mushaf-ayah-range-color: #185fa5;
   --mushaf-word-hover: var(--color-gold);
   --mushaf-selected-word-color: var(--color-gold);
   --mushaf-frame-teal: #2c5f7c;
   --mushaf-frame-teal-deep: #1a5276;
-  /* Surah frame / rules / fallback text; title artwork tint uses `.mushaf-surah-title-img` filter */
+  /* Surah frame / rules accent; title calligraphy uses this via CSS mask */
   --mushaf-surah-title-color: #1a5276;
   /* App shell: viewports narrower than this get horizontal scroll (avoids unusably narrow layout) */
   --app-min-width: 360px;
@@ -153,18 +155,9 @@
 }
 
 /*
- * Surah title SVGs are black glyphs on transparent. Tint to `--mushaf-surah-title-color` without
- * `mask-image` (Safari/WebKit often fails external SVG masks → solid colored rectangle).
+ * Surah title calligraphy is inlined in SurahNameSvg with fill=currentColor
+ * (`text-[var(--mushaf-surah-title-color)]`). Do not use CSS mask-image on these SVGs.
  */
-.mushaf-surah-title-img {
-  filter: brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(172deg)
-    brightness(95%) contrast(95%);
-}
-
-.dark .mushaf-surah-title-img {
-  filter: brightness(0) saturate(100%) invert(90%) sepia(35%) saturate(600%) hue-rotate(175deg)
-    brightness(95%) contrast(95%);
-}
 
 @layer base {
   * {
@@ -203,6 +196,21 @@
   line-height: 1.65;
 }
 
+@keyframes reciter-eq {
+  0%,
+  100% {
+    transform: scaleY(0.5);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.reciter-eq-bar {
+  display: inline-block;
+  transform-origin: bottom;
+  animation: reciter-eq 1s ease-in-out infinite;
+}
+
 /* Surah title / basmalah blocks */
 .mushaf-line--centered {
   text-align: center;
@@ -216,12 +224,11 @@
   align-items: baseline;
   width: 100%;
   min-width: 0;
-  justify-content: center; 
 }
 
-/* Full-width lines: justify */
+/* Full-width Madani lines: spread words edge-to-edge */
 .mushaf-ayah-line--justify {
-  /* justify-content: space-between; */
+  justify-content: space-between;
 }
 
 /* Centered lines (e.g. last line of a surah, Bismillah as an ayah in Al-Fatihah): horizontally centered in the column, matching Madina Mushaf print convention. */

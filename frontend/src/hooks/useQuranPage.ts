@@ -38,7 +38,7 @@ interface ApiWord {
   code_v1?: string;
   line_number: number;
   /** Mushaf page font that owns this glyph (QCF PUA is per-page). */
-  page_number: number;
+  page_number?: number;
 }
 
 interface ApiVerse {
@@ -46,24 +46,48 @@ interface ApiVerse {
   words?: ApiWord[];
 }
 
+interface ApiPagination {
+  next_page: number | null;
+  current_page?: number;
+  total_pages?: number;
+}
+
 interface ApiResponse {
   verses: ApiVerse[];
+  pagination?: ApiPagination;
 }
 
 /** Bump when layout rules change so cached pages refetch. */
-const PAGE_CACHE_VER = 9;
+const PAGE_CACHE_VER = 13;
 const PAGE_CACHE = new Map<string, PageData>();
+
+/**
+ * Raw `verses/by_page/{n}` payloads (may include words whose `page_number` ≠ n).
+ * Shared across adjacent-page assembly so N±1 are not re-downloaded.
+ */
+const RAW_VERSE_CACHE = new Map<number, ApiVerse[]>();
 
 /** Madani mushaf page count (Hafs 604 lines). */
 const MUSHAF_PAGE_COUNT = 604;
+
+/** Hard cap on QF result-page iteration (per_page=300 → far above any mushaf page). */
+const MAX_QF_RESULT_PAGES = 20;
+
+const WORD_FIELDS =
+  "code_v2,code_v1,char_type_name,line_number,position,page_number";
 
 function pageCacheKey(pageNumber: number): string {
   return `${PAGE_CACHE_VER}:${pageNumber}`;
 }
 
-/** Standalone basmalah before the surah body: every surah except At-Tawbah (9), which has none in the Mushaf. */
+/**
+ * Standalone ornamental basmalah before the surah body (Madani Mushaf):
+ * - Al-Fatiha (1): basmalah is ayah 1 in QCF text — no header ornament.
+ * - At-Tawbah (9): no basmalah at all.
+ * - All other surahs: decorative basmalah row under the title.
+ */
 function needsStandaloneBasmallahLine(surah: number): boolean {
-  return surah !== 9;
+  return surah !== 1 && surah !== 9;
 }
 
 function parseGlyph(w: ApiWord): string {
@@ -81,13 +105,63 @@ function emptyAyahLine(lineNumber: number, centered = false): LineData {
   };
 }
 
+/**
+ * Collect words that belong on mushaf page `pageNumber` from one or more
+ * `verses/by_page` responses. QF indexes verses by a different boundary than
+ * QCF v2 word `page_number`, so words for page N often arrive on the N−1
+ * (or N+1) verse list with correct `line_number` / `page_number`.
+ */
+function assembleVersesForMushafPage(
+  pageNumber: number,
+  verseBags: ApiVerse[][],
+): { verses: ApiVerse[]; droppedForeign: number } {
+  const wordsByVerseKey = new Map<string, ApiWord[]>();
+  const verseOrder: string[] = [];
+  const seenWordIds = new Set<number>();
+  let droppedForeign = 0;
+
+  for (const verses of verseBags) {
+    for (const verse of verses) {
+      for (const w of verse.words ?? []) {
+        if (typeof w.page_number === "number" && w.page_number !== pageNumber) {
+          droppedForeign++;
+          continue;
+        }
+        if (seenWordIds.has(w.id)) continue;
+        seenWordIds.add(w.id);
+
+        let list = wordsByVerseKey.get(verse.verse_key);
+        if (!list) {
+          list = [];
+          wordsByVerseKey.set(verse.verse_key, list);
+          verseOrder.push(verse.verse_key);
+        }
+        list.push(w);
+      }
+    }
+  }
+
+  const verses: ApiVerse[] = verseOrder.map((verse_key) => ({
+    verse_key,
+    words: wordsByVerseKey.get(verse_key),
+  }));
+
+  return { verses, droppedForeign };
+}
+
 function buildPageData(pageNumber: number, verses: ApiVerse[], riwaya: Riwaya): PageData {
   const byLine = new Map<number, WordData[]>();
   let minLine = 0;
+  let droppedForeign = 0;
 
   for (const verse of verses) {
     const [s, a] = verse.verse_key.split(":").map(Number) as [number, number];
     for (const w of verse.words ?? []) {
+      // I1 — page membership (render-boundary guard; assembly already filters)
+      if (typeof w.page_number === "number" && w.page_number !== pageNumber) {
+        droppedForeign++;
+        continue;
+      }
       const glyph = parseGlyph(w);
       if (!glyph) continue;
       const lineNum = w.line_number;
@@ -99,12 +173,18 @@ function buildPageData(pageNumber: number, verses: ApiVerse[], riwaya: Riwaya): 
         wordPosition: w.position,
         glyph,
         charTypeName: w.char_type_name,
-        glyphPageFont: typeof w.page_number === "number" ? w.page_number : pageNumber,
+        glyphPageFont: pageNumber,
       };
       const list = byLine.get(lineNum) ?? [];
       list.push(wd);
       byLine.set(lineNum, list);
     }
+  }
+
+  if (droppedForeign > 0) {
+    console.warn(
+      `[useQuranPage] dropped ${droppedForeign} foreign-page word(s) from page ${pageNumber}`,
+    );
   }
 
   for (const [, list] of byLine) {
@@ -117,6 +197,7 @@ function buildPageData(pageNumber: number, verses: ApiVerse[], riwaya: Riwaya): 
 
   if (minLine === 0) minLine = 1;
 
+  // I2 — numeric line order (not Map insertion order / string sort)
   const sortedLines = [...byLine.keys()].sort((a, b) => a - b);
   const [pageStartSurah, pageStartAyah] = getSurahAyahAtPageStart(pageNumber, riwaya);
   /**
@@ -248,40 +329,62 @@ function buildPageData(pageNumber: number, verses: ApiVerse[], riwaya: Riwaya): 
     }
   }
 
-  // 4) Surah begins on QCF line 1 (no empty lines above first ayah): insert surah + basmalah
-  // when the page itself starts at ayah 1 of that surah. Shift ayah rows down by two only if the
-  // last two grid rows have no verse text (otherwise we would truncate the page).
+  // 4) Surah begins on QCF line 1 (no empty lines above first ayah): insert surah title
+  // (and basmalah when needed). Shift ayah rows down only if trailing grid rows are empty
+  // (otherwise we would truncate the page).
   if (minLine === 1) {
     const w = byLine.get(1)![0];
     const [pageStartSurah, pageStartAyah] = getSurahAyahAtPageStart(pageNumber, riwaya);
     const pageStartsAtSurahAyah1 =
       w.surah === pageStartSurah && w.ayah === pageStartAyah && pageStartAyah === 1;
-    const wantBasmallah = pageStartsAtSurahAyah1 && needsStandaloneBasmallahLine(w.surah);
-    const canShiftTwoLines = !rowHasAyahWords(grid[13]) && !rowHasAyahWords(grid[14]);
-
-    if (wantBasmallah && canShiftTwoLines) {
-      for (let i = 12; i >= 0; i--) {
-        const cell = grid[i];
-        if (cell) {
-          grid[i + 2] = { ...cell, lineNumber: i + 3 };
-        } else {
-          grid[i + 2] = null;
+    if (!pageStartsAtSurahAyah1) {
+      /* keep ayah grid as returned by API */
+    } else if (needsStandaloneBasmallahLine(w.surah)) {
+      const canShiftTwoLines = !rowHasAyahWords(grid[13]) && !rowHasAyahWords(grid[14]);
+      if (canShiftTwoLines) {
+        for (let i = 12; i >= 0; i--) {
+          const cell = grid[i];
+          if (cell) {
+            grid[i + 2] = { ...cell, lineNumber: i + 3 };
+          } else {
+            grid[i + 2] = null;
+          }
         }
+        grid[0] = {
+          lineNumber: 1,
+          lineType: "surah_name",
+          isCentered: true,
+          surahNumber: w.surah,
+          words: [],
+        };
+        grid[1] = {
+          lineNumber: 2,
+          lineType: "basmallah",
+          isCentered: true,
+          surahNumber: null,
+          words: [],
+        };
       }
-      grid[0] = {
-        lineNumber: 1,
-        lineType: "surah_name",
-        isCentered: true,
-        surahNumber: w.surah,
-        words: [],
-      };
-      grid[1] = {
-        lineNumber: 2,
-        lineType: "basmallah",
-        isCentered: true,
-        surahNumber: null,
-        words: [],
-      };
+    } else {
+      // Al-Fatiha / At-Tawbah: title only — basmalah is ayah 1 (Fatiha) or absent (Tawbah).
+      const canShiftOneLine = !rowHasAyahWords(grid[14]);
+      if (canShiftOneLine) {
+        for (let i = 13; i >= 0; i--) {
+          const cell = grid[i];
+          if (cell) {
+            grid[i + 1] = { ...cell, lineNumber: i + 2 };
+          } else {
+            grid[i + 1] = null;
+          }
+        }
+        grid[0] = {
+          lineNumber: 1,
+          lineType: "surah_name",
+          isCentered: true,
+          surahNumber: w.surah,
+          words: [],
+        };
+      }
     }
   }
 
@@ -296,6 +399,9 @@ function buildPageData(pageNumber: number, verses: ApiVerse[], riwaya: Riwaya): 
     }
   }
 
+  // I2 — explicit numeric sort at the choke point before the renderer
+  lines.sort((a, b) => a.lineNumber - b.lineNumber);
+
   /* Only 1–2 real words per line: avoid huge space-between gaps; 3+ words stay fully justified */
   const SHORT_LINE_MAX_WORDS = 2;
   for (const line of lines) {
@@ -309,16 +415,60 @@ function buildPageData(pageNumber: number, verses: ApiVerse[], riwaya: Riwaya): 
   return { pageNumber, lines };
 }
 
+/**
+ * Exhaustive `verses/by_page/{apiPage}` fetch (follows `pagination.next_page`).
+ * Only fully-assembled verse lists are cached.
+ */
+async function fetchVersesByApiPage(apiPage: number): Promise<ApiVerse[]> {
+  const cached = RAW_VERSE_CACHE.get(apiPage);
+  if (cached) return cached;
+
+  const all: ApiVerse[] = [];
+  let resultPage = 1;
+
+  for (let i = 0; i < MAX_QF_RESULT_PAGES; i++) {
+    const url = new URL(`https://api.quran.com/api/v4/verses/by_page/${apiPage}`);
+    url.searchParams.set("words", "true");
+    url.searchParams.set("mushaf", "2");
+    url.searchParams.set("word_fields", WORD_FIELDS);
+    url.searchParams.set("per_page", "300");
+    url.searchParams.set("page", String(resultPage));
+
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as ApiResponse;
+    all.push(...(data.verses ?? []));
+
+    const next = data.pagination?.next_page;
+    if (next == null) break;
+    resultPage = next;
+  }
+
+  RAW_VERSE_CACHE.set(apiPage, all);
+  return all;
+}
+
 async function fetchPage(pageNumber: number, riwaya: Riwaya): Promise<PageData> {
   const key = pageCacheKey(pageNumber);
   const cached = PAGE_CACHE.get(key);
   if (cached) return cached;
 
-  const url = `https://api.quran.com/api/v4/verses/by_page/${pageNumber}?words=true&word_fields=code_v2,code_v1,char_type_name,line_number,page_number,position`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = (await res.json()) as ApiResponse;
-  const built = buildPageData(pageNumber, data.verses ?? [], riwaya);
+  /**
+   * Quran.com `verses/by_page/N` with `code_v2` returns words whose `page_number`
+   * may be N−1 or N+1 (verse index ≠ QCF v2 page membership). Those foreign words
+   * carry the *other* page’s `line_number` (often 1–2), which previously rendered
+   * as leaked verses at the top of the page (e.g. Aʿlā 11–15 on page 591).
+   *
+   * Fix: pull N−1 / N / N+1 verse lists, keep only words with `page_number === N`,
+   * and trust glyph `line_number` for those words.
+   */
+  const apiPages = [pageNumber - 1, pageNumber, pageNumber + 1].filter(
+    (p) => p >= 1 && p <= MUSHAF_PAGE_COUNT,
+  );
+  const bags = await Promise.all(apiPages.map((p) => fetchVersesByApiPage(p)));
+  const { verses } = assembleVersesForMushafPage(pageNumber, bags);
+
+  const built = buildPageData(pageNumber, verses, riwaya);
   PAGE_CACHE.set(key, built);
   return built;
 }
@@ -369,6 +519,10 @@ export function useQuranPage(pageNumber: number, riwaya: Riwaya): {
 
   const reload = () => {
     PAGE_CACHE.delete(pageCacheKey(pageNumber));
+    // Bust raw bags that contributed to this page so a forced reload re-hits the API.
+    for (const p of [pageNumber - 1, pageNumber, pageNumber + 1]) {
+      RAW_VERSE_CACHE.delete(p);
+    }
     setToken((t) => t + 1);
   };
 

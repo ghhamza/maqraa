@@ -50,6 +50,25 @@ export function LiveSessionAnotherTab() {
   );
 }
 
+export function LiveSessionAuthExpired({ sessionId }: { sessionId: string }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)] p-6">
+      <div className="w-full max-w-md rounded-xl bg-white p-8 text-center shadow-[0_4px_24px_rgba(26,26,26,0.08)]">
+        <h1 className="mb-3 text-xl font-semibold text-[var(--color-text)]">
+          {t("liveSession.authExpired.title")}
+        </h1>
+        <p className="mb-6 text-[var(--color-text-muted)]">{t("liveSession.authExpired.body")}</p>
+        <Button type="button" variant="primary" onClick={() => navigate(`/sessions/${sessionId}`)}>
+          {t("liveSession.authExpired.action")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function LiveSessionAccessBlocked({
   messageKey,
   sessionId,

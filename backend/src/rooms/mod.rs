@@ -21,6 +21,10 @@ pub struct SessionState {
     pub active_reciter_id: Option<Uuid>,
     pub current_ayah: Option<AyahPosition>,
     pub current_page: Option<i32>,
+    /// Live content surface: `"mushaf"` | `"board"`.
+    pub content_mode: String,
+    /// Students with hand raised, ordered by raise time (oldest first).
+    pub raised_hands: Vec<Uuid>,
     /// Updated on join, leave, and any client activity (for empty-session idle timeout).
     pub last_activity: DateTime<Utc>,
 }
@@ -49,9 +53,15 @@ impl RoomManager {
         user_id == session.teacher_id
     }
 
+    /// Default live content mode — always mushaf; board is opt-in via the teacher toggle.
+    pub fn default_content_mode(_halaqah_type: &str) -> String {
+        "mushaf".to_string()
+    }
+
     /// Adds or replaces a participant's outbound channel.
     /// `max_participants` is typically `max_students + 1` (teacher + students).
     /// If `user_id` is already connected, the old WebSocket receives an error and is replaced (latest tab wins).
+    /// `default_content_mode` is applied only when the in-memory session is first created.
     #[allow(clippy::too_many_arguments)]
     pub async fn join_session(
         &self,
@@ -63,6 +73,7 @@ impl RoomManager {
         role: String,
         tx: mpsc::UnboundedSender<Message>,
         max_participants: usize,
+        _default_content_mode: String,
     ) -> Result<ServerMessage, &'static str> {
         let mut guard = self.sessions.write().await;
         let session = guard.entry(session_id).or_insert_with(|| SessionState {
@@ -73,6 +84,9 @@ impl RoomManager {
             active_reciter_id: None,
             current_ayah: None,
             current_page: None,
+            // Always mushaf for new live rooms (ignore legacy hifz→board seeding).
+            content_mode: "mushaf".to_string(),
+            raised_hands: Vec::new(),
             last_activity: Utc::now(),
         });
 
@@ -89,6 +103,15 @@ impl RoomManager {
             );
         } else if session.participants.len() >= max_participants {
             return Err("room_full");
+        }
+
+        // Legacy hifz rooms were seeded as `board`. If the teacher is (re)joining an
+        // otherwise empty live room, re-seed mushaf as the default surface.
+        if role == "teacher"
+            && session.participants.is_empty()
+            && session.content_mode == "board"
+        {
+            session.content_mode = "mushaf".to_string();
         }
 
         session.last_activity = Utc::now();
@@ -116,6 +139,8 @@ impl RoomManager {
             active_reciter_id: session.active_reciter_id,
             current_ayah: session.current_ayah.clone(),
             current_page: session.current_page,
+            content_mode: session.content_mode.clone(),
+            raised_hands: session.raised_hands.clone(),
             session_id,
             room_id,
         })
@@ -158,10 +183,31 @@ impl RoomManager {
             return;
         };
         session.participants.remove(&user_id);
+        let hand_was_raised = Self::remove_raised_hand(session, user_id);
         session.last_activity = Utc::now();
         if session.active_reciter_id == Some(user_id) {
             session.active_reciter_id = None;
         }
+        let empty = session.participants.is_empty();
+        if empty {
+            // Drop empty rooms immediately so the next join re-seeds content_mode
+            // (avoids a stale `board` default sticking across reconnects).
+            guard.remove(&session_id);
+        }
+        drop(guard);
+        if hand_was_raised && !empty {
+            let msg = ServerMessage::HandChanged {
+                user_id,
+                raised: false,
+            };
+            self.broadcast(session_id, &msg, None).await;
+        }
+    }
+
+    fn remove_raised_hand(session: &mut SessionState, user_id: Uuid) -> bool {
+        let before = session.raised_hands.len();
+        session.raised_hands.retain(|id| *id != user_id);
+        session.raised_hands.len() != before
     }
 
     pub async fn touch_activity(&self, session_id: Uuid) {
@@ -261,6 +307,7 @@ impl RoomManager {
         }
 
         session.active_reciter_id = Some(new_reciter);
+        let hand_lowered = Self::remove_raised_hand(session, new_reciter);
         Self::apply_classroom_mute_rules(session);
 
         let reciter_msg = ServerMessage::ReciterChanged {
@@ -275,6 +322,15 @@ impl RoomManager {
                 muted: p.is_muted,
             };
             let _ = Self::send_json(&p.tx, &m);
+        }
+        if hand_lowered {
+            let hand_msg = ServerMessage::HandChanged {
+                user_id: new_reciter,
+                raised: false,
+            };
+            for p in session.participants.values() {
+                let _ = Self::send_json(&p.tx, &hand_msg);
+            }
         }
         Ok(())
     }
@@ -410,6 +466,83 @@ impl RoomManager {
 
         session.current_page = Some(page);
         let msg = ServerMessage::CurrentPage { page };
+        drop(guard);
+        self.broadcast(session_id, &msg, None).await;
+        Ok(())
+    }
+
+    pub async fn set_content_mode(
+        &self,
+        session_id: Uuid,
+        mode: &str,
+        requester_id: Uuid,
+    ) -> Result<(), &'static str> {
+        if mode != "mushaf" && mode != "board" {
+            return Err("invalid_mode");
+        }
+        let mut guard = self.sessions.write().await;
+        let session = guard
+            .get_mut(&session_id)
+            .ok_or("no_session")?;
+
+        if !Self::is_teacher_user(session, requester_id) {
+            return Err("forbidden");
+        }
+
+        session.content_mode = mode.to_string();
+        let msg = ServerMessage::ContentModeChanged {
+            mode: mode.to_string(),
+        };
+        drop(guard);
+        self.broadcast(session_id, &msg, None).await;
+        Ok(())
+    }
+
+    /// Student raises hand. Teachers are rejected.
+    pub async fn raise_hand(
+        &self,
+        session_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), &'static str> {
+        let mut guard = self.sessions.write().await;
+        let session = guard.get_mut(&session_id).ok_or("no_session")?;
+        if Self::is_teacher_user(session, user_id) {
+            return Err("forbidden");
+        }
+        if !session.participants.contains_key(&user_id) {
+            return Err("unknown_user");
+        }
+        if session.raised_hands.contains(&user_id) {
+            return Ok(());
+        }
+        session.raised_hands.push(user_id);
+        let msg = ServerMessage::HandChanged {
+            user_id,
+            raised: true,
+        };
+        drop(guard);
+        self.broadcast(session_id, &msg, None).await;
+        Ok(())
+    }
+
+    /// Student lowers hand.
+    pub async fn lower_hand(
+        &self,
+        session_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), &'static str> {
+        let mut guard = self.sessions.write().await;
+        let session = guard.get_mut(&session_id).ok_or("no_session")?;
+        if Self::is_teacher_user(session, user_id) {
+            return Err("forbidden");
+        }
+        if !Self::remove_raised_hand(session, user_id) {
+            return Ok(());
+        }
+        let msg = ServerMessage::HandChanged {
+            user_id,
+            raised: false,
+        };
         drop(guard);
         self.broadcast(session_id, &msg, None).await;
         Ok(())

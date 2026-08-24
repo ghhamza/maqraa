@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check } from "lucide-react";
+import { Check, X } from "lucide-react";
 import type { RecitationGrade, RecitationPublic } from "../../types";
 import type { SessionParticipant } from "../../hooks/useSessionState";
 import {
@@ -46,6 +46,11 @@ export interface GradingPanelProps {
   onPlanCompleted?: (rec: RecitationPublic) => void;
   /** When the title is shown elsewhere (e.g. Dialog header). */
   hideTitle?: boolean;
+  /** Floating dock chrome (Prompt 4). */
+  variant?: "inline" | "dock";
+  /** Open annotations on the current recitation (homework note). */
+  openAnnotationsCount?: number;
+  onDismiss?: () => void;
   className?: string;
 }
 
@@ -63,6 +68,9 @@ export function GradingPanel({
   planToComplete = null,
   onPlanCompleted,
   hideTitle = false,
+  variant = "inline",
+  openAnnotationsCount = 0,
+  onDismiss,
   className,
 }: GradingPanelProps) {
   const { t, i18n } = useTranslation();
@@ -198,14 +206,34 @@ export function GradingPanel({
   };
 
   const disabled = isCompletePlan ? !planToComplete : !activeReciter;
+  const isDock = variant === "dock";
 
   return (
     <div
-      className={cn("border-t border-gray-100 bg-muted/20 px-4 py-4", className)}
+      className={cn(
+        isDock
+          ? "rounded-[18px] border border-[rgba(15,23,42,0.10)] bg-white px-4 py-4 shadow-[0_12px_40px_rgba(0,0,0,0.14)]"
+          : "border-t border-gray-100 bg-muted/20 px-4 py-4",
+        className,
+      )}
       style={{ fontFamily: "var(--font-ui)" }}
     >
-      {!hideTitle ? (
-        <h3 className="mb-3 text-sm font-semibold text-[var(--color-text)]">{t("liveSession.gradeRecitation")}</h3>
+      {isDock || !hideTitle ? (
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <h3 className="text-sm font-semibold text-[var(--color-text)]">
+            {t("liveSession.gradeRecitation")}
+          </h3>
+          {isDock && onDismiss ? (
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="grid size-8 shrink-0 place-items-center rounded-lg text-[#6B7280] hover:bg-[#f1f3ee] hover:text-[#1A1A1A]"
+              aria-label={t("common.close")}
+            >
+              <X className="size-4" strokeWidth={2} aria-hidden />
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {disabled ? (
@@ -219,6 +247,11 @@ export function GradingPanel({
           <p className="mb-2 text-xs text-[var(--color-text-muted)]" style={{ fontFamily: "var(--font-quran)" }}>
             {getSurahNameWithArabic(surah, locale)} · {t("liveSession.ayahRange")}: {ayahStart}–{ayahEnd}
           </p>
+          {openAnnotationsCount > 0 ? (
+            <p className="mb-3 rounded-lg bg-[rgba(212,168,67,0.12)] px-2.5 py-1.5 text-xs font-medium text-[#9a7616]">
+              {t("liveSession.grading.openAnnotationsNote", { count: openAnnotationsCount })}
+            </p>
+          ) : null}
           {!isCompletePlan ? (
             <div className="mb-3 grid grid-cols-3 gap-2 text-xs items-end">
               <label className="col-span-1 flex min-w-0 flex-col gap-1.5">
@@ -266,18 +299,25 @@ export function GradingPanel({
           ) : null}
 
           <div className="mb-3 flex flex-wrap gap-2">
-            {GRADE_ORDER.map((g) => (
-              <button
-                key={g}
-                type="button"
-                disabled={submitting}
-                onClick={() => void submitGrade(g)}
-                className="rounded-lg px-3 py-2 text-xs font-medium text-white shadow-sm disabled:opacity-50"
-                style={{ backgroundColor: GRADE_COLORS[g] }}
-              >
-                {t(`recitations.${g === "needs_work" ? "needsWork" : g}`)}
-              </button>
-            ))}
+            {GRADE_ORDER.map((g) => {
+              const color = GRADE_COLORS[g];
+              return (
+                <button
+                  key={g}
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => void submitGrade(g)}
+                  className="rounded-lg border-2 bg-[rgba(255,255,255,0.9)] px-3 py-2 text-xs font-semibold shadow-sm disabled:opacity-50"
+                  style={{
+                    borderColor: color,
+                    color,
+                    backgroundColor: `${color}18`,
+                  }}
+                >
+                  {t(`recitations.${g === "needs_work" ? "needsWork" : g}`)}
+                </button>
+              );
+            })}
           </div>
 
           {okFlash ? (
@@ -301,23 +341,27 @@ export function GradingPanel({
         </>
       )}
 
-      <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">{t("liveSession.sessionRecitations")}</p>
-      {loading ? (
-        <p className="text-xs text-[var(--color-text-muted)]">{t("common.loading")}</p>
-      ) : list.length === 0 ? (
-        <p className="text-xs text-[var(--color-text-muted)]">—</p>
-      ) : (
-        <ul className="max-h-40 space-y-2 overflow-y-auto text-xs">
-          {list.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-100 bg-[var(--color-surface)] px-2 py-1.5">
-              <span className="min-w-0 truncate" style={{ fontFamily: "var(--font-quran)" }}>
-                {r.student_name ?? "—"} — {getSurahNameWithArabic(r.surah, locale)} {r.ayah_start}:{r.ayah_end}
-              </span>
-              <GradeBadge grade={r.grade} />
-            </li>
-          ))}
-        </ul>
-      )}
+      {!isDock ? (
+        <>
+          <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">{t("liveSession.sessionRecitations")}</p>
+          {loading ? (
+            <p className="text-xs text-[var(--color-text-muted)]">{t("common.loading")}</p>
+          ) : list.length === 0 ? (
+            <p className="text-xs text-[var(--color-text-muted)]">—</p>
+          ) : (
+            <ul className="max-h-40 space-y-2 overflow-y-auto text-xs">
+              {list.map((r) => (
+                <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-100 bg-[var(--color-surface)] px-2 py-1.5">
+                  <span className="min-w-0 truncate" style={{ fontFamily: "var(--font-quran)" }}>
+                    {r.student_name ?? "—"} — {getSurahNameWithArabic(r.surah, locale)} {r.ayah_start}:{r.ayah_end}
+                  </span>
+                  <GradeBadge grade={r.grade} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      ) : null}
     </div>
   );
 }

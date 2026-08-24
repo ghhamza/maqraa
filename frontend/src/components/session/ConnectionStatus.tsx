@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
+import { Signal } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
 import type { SessionWsStatus } from "../../hooks/useSessionWebSocket";
 import type { LivekitConnectionStatus } from "../../hooks/useLivekitConnection";
 
@@ -21,6 +23,8 @@ interface ConnectionStatusProps {
   variant?: "default" | "onDark";
   /** Dot only (no status text). */
   iconsOnly?: boolean;
+  /** Mockup ghost pill: signal icon + status label. */
+  ghostPill?: boolean;
 }
 
 const LIVEKIT_DOT: Record<
@@ -41,6 +45,7 @@ export function ConnectionStatus({
   className = "",
   variant = "default",
   iconsOnly = false,
+  ghostPill = false,
 }: ConnectionStatusProps) {
   const { t } = useTranslation();
   const cfg = DOT[status] ?? DOT.disconnected;
@@ -49,6 +54,26 @@ export function ConnectionStatus({
 
   const labelClass =
     variant === "onDark" ? "text-white/80" : "text-[var(--color-text-muted)]";
+
+  if (ghostPill) {
+    return (
+      <span
+        className={cn(
+          "inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-[rgba(15,23,42,0.10)] bg-white px-3 text-[13px] font-medium text-[#6B7280]",
+          className,
+        )}
+        title={t(labelKey)}
+      >
+        <Signal
+          className="size-[15px]"
+          strokeWidth={2}
+          style={{ color: cfg.color }}
+          aria-hidden
+        />
+        <span className="text-[#1A1A1A]">{t(labelKey)}</span>
+      </span>
+    );
+  }
 
   if (iconsOnly) {
     return (
@@ -76,7 +101,7 @@ export function ConnectionStatus({
   return (
     <div className={`flex items-center gap-2 text-sm ${className}`}>
       <span
-        className="inline-block size-2.5 shrink-0 rounded-full"
+        className="inline-flex size-2.5 shrink-0 rounded-full"
         style={{ backgroundColor: cfg.color }}
         aria-hidden
       />

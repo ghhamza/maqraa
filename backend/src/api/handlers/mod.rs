@@ -11,6 +11,7 @@ pub mod profile;
 pub mod recitations;
 pub mod rooms;
 pub mod schedules;
+pub mod session_strokes;
 pub mod sessions;
 pub mod share;
 pub mod share_card;

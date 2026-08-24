@@ -33,6 +33,8 @@ struct SessionJoinMeta {
     /// Whether to update `session_attendance` on join/leave.
     track_attendance: bool,
     max_students: i32,
+    /// Room halaqah type — seeds default `content_mode` on first join.
+    halaqah_type: String,
 }
 
 async fn load_session_join_meta(
@@ -41,8 +43,8 @@ async fn load_session_join_meta(
     user_id: Uuid,
     jwt_role: &str,
 ) -> Result<SessionJoinMeta, StatusCode> {
-    let row: Option<(Uuid, Uuid, String, i32)> = sqlx::query_as(
-        "SELECT s.room_id, r.teacher_id, s.status::text, r.max_students \
+    let row: Option<(Uuid, Uuid, String, i32, String)> = sqlx::query_as(
+        "SELECT s.room_id, r.teacher_id, s.status::text, r.max_students, r.halaqah_type::text \
          FROM sessions s \
          INNER JOIN rooms r ON r.id = s.room_id \
          WHERE s.id = $1",
@@ -55,7 +57,8 @@ async fn load_session_join_meta(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let (room_id, teacher_id, status, max_students) = row.ok_or(StatusCode::NOT_FOUND)?;
+    let (room_id, teacher_id, status, max_students, halaqah_type) =
+        row.ok_or(StatusCode::NOT_FOUND)?;
 
     if status != "in_progress" {
         tracing::warn!(%session_id, %status, "session not in progress");
@@ -76,6 +79,7 @@ async fn load_session_join_meta(
             participant_role: "teacher".to_string(),
             track_attendance: false,
             max_students,
+            halaqah_type,
         });
     }
 
@@ -93,6 +97,7 @@ async fn load_session_join_meta(
             participant_role: "teacher".to_string(),
             track_attendance: false,
             max_students,
+            halaqah_type,
         });
     }
 
@@ -125,6 +130,7 @@ async fn load_session_join_meta(
         participant_role: "student".to_string(),
         track_attendance: true,
         max_students,
+        halaqah_type,
     })
 }
 
@@ -240,6 +246,7 @@ async fn handle_socket(
             meta.participant_role.clone(),
             tx.clone(),
             max_participants,
+            crate::rooms::RoomManager::default_content_mode(&meta.halaqah_type),
         )
         .await
     {
@@ -538,6 +545,34 @@ async fn handle_client_message(
                 }
             }
         }
+        ClientMessage::SetContentMode { mode } => {
+            if user_id != teacher_id {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "Only the teacher can set content mode")
+                    .await;
+                return;
+            }
+            match state
+                .rooms
+                .set_content_mode(session_id, mode, user_id)
+                .await
+            {
+                Ok(()) => {}
+                Err("invalid_mode") => {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, "Invalid content mode")
+                        .await;
+                }
+                Err(_) => {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, "set-content-mode failed")
+                        .await;
+                }
+            }
+        }
         ClientMessage::GradeNotification {
             student_id,
             grade,
@@ -743,6 +778,166 @@ async fn handle_client_message(
                         .send_error(session_id, user_id, "Annotation delete failed")
                         .await;
                 }
+            }
+        }
+        ClientMessage::StrokeAdd {
+            page,
+            points,
+            color,
+            width,
+        } => {
+            if user_id != teacher_id {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "Only the teacher can draw")
+                    .await;
+                return;
+            }
+            let points = match crate::api::handlers::session_strokes::validate_stroke_payload(
+                *page, points, color, *width,
+            ) {
+                Ok(p) => p,
+                Err(code) => {
+                    let msg = match code {
+                        "invalid_page" => "Invalid stroke page",
+                        "invalid_color" => "Invalid stroke color",
+                        "invalid_width" => "Invalid stroke width",
+                        _ => "Invalid stroke payload",
+                    };
+                    state.rooms.send_error(session_id, user_id, msg).await;
+                    return;
+                }
+            };
+            match crate::api::handlers::session_strokes::insert_stroke(
+                &state.db,
+                session_id,
+                *page,
+                points,
+                color,
+                *width,
+                user_id,
+            )
+            .await
+            {
+                Ok(stroke) => {
+                    let msg = ServerMessage::StrokeAdded { stroke };
+                    state.rooms.broadcast(session_id, &msg, None).await;
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, %session_id, "stroke-add insert failed");
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, "stroke-add failed")
+                        .await;
+                }
+            }
+        }
+        ClientMessage::StrokeUndo { page } => {
+            if user_id != teacher_id {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "Only the teacher can undo strokes")
+                    .await;
+                return;
+            }
+            if let Some(p) = page {
+                if !(1..=604).contains(p) {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, "Invalid undo page")
+                        .await;
+                    return;
+                }
+            }
+            match crate::api::handlers::session_strokes::delete_last_teacher_stroke(
+                &state.db,
+                session_id,
+                *page,
+                user_id,
+            )
+            .await
+            {
+                Ok(Some(stroke_id)) => {
+                    let msg = ServerMessage::StrokeRemoved { stroke_id };
+                    state.rooms.broadcast(session_id, &msg, None).await;
+                }
+                Ok(None) => {
+                    // Nothing to undo — silent no-op.
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, %session_id, "stroke-undo failed");
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, "stroke-undo failed")
+                        .await;
+                }
+            }
+        }
+        ClientMessage::StrokesClear { page } => {
+            if user_id != teacher_id {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "Only the teacher can clear strokes")
+                    .await;
+                return;
+            }
+            if let Some(p) = page {
+                if !(1..=604).contains(p) {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, "Invalid clear page")
+                        .await;
+                    return;
+                }
+            }
+            match crate::api::handlers::session_strokes::clear_strokes_for_surface(
+                &state.db,
+                session_id,
+                *page,
+            )
+            .await
+            {
+                Ok(_) => {
+                    let msg = ServerMessage::StrokesCleared { page: *page };
+                    state.rooms.broadcast(session_id, &msg, None).await;
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, %session_id, "strokes-clear failed");
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, "strokes-clear failed")
+                        .await;
+                }
+            }
+        }
+        ClientMessage::RaiseHand => {
+            if user_id == teacher_id {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "Students only can raise hand")
+                    .await;
+                return;
+            }
+            if state.rooms.raise_hand(session_id, user_id).await.is_err() {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "raise-hand failed")
+                    .await;
+            }
+        }
+        ClientMessage::LowerHand => {
+            if user_id == teacher_id {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "Students only can lower hand")
+                    .await;
+                return;
+            }
+            if state.rooms.lower_hand(session_id, user_id).await.is_err() {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "lower-hand failed")
+                    .await;
             }
         }
     }

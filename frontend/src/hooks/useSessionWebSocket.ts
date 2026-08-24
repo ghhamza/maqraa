@@ -13,6 +13,8 @@ export interface ParticipantInfo {
   joined_at: string;
 }
 
+export type ContentMode = "mushaf" | "board";
+
 export interface RoomStateMessage {
   type: "room-state";
   participants: ParticipantInfo[];
@@ -20,6 +22,10 @@ export interface RoomStateMessage {
   current_ayah: { surah: number; ayah: number } | null;
   /** Teacher-led mushaf page; absent or null means clients default to 1 until set. */
   current_page?: number | null;
+  /** Live content surface; defaults to mushaf when absent (older servers). */
+  content_mode?: ContentMode;
+  /** Student ids with hand raised (raise-time order). */
+  raised_hands?: string[];
   session_id: string;
   room_id: string;
 }
@@ -34,6 +40,19 @@ export interface PlanStatusChangedMessage {
   active_reciter_id: string | null;
 }
 
+/** Persisted freehand stroke (`session_strokes` row). */
+export interface SessionStroke {
+  id: string;
+  session_id: string;
+  /** `null` = board surface. */
+  page: number | null;
+  points: number[][];
+  color: string;
+  width: number;
+  created_by: string;
+  created_at: string;
+}
+
 export interface UseSessionWebSocketOptions {
   sessionId: string;
   token: string;
@@ -46,8 +65,11 @@ export interface UseSessionWebSocketOptions {
   onCurrentAyah?: (surah: number, ayah: number) => void;
   onAyahCleared?: () => void;
   onCurrentPage?: (page: number) => void;
-  onOffer?: (sdp: string, from: string) => void;
-  onIceCandidate?: (candidate: string, from: string) => void;
+  onContentModeChanged?: (mode: ContentMode) => void;
+  onStrokeAdded?: (stroke: SessionStroke) => void;
+  onStrokeRemoved?: (strokeId: string) => void;
+  onStrokesCleared?: (page: number | null) => void;
+  onHandChanged?: (userId: string, raised: boolean) => void;
   onSessionEnded?: () => void;
   /** Student: private grade push from teacher */
   onGradeNotification?: (grade: string, notes?: string) => void;
@@ -64,24 +86,8 @@ export interface UseSessionWebSocketOptions {
   onJoinRejected?: (message: string) => void;
   /** WebSocket recovered after reconnecting (for toast). */
   onReconnected?: () => void;
-  onMsRtpCapabilities?: (rtpCapabilities: unknown) => void;
-  onMsTransportCreated?: (transport: {
-    id: string;
-    iceParameters: unknown;
-    iceCandidates: unknown;
-    dtlsParameters: unknown;
-  }) => void;
-  onMsTransportConnected?: (transportId: string) => void;
-  onMsProduced?: (producerId: string) => void;
-  onMsConsumed?: (consumer: {
-    id: string;
-    producerId: string;
-    kind: string;
-    rtpParameters: unknown;
-  }) => void;
-  onMsConsumerResumed?: (consumerId: string) => void;
-  onMsNewProducer?: (info: { producerId: string; userId: string; kind: string }) => void;
-  onMsProducerClosed?: (producerId: string) => void;
+  /** JWT expired — reconnect loop stopped; show a blocking dead-end state. */
+  onAuthExpired?: () => void;
 }
 
 export type SessionWsStatus = "connecting" | "connected" | "reconnecting" | "disconnected" | "error";
@@ -94,8 +100,17 @@ export interface UseSessionWebSocketReturn {
   sendCurrentAyah: (surah: number, ayah: number) => void;
   sendClearAyah: () => void;
   sendCurrentPage: (page: number) => void;
-  sendAnswer: (sdp: string) => void;
-  sendIceCandidate: (candidate: string) => void;
+  sendSetContentMode: (mode: ContentMode) => void;
+  sendStrokeAdd: (payload: {
+    page: number | null;
+    points: number[][];
+    color: string;
+    width: number;
+  }) => void;
+  sendStrokeUndo: (page: number | null) => void;
+  sendStrokesClear: (page: number | null) => void;
+  sendRaiseHand: () => void;
+  sendLowerHand: () => void;
   sendPing: () => void;
   sendGradeNotification: (studentId: string, grade: string, notes?: string) => void;
   sendCreateAnnotation: (payload: {
@@ -109,17 +124,42 @@ export interface UseSessionWebSocketReturn {
     annotation_kind: string;
   }) => void;
   sendRemoveAnnotation: (annotationId: string) => void;
-  sendMsGetRtpCapabilities: () => void;
-  sendMsCreateTransport: (direction: "send" | "recv") => void;
-  sendMsConnectTransport: (transportId: string, dtlsParameters: unknown) => void;
-  sendMsProduce: (transportId: string, kind: "audio", rtpParameters: unknown) => void;
-  sendMsConsume: (transportId: string, producerId: string, rtpCapabilities: unknown) => void;
-  sendMsResumeConsumer: (consumerId: string) => void;
-  sendMsCloseProducer: (producerId: string) => void;
   disconnect: () => void;
 }
 
+function mapStroke(raw: Record<string, unknown>): SessionStroke | null {
+  const id = raw.id as string | undefined;
+  if (!id) return null;
+  let points: number[][] = [];
+  const rawPoints = raw.points;
+  if (Array.isArray(rawPoints)) {
+    points = rawPoints as number[][];
+  } else if (typeof rawPoints === "string") {
+    try {
+      const parsed = JSON.parse(rawPoints) as unknown;
+      if (Array.isArray(parsed)) points = parsed as number[][];
+    } catch {
+      points = [];
+    }
+  }
+  const pageNum = raw.page == null ? null : Number(raw.page);
+  return {
+    id,
+    session_id: String(raw.session_id ?? ""),
+    page: pageNum != null && Number.isFinite(pageNum) ? pageNum : null,
+    points,
+    color: String(raw.color ?? "#EF5350"),
+    width: typeof raw.width === "number" ? raw.width : Number(raw.width) || 0.012,
+    created_by: String(raw.created_by ?? ""),
+    created_at: String(raw.created_at ?? ""),
+  };
+}
+
 const BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 30000];
+/** Client ping interval (must stay in sync with the stale threshold below). */
+const PING_INTERVAL_MS = 30_000;
+/** Half-dead socket: no inbound traffic for 2.5× ping interval. */
+const INBOUND_STALE_MS = 75_000;
 
 function parseServerMessage(raw: string): Record<string, unknown> | null {
   try {
@@ -129,19 +169,19 @@ function parseServerMessage(raw: string): Record<string, unknown> | null {
   }
 }
 
-/** Recursively rename snake_case keys to camelCase for JSON shapes from the server. */
-function jsonKeysToCamelCase(value: unknown): unknown {
-  if (value === null || value === undefined) return value;
-  if (Array.isArray(value)) return value.map(jsonKeysToCamelCase);
-  if (typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      const camel = k.replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase());
-      out[camel] = jsonKeysToCamelCase(v);
-    }
-    return out;
+/** True when the JWT `exp` claim is present and already in the past. */
+function isJwtExpired(token: string): boolean {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return false;
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded)) as { exp?: unknown };
+    if (typeof payload.exp !== "number") return false;
+    return payload.exp * 1000 <= Date.now();
+  } catch {
+    return false;
   }
-  return value;
 }
 
 /**
@@ -186,6 +226,9 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
   const intentionalClose = useRef(false);
   const mounted = useRef(true);
   const prevStatus = useRef<SessionWsStatus | null>(null);
+  const lastInboundAt = useRef(0);
+  const statusRef = useRef<SessionWsStatus>(status);
+  statusRef.current = status;
 
   const optsRef = useRef(options);
   optsRef.current = options;
@@ -244,19 +287,41 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
     [sendRaw],
   );
 
-  const sendAnswer = useCallback(
-    (sdp: string) => {
-      sendRaw({ type: "answer", sdp, target: null });
+  const sendSetContentMode = useCallback(
+    (mode: ContentMode) => {
+      sendRaw({ type: "set-content-mode", mode });
     },
     [sendRaw],
   );
 
-  const sendIceCandidate = useCallback(
-    (candidate: string) => {
-      sendRaw({ type: "ice-candidate", candidate, target: null });
+  const sendStrokeAdd = useCallback(
+    (payload: { page: number | null; points: number[][]; color: string; width: number }) => {
+      sendRaw({ type: "stroke-add", ...payload });
     },
     [sendRaw],
   );
+
+  const sendStrokeUndo = useCallback(
+    (page: number | null) => {
+      sendRaw({ type: "stroke-undo", page });
+    },
+    [sendRaw],
+  );
+
+  const sendStrokesClear = useCallback(
+    (page: number | null) => {
+      sendRaw({ type: "strokes-clear", page });
+    },
+    [sendRaw],
+  );
+
+  const sendRaiseHand = useCallback(() => {
+    sendRaw({ type: "raise-hand" });
+  }, [sendRaw]);
+
+  const sendLowerHand = useCallback(() => {
+    sendRaw({ type: "lower-hand" });
+  }, [sendRaw]);
 
   const sendPing = useCallback(() => {
     sendRaw({ type: "ping" });
@@ -304,81 +369,6 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
     [],
   );
 
-  const sendMsGetRtpCapabilities = useCallback(() => {
-    const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "ms-get-rtp-capabilities" }));
-    }
-  }, []);
-
-  const sendMsCreateTransport = useCallback((direction: "send" | "recv") => {
-    const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "ms-create-transport", direction }));
-    }
-  }, []);
-
-  const sendMsConnectTransport = useCallback((transportId: string, dtlsParameters: unknown) => {
-    const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          type: "ms-connect-transport",
-          transport_id: transportId,
-          dtls_parameters: dtlsParameters,
-        }),
-      );
-    }
-  }, []);
-
-  const sendMsProduce = useCallback(
-    (transportId: string, kind: "audio", rtpParameters: unknown) => {
-      const ws = wsRef.current;
-      if (ws?.readyState === WebSocket.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: "ms-produce",
-            transport_id: transportId,
-            kind,
-            rtp_parameters: rtpParameters,
-          }),
-        );
-      }
-    },
-    [],
-  );
-
-  const sendMsConsume = useCallback(
-    (transportId: string, producerId: string, rtpCapabilities: unknown) => {
-      const ws = wsRef.current;
-      if (ws?.readyState === WebSocket.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: "ms-consume",
-            transport_id: transportId,
-            producer_id: producerId,
-            rtp_capabilities: rtpCapabilities,
-          }),
-        );
-      }
-    },
-    [],
-  );
-
-  const sendMsResumeConsumer = useCallback((consumerId: string) => {
-    const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "ms-resume-consumer", consumer_id: consumerId }));
-    }
-  }, []);
-
-  const sendMsCloseProducer = useCallback((producerId: string) => {
-    const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "ms-close-producer", producer_id: producerId }));
-    }
-  }, []);
-
   const disconnect = useCallback(() => {
     // Mark this close as intentional so the close handler does not reconnect.
     intentionalClose.current = true;
@@ -422,8 +412,27 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
 
     intentionalClose.current = false;
 
+    const failAuthExpired = () => {
+      intentionalClose.current = true;
+      clearReconnect();
+      clearPing();
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      if (mounted.current) setStatus("error");
+      optsRef.current.onAuthExpired?.();
+    };
+
     const connect = () => {
       if (!mounted.current) return;
+      if (intentionalClose.current) return;
+
+      if (isJwtExpired(token)) {
+        failAuthExpired();
+        return;
+      }
+
       clearReconnect();
       setStatus((s) => (s === "reconnecting" ? "reconnecting" : "connecting"));
 
@@ -439,21 +448,30 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
 
       ws.onopen = () => {
         if (!mounted.current) return;
+        lastInboundAt.current = Date.now();
         reconnectAttempt.current = 0;
         setStatus("connected");
         clearPing();
         pingTimer.current = setInterval(() => {
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: "ping" }));
+          const sock = wsRef.current;
+          if (!sock || sock.readyState !== WebSocket.OPEN) return;
+          if (Date.now() - lastInboundAt.current > INBOUND_STALE_MS) {
+            // Half-dead: force close so onclose → backoff reconnect (not intentional).
+            sock.close();
+            return;
           }
-        }, 30_000);
+          sock.send(JSON.stringify({ type: "ping" }));
+        }, PING_INTERVAL_MS);
       };
 
       ws.onmessage = (ev) => {
         const msg = parseServerMessage(String(ev.data));
         if (!msg || typeof msg.type !== "string") return;
+        lastInboundAt.current = Date.now();
         const o = optsRef.current;
         switch (msg.type) {
+          case "pong":
+            break;
           case "room-state":
             o.onRoomState?.(msg as unknown as RoomStateMessage);
             break;
@@ -492,16 +510,35 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
             if (pg !== undefined && Number.isFinite(pg)) o.onCurrentPage?.(Math.floor(pg));
             break;
           }
-          case "offer": {
-            const sdp = msg.sdp as string | undefined;
-            const from = String(msg.from ?? "");
-            if (sdp) o.onOffer?.(sdp, from);
+          case "content-mode-changed": {
+            const mode = msg.mode as string | undefined;
+            if (mode === "mushaf" || mode === "board") o.onContentModeChanged?.(mode);
             break;
           }
-          case "ice-candidate": {
-            const cand = msg.candidate as string | undefined;
-            const from = String(msg.from ?? "");
-            if (cand) o.onIceCandidate?.(cand, from);
+          case "stroke-added": {
+            const strokeRaw = msg.stroke as Record<string, unknown> | undefined;
+            if (strokeRaw) {
+              const stroke = mapStroke(strokeRaw);
+              if (stroke) o.onStrokeAdded?.(stroke);
+            }
+            break;
+          }
+          case "stroke-removed": {
+            const strokeId = msg.stroke_id as string | undefined;
+            if (strokeId) o.onStrokeRemoved?.(strokeId);
+            break;
+          }
+          case "strokes-cleared": {
+            const page =
+              msg.page === undefined || msg.page === null ? null : Number(msg.page);
+            if (page !== null && !Number.isFinite(page)) break;
+            o.onStrokesCleared?.(page);
+            break;
+          }
+          case "hand-changed": {
+            const uid = msg.user_id as string | undefined;
+            const raised = msg.raised as boolean | undefined;
+            if (uid && typeof raised === "boolean") o.onHandChanged?.(uid, raised);
             break;
           }
           case "session-ended": {
@@ -550,73 +587,6 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
                 active_reciter_id,
               });
             }
-            break;
-          }
-          case "ms-rtp-capabilities": {
-            const caps = msg.rtp_capabilities;
-            if (caps !== undefined && caps !== null && o.onMsRtpCapabilities) {
-              o.onMsRtpCapabilities(jsonKeysToCamelCase(caps));
-            }
-            break;
-          }
-          case "ms-transport-created": {
-            const id = msg.id as string | undefined;
-            if (!id) break;
-            const iceParameters = msg.ice_parameters;
-            const iceCandidates = msg.ice_candidates;
-            const dtlsParameters = msg.dtls_parameters;
-            if (o.onMsTransportCreated) {
-              o.onMsTransportCreated({
-                id,
-                iceParameters: jsonKeysToCamelCase(iceParameters),
-                iceCandidates: jsonKeysToCamelCase(iceCandidates),
-                dtlsParameters: jsonKeysToCamelCase(dtlsParameters),
-              });
-            }
-            break;
-          }
-          case "ms-transport-connected": {
-            const tid = msg.transport_id as string | undefined;
-            if (tid && o.onMsTransportConnected) o.onMsTransportConnected(tid);
-            break;
-          }
-          case "ms-produced": {
-            const pid = msg.producer_id as string | undefined;
-            if (pid && o.onMsProduced) o.onMsProduced(pid);
-            break;
-          }
-          case "ms-consumed": {
-            const cid = msg.id as string | undefined;
-            const producerId = msg.producer_id as string | undefined;
-            const kind = msg.kind as string | undefined;
-            const rtpParameters = msg.rtp_parameters;
-            if (cid && producerId && kind && o.onMsConsumed) {
-              o.onMsConsumed({
-                id: cid,
-                producerId,
-                kind,
-                rtpParameters: jsonKeysToCamelCase(rtpParameters),
-              });
-            }
-            break;
-          }
-          case "ms-consumer-resumed": {
-            const consumerId = msg.consumer_id as string | undefined;
-            if (consumerId && o.onMsConsumerResumed) o.onMsConsumerResumed(consumerId);
-            break;
-          }
-          case "ms-new-producer": {
-            const producerId = msg.producer_id as string | undefined;
-            const userId = msg.user_id as string | undefined;
-            const kind = msg.kind as string | undefined;
-            if (producerId && userId && kind && o.onMsNewProducer) {
-              o.onMsNewProducer({ producerId, userId, kind });
-            }
-            break;
-          }
-          case "ms-producer-closed": {
-            const producerId = msg.producer_id as string | undefined;
-            if (producerId && o.onMsProducerClosed) o.onMsProducerClosed(producerId);
             break;
           }
           case "error": {
@@ -676,12 +646,47 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
       };
     };
 
+    const onOnline = () => {
+      if (!mounted.current || intentionalClose.current) return;
+      if (statusRef.current !== "reconnecting") return;
+      clearReconnect();
+      reconnectAttempt.current = 0;
+      connect();
+    };
+
+    const onVisibilityChange = () => {
+      if (!mounted.current || intentionalClose.current) return;
+      if (document.visibilityState !== "visible") return;
+
+      if (statusRef.current === "reconnecting") {
+        clearReconnect();
+        reconnectAttempt.current = 0;
+        connect();
+        return;
+      }
+
+      if (statusRef.current === "connected") {
+        const sock = wsRef.current;
+        if (sock?.readyState === WebSocket.OPEN) {
+          sock.send(JSON.stringify({ type: "ping" }));
+        }
+        if (Date.now() - lastInboundAt.current > INBOUND_STALE_MS) {
+          sock?.close();
+        }
+      }
+    };
+
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
     connect();
 
     return () => {
       intentionalClose.current = true;
       clearReconnect();
       clearPing();
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -698,19 +703,16 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
     sendCurrentAyah,
     sendClearAyah,
     sendCurrentPage,
-    sendAnswer,
-    sendIceCandidate,
+    sendSetContentMode,
+    sendStrokeAdd,
+    sendStrokeUndo,
+    sendStrokesClear,
+    sendRaiseHand,
+    sendLowerHand,
     sendPing,
     sendGradeNotification,
     sendCreateAnnotation,
     sendRemoveAnnotation,
-    sendMsGetRtpCapabilities,
-    sendMsCreateTransport,
-    sendMsConnectTransport,
-    sendMsProduce,
-    sendMsConsume,
-    sendMsResumeConsumer,
-    sendMsCloseProducer,
     disconnect,
   };
 }

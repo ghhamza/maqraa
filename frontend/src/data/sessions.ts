@@ -12,8 +12,42 @@ import {
 } from "../lib/recurrenceSessionTargets";
 import type { CreateSessionsResponse, GenerateResult, Paginated, Schedule, SessionDetail, SessionPublic, SessionStats } from "../types";
 import type { SessionLivePublicItem } from "../types";
+import type { SessionStroke } from "../hooks/useSessionWebSocket";
 
 const POLL_MS = 30_000;
+
+/**
+ * GET `/api/sessions/:id/strokes`
+ * @param pageFilter omit = all; `"board"` = board surface; number = mushaf page
+ */
+export async function fetchSessionStrokes(
+  sessionId: string,
+  pageFilter?: number | "board",
+  signal?: AbortSignal,
+): Promise<SessionStroke[]> {
+  const params =
+    pageFilter === undefined
+      ? undefined
+      : { page: pageFilter === "board" ? "board" : String(pageFilter) };
+  const { data } = await api.get<SessionStroke[]>(`/sessions/${sessionId}/strokes`, {
+    signal,
+    params,
+  });
+  return (data ?? []).map((row) => {
+    let points: number[][] = [];
+    if (Array.isArray(row.points)) {
+      points = row.points;
+    } else if (typeof row.points === "string") {
+      try {
+        const parsed = JSON.parse(row.points) as unknown;
+        if (Array.isArray(parsed)) points = parsed as number[][];
+      } catch {
+        points = [];
+      }
+    }
+    return { ...row, points };
+  });
+}
 
 export function useUpcomingSessions(enabled = true) {
   return useQuery({
@@ -239,7 +273,12 @@ export function useStartSession(
       });
       return data;
     },
-    invalidates: [sessionKeys.calendars(), sessionKeys.upcoming(), sessionKeys.live(userId)],
+    invalidates: [
+      sessionKeys.calendars(),
+      sessionKeys.upcoming(),
+      sessionKeys.live(userId),
+      sessionKeys.detail(sessionId),
+    ],
     onSuccess: (d) => onSuccess?.(d),
     onError: (m, e) => onError?.(m, e),
   });

@@ -296,7 +296,12 @@ export function SessionDetailPage() {
   const startMutation = useStartSession(
     id ?? "",
     user?.id ?? null,
-    () => {
+    (data) => {
+      // Keep detail cache in sync before entering live — otherwise LiveSessionPage
+      // still sees `scheduled` and bounces back with sessionNotActive.
+      patchSessionDetail((prev) =>
+        prev ? { ...prev, ...data, attendance: prev.attendance } : prev,
+      );
       navigate(`/sessions/${id}/live`);
     },
     (message, error) => {

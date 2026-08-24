@@ -107,7 +107,7 @@ fn json_err(status: StatusCode, code: &'static str) -> (StatusCode, Json<serde_j
     (status, Json(json!({ "code": code })))
 }
 
-async fn can_access_room(
+pub(crate) async fn can_access_room(
     pool: &PgPool,
     auth: &AuthenticatedUser,
     room_id: Uuid,
@@ -221,7 +221,7 @@ async fn has_overlap_tx(
     Ok(exists)
 }
 
-async fn fetch_session_public(
+pub(crate) async fn fetch_session_public(
     pool: &PgPool,
     session_id: Uuid,
 ) -> Result<Option<SessionPublic>, StatusCode> {

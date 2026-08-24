@@ -1,14 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { MushafBookLayout, MUSHAF_PAGE_INNER_PADDING_X, mushafPageCardWidthStyle } from "./MushafBookLayout";
 import { MushafNavigation } from "./MushafNavigation";
 import { MushafPageTurnButtons } from "./MushafPageTurnButtons";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { getPageForSurahStart, getTotalPages } from "../../lib/quranService";
+import { useStageFitSize } from "../../hooks/useStageFitSize";
+import {
+  getJuzForAyah,
+  getPageForSurahStart,
+  getSurahAyahAtPageStart,
+  getSurahName,
+  getSurahRangeOnPage,
+  getTotalPages,
+} from "../../lib/quranService";
+import { formatLocaleNumber } from "../../lib/formatLocaleNumber";
 import type { Riwaya } from "../../lib/quranService";
 
 export interface MushafReaderProps {
@@ -32,6 +41,10 @@ export interface MushafReaderProps {
    * (e.g. live session desktop: menu + surah row).
    */
   immersiveHeader?: ReactNode;
+  /** Live session: fit page card to stage height/width (no 48rem cap). */
+  fitStage?: boolean;
+  /** Overlay on the page card (whiteboard). */
+  pageOverlay?: ReactNode;
   children: ReactNode;
 }
 
@@ -50,14 +63,27 @@ export function MushafReader({
   menuNavigationZone,
   omitMenuStrip = false,
   immersiveHeader,
+  fitStage = false,
+  pageOverlay,
   children,
 }: MushafReaderProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [jumpOpen, setJumpOpen] = useState(false);
-  /** Last surah chosen via “go to surah”; shown in the select when that surah starts on `page` (mid-page starts vs first surah on page). */
+  /** Last surah chosen via “go to surah”; shown in the select when that surah starts on `page`. */
   const [surahIntent, setSurahIntent] = useState<number | null>(null);
   const totalPages = getTotalPages(riwaya);
   const navDisabled = !canChangePage;
+  const stageRef = useRef<HTMLDivElement>(null);
+  const stageSize = useStageFitSize(stageRef, { gutterX: fitStage ? 24 : 0 });
+  const loc = (i18n.language || "ar").startsWith("ar")
+    ? "ar"
+    : (i18n.language || "").startsWith("fr")
+      ? "fr"
+      : "en";
+
+  const pageHeader = fitStage ? (
+    <MushafPageMetaHeader page={page} riwaya={riwaya} locale={loc} />
+  ) : null;
 
   useEffect(() => {
     if (surahIntent == null) return;
@@ -69,7 +95,6 @@ export function MushafReader({
     if (!canChangePage) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      /* RTL Mushaf: left arrow = advance in book (next page), right arrow = back (prev). Matches edge buttons. */
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         onPageChange(Math.min(totalPages, page + 1));
@@ -84,12 +109,13 @@ export function MushafReader({
   }, [canChangePage, onPageChange, page, totalPages]);
 
   return (
-    <div
-      className={cn("relative flex min-h-0 w-full flex-1 flex-col gap-2", className)}
-    >
+    <div className={cn("relative flex min-h-0 w-full flex-1 flex-col gap-2", className)}>
       {!hideNavigation ? (
         <Sheet open={jumpOpen} onOpenChange={setJumpOpen}>
-          <SheetContent side="bottom" className="max-h-[min(85dvh,32rem)] overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <SheetContent
+            side="bottom"
+            className="max-h-[min(85dvh,32rem)] overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))]"
+          >
             <SheetHeader className="text-start">
               <SheetTitle>{t("mushaf.jumpTitle")}</SheetTitle>
             </SheetHeader>
@@ -110,7 +136,6 @@ export function MushafReader({
       ) : null}
 
       <header className="w-full shrink-0">
-        {/* Tablet / desktop: always-visible surah · juz · page (small screens use bottom sheet + jump). */}
         {!hideNavigation ? (
           <div className="hidden w-full border-b border-gray-100 pb-2 md:block">
             <div className="mx-auto w-full min-w-0 max-w-4xl px-3 sm:px-4 md:px-5 lg:px-6">
@@ -136,7 +161,9 @@ export function MushafReader({
               {menuNavigationZone !== undefined ? (
                 menuNavigationZone
               ) : (
-                <p className="text-center text-xs text-muted-foreground sm:text-sm">{t("mushaf.menuNavigationZone")}</p>
+                <p className="text-center text-xs text-muted-foreground sm:text-sm">
+                  {t("mushaf.menuNavigationZone")}
+                </p>
               )}
             </nav>
           ) : null}
@@ -149,20 +176,45 @@ export function MushafReader({
       </header>
 
       <main
-        className="mx-auto flex min-h-0 w-full min-w-0 max-w-4xl flex-1 flex-col overflow-y-auto px-3 sm:px-4 md:px-5 lg:px-6"
+        ref={fitStage ? stageRef : undefined}
+        className={cn(
+          "mx-auto flex min-h-0 w-full min-w-0 flex-1 flex-col",
+          fitStage
+            ? "max-w-none items-center justify-center overflow-hidden px-2"
+            : "max-w-4xl overflow-y-auto px-3 sm:px-4 md:px-5 lg:px-6",
+        )}
         aria-label="Mushaf content"
       >
-        <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center">
-          <MushafPageTurnButtons
-            page={page}
-            totalPages={totalPages}
-            onPageChange={onPageChange}
-            disabled={navDisabled}
-            onOpenJump={hideNavigation ? undefined : () => setJumpOpen(true)}
-            showDesktopJump={!hideNavigation}
-          />
-          <section className="flex min-h-0 w-full flex-1 flex-col items-center justify-center">
-            <MushafBookLayout page={page} riwaya={riwaya}>
+        <div
+          className={cn(
+            "relative flex min-h-0 w-full flex-1 flex-col items-center",
+            fitStage ? "justify-center" : "justify-center",
+          )}
+        >
+          {!hideNavigation ? (
+            <MushafPageTurnButtons
+              page={page}
+              totalPages={totalPages}
+              onPageChange={onPageChange}
+              disabled={navDisabled}
+              onOpenJump={() => setJumpOpen(true)}
+              showDesktopJump
+            />
+          ) : null}
+          <section
+            className={cn(
+              "flex min-h-0 w-full flex-1 flex-col items-center",
+              fitStage ? "justify-center" : "justify-center",
+            )}
+          >
+            <MushafBookLayout
+              page={page}
+              riwaya={riwaya}
+              fitStage={fitStage}
+              stageSize={fitStage ? stageSize : null}
+              pageHeader={pageHeader}
+              overlay={pageOverlay}
+            >
               {children}
             </MushafBookLayout>
           </section>
@@ -174,6 +226,40 @@ export function MushafReader({
           {bottomAccessory}
         </section>
       </footer>
+    </div>
+  );
+}
+
+function MushafPageMetaHeader({
+  page,
+  riwaya,
+  locale,
+}: {
+  page: number;
+  riwaya: Riwaya;
+  locale: "ar" | "en" | "fr";
+}) {
+  const { t, i18n } = useTranslation();
+  const { startSurah, endSurah } = getSurahRangeOnPage(page, riwaya);
+  const [s, a] = getSurahAyahAtPageStart(page, riwaya);
+  const juzN = getJuzForAyah(s, a, riwaya);
+  const surahLabel =
+    startSurah === endSurah
+      ? getSurahName(startSurah, locale)
+      : `${getSurahName(startSurah, locale)} – ${getSurahName(endSurah, locale)}`;
+  const juzLabel = t("mushaf.juzOf", {
+    n: formatLocaleNumber(juzN, i18n.language),
+  });
+
+  return (
+    <div className="flex w-full items-center justify-between gap-3 text-[12px] leading-snug text-[var(--color-text-muted)] sm:text-[13px]">
+      <span className="min-w-0 truncate tabular-nums">{juzLabel}</span>
+      <span
+        className="min-w-0 truncate text-end"
+        style={{ fontFamily: "var(--font-mushaf-title)" }}
+      >
+        {surahLabel}
+      </span>
     </div>
   );
 }

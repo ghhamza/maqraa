@@ -28,19 +28,22 @@ import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import {
   LiveSessionAccessBlocked,
   LiveSessionAnotherTab,
+  LiveSessionAuthExpired,
   LiveSessionLoadError,
   LiveSessionLoading,
 } from "./components/LiveSessionEarlyStates";
 import { LiveSessionDesktopActionBar } from "./components/LiveSessionDesktopActionBar";
+import { LiveSessionTopBar } from "./components/LiveSessionTopBar";
 import { LiveSessionConfirmModals } from "./components/LiveSessionConfirmModals";
 import { LiveSessionToastsAndOverlays } from "./components/LiveSessionToastsAndOverlays";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../../components/ui/dialog";
+import { ReciterChip } from "../../components/session/ReciterChip";
+import { SessionToolRail, type SessionToolId } from "../../components/session/SessionToolRail";
+import { ContentModeToggle } from "../../components/session/ContentModeToggle";
+import { SessionBoardSurface } from "../../components/session/SessionBoardSurface";
+import { WhiteboardLayer, type StrokePoint } from "../../components/session/WhiteboardLayer";
+import { AutoFollowBadge } from "../../components/session/AutoFollowBadge";
+import { fetchSessionStrokes } from "../../data/sessions";
+import { STROKE_COLORS, STROKE_WIDTH } from "../../lib/strokePath";
 import { Button } from "../../components/ui/Button";
 import {
   findJuzStartingAtPage,
@@ -141,6 +144,8 @@ function LiveSessionPageInner() {
   const [teacherPage, setTeacherPage] = useState(1);
   const [studentBrowsePage, setStudentBrowsePage] = useState(1);
   const [autoFollow, setAutoFollow] = useState(true);
+  /** Teacher: broadcast mushaf page so students can auto-follow. */
+  const [pageBroadcast, setPageBroadcast] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mobileOverflowOpen, setMobileOverflowOpen] = useState(false);
   const [navigatorOpen, setNavigatorOpen] = useState(false);
@@ -152,10 +157,14 @@ function LiveSessionPageInner() {
   const hadServerCurrentAyahRef = useRef(false);
   const teacherSeededFromServer = useRef(false);
   const [anotherTab, setAnotherTab] = useState(false);
+  const [authExpired, setAuthExpired] = useState(false);
   const [announce, setAnnounce] = useState("");
   const [reconnectedToast, setReconnectedToast] = useState(false);
   const [annotationTarget, setAnnotationTarget] = useState<AnnotationTarget | null>(null);
   const [annotationMode, setAnnotationMode] = useState(false);
+  const [activeTool, setActiveTool] = useState<SessionToolId>("hand");
+  const [clearStrokesOpen, setClearStrokesOpen] = useState(false);
+  const [strokeResyncNonce, setStrokeResyncNonce] = useState(0);
   const [currentRecitationId, setCurrentRecitation] = useState<string | null>(null);
   /** Bumped when grading creates a recitation; used as an invalidation signal in existing handlers. */
   const recitationFetchEpochRef = useRef(0);
@@ -249,6 +258,7 @@ function LiveSessionPageInner() {
     getWordAnnotations,
     receiveAnnotationFromWs,
     removeAnnotationFromWs,
+    annotations: recitationAnnotations,
   } = useAnnotations(currentRecitationId);
 
   const annotationTargetRef = useRef<AnnotationTarget | null>(null);
@@ -333,13 +343,22 @@ function LiveSessionPageInner() {
 
   useEffect(() => {
     if (!id) return;
+    // Don't bounce on a stale `scheduled` cache while a refetch after start is in flight.
+    if (sessionDetailQuery.isPending || sessionDetailQuery.isFetching) return;
     if (sessionDetailQuery.data && sessionDetailQuery.data.status !== "in_progress") {
       navigate(`/sessions/${id}`, {
         replace: true,
         state: { liveSessionError: t("liveSession.sessionNotActive") },
       });
     }
-  }, [id, sessionDetailQuery.data, navigate, t]);
+  }, [
+    id,
+    sessionDetailQuery.data,
+    sessionDetailQuery.isPending,
+    sessionDetailQuery.isFetching,
+    navigate,
+    t,
+  ]);
 
   const sessionReady = !!(sessionDetail && room && id && user && token);
 
@@ -349,7 +368,7 @@ function LiveSessionPageInner() {
     token: token ?? "",
     myUserId: user?.id ?? "",
     teacherId: sessionDetail?.teacher_id ?? "",
-    enabled: sessionReady && !anotherTab,
+    enabled: sessionReady && !anotherTab && !authExpired,
     onSessionEnded: onSessionEndedNav,
     onGradeNotification,
     onAnnotationAdded: (annotation) => {
@@ -381,6 +400,7 @@ function LiveSessionPageInner() {
       });
     },
     onAnotherTab: () => setAnotherTab(true),
+    onAuthExpired: () => setAuthExpired(true),
     onJoinRejected: (message) => {
       if (message === "Room is full" || message === "Halaqah is full") {
         navigate(`/sessions/${id}`, {
@@ -389,7 +409,10 @@ function LiveSessionPageInner() {
         });
       }
     },
-    onReconnected: () => setReconnectedToast(true),
+    onReconnected: () => {
+      setReconnectedToast(true);
+      setStrokeResyncNonce((n) => n + 1);
+    },
     onParticipantJoined: (u) => setAnnounce(t("liveSession.userJoinedAnnounce", { name: u.name })),
     onParticipantLeft: (_userId, name) => {
       if (name) setAnnounce(t("liveSession.userLeftAnnounce", { name }));
@@ -532,8 +555,10 @@ function LiveSessionPageInner() {
     const rid = sessionState.state.activeReciterId;
     const tid = sessionDetail.teacher_id;
     if (!rid || rid === tid) return;
+    if (sessionState.state.contentMode === "board") return;
     setAnnotationMode(true);
-  }, [sessionReady, isTeacher, sessionDetail, sessionState.state.activeReciterId]);
+    setActiveTool("annotate");
+  }, [sessionReady, isTeacher, sessionDetail, sessionState.state.activeReciterId, sessionState.state.contentMode]);
 
   const page = isTeacher
     ? teacherPage
@@ -548,20 +573,41 @@ function LiveSessionPageInner() {
       const next = Math.min(totalPages, Math.max(1, p));
       if (isTeacher) {
         setTeacherPage(next);
-        sessionState.setCurrentPage(next);
+        if (pageBroadcast) sessionState.setCurrentPage(next);
       } else if (!autoFollow) {
         setStudentBrowsePage(next);
       }
     },
-    [isTeacher, autoFollow, totalPages, sessionState.setCurrentPage],
+    [isTeacher, autoFollow, pageBroadcast, totalPages, sessionState.setCurrentPage],
   );
 
   const canNavigate = isTeacher || (!isTeacher && !autoFollow);
+  const contentMode = sessionState.state.contentMode;
+  const isBoardMode = contentMode === "board";
+  const contentSurfaceReady = sessionState.hasRoomState;
+  const mushafNavigate = canNavigate && !isBoardMode;
   const navigatorSide = i18n.language?.startsWith("ar") ? "right" : "left";
+
+  /** One-shot: legacy hifz sessions were seeded as board — force mushaf as the default on first join. */
+  const mushafDefaultAppliedForSessionRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!id || !isTeacher || !sessionState.hasRoomState) return;
+    if (mushafDefaultAppliedForSessionRef.current === id) return;
+    mushafDefaultAppliedForSessionRef.current = id;
+    if (sessionState.state.contentMode === "board") {
+      sessionState.setContentMode("mushaf");
+    }
+  }, [
+    id,
+    isTeacher,
+    sessionState.hasRoomState,
+    sessionState.state.contentMode,
+    sessionState.setContentMode,
+  ]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!sessionReady || anotherTab) return;
+      if (!sessionReady || anotherTab || isBoardMode) return;
       const el = e.target as HTMLElement;
       if (el.closest("input,textarea,[contenteditable=true]")) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -571,7 +617,103 @@ function LiveSessionPageInner() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sessionReady, anotherTab]);
+  }, [sessionReady, anotherTab, isBoardMode]);
+
+  useEffect(() => {
+    if (!isBoardMode) return;
+    setAnnotationMode(false);
+    setActiveTool((tool) => (tool === "annotate" ? "hand" : tool));
+    setAnnotationTarget(null);
+    setNavigatorOpen(false);
+  }, [isBoardMode]);
+
+  const strokeSurfacePage = isBoardMode ? null : page;
+  const surfaceStrokes = useMemo(
+    () =>
+      sessionState.strokes.filter((s) =>
+        strokeSurfacePage == null ? s.page == null : s.page === strokeSurfacePage,
+      ),
+    [sessionState.strokes, strokeSurfacePage],
+  );
+
+  const drawingEnabled =
+    isTeacher && (activeTool === "pen" || activeTool === "highlighter");
+  const drawColor =
+    activeTool === "highlighter" ? STROKE_COLORS.highlighter : STROKE_COLORS.pen;
+  const drawWidth =
+    activeTool === "highlighter" ? STROKE_WIDTH.highlighter : STROKE_WIDTH.pen;
+
+  useEffect(() => {
+    if (!sessionReady || !id) return;
+    const ac = new AbortController();
+    const filter = isBoardMode ? ("board" as const) : page;
+    const surfacePage = isBoardMode ? null : page;
+    void fetchSessionStrokes(id, filter, ac.signal)
+      .then((rows) => {
+        if (ac.signal.aborted) return;
+        sessionState.replaceSurfaceStrokes(surfacePage, rows);
+      })
+      .catch(() => {
+        /* ignore abort / transient */
+      });
+    return () => ac.abort();
+    // Resync on reconnect via strokeResyncNonce.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- replaceSurfaceStrokes is stable
+  }, [sessionReady, id, isBoardMode, page, strokeResyncNonce]);
+
+  const handleStrokeComplete = useCallback(
+    (points: StrokePoint[]) => {
+      if (!isTeacher || !id || !user?.id || points.length === 0) return;
+      const color = drawColor;
+      const width = drawWidth;
+      // Keep every stroke visible immediately — a single pending slot used to
+      // drop the previous line when the next one finished before the WS ack.
+      sessionState.addLocalStroke({
+        id: `local:${crypto.randomUUID()}`,
+        session_id: id,
+        page: strokeSurfacePage,
+        points,
+        color,
+        width,
+        created_by: user.id,
+        created_at: new Date().toISOString(),
+      });
+      sessionState.sendStrokeAdd({
+        page: strokeSurfacePage,
+        points,
+        color,
+        width,
+      });
+    },
+    [
+      isTeacher,
+      id,
+      user?.id,
+      drawColor,
+      drawWidth,
+      strokeSurfacePage,
+      sessionState.addLocalStroke,
+      sessionState.sendStrokeAdd,
+    ],
+  );
+
+  const whiteboardOverlay = (
+    <WhiteboardLayer
+      strokes={surfaceStrokes}
+      drawingEnabled={drawingEnabled}
+      color={drawColor}
+      width={drawWidth}
+      onStrokeComplete={handleStrokeComplete}
+    />
+  );
+
+  const handleContentModeChange = useCallback(
+    (mode: typeof contentMode) => {
+      if (!isTeacher || mode === contentMode) return;
+      sessionState.setContentMode(mode);
+    },
+    [isTeacher, contentMode, sessionState.setContentMode],
+  );
 
   useEffect(() => {
     if (!sessionReady || !isTeacher) return;
@@ -708,6 +850,25 @@ function LiveSessionPageInner() {
   useEffect(() => {
     if (!annotationMode) setAnnotationTarget(null);
   }, [annotationMode]);
+
+  useEffect(() => {
+    if (!annotationMode && activeTool === "annotate") setActiveTool("hand");
+  }, [annotationMode, activeTool]);
+
+  const handleToolChange = useCallback((tool: SessionToolId) => {
+    if (tool === "annotate" && sessionState.state.contentMode === "board") return;
+    setActiveTool(tool);
+    setAnnotationMode(tool === "annotate");
+  }, [sessionState.state.contentMode]);
+
+  const handleToggleAnnotation = useCallback(() => {
+    if (sessionState.state.contentMode === "board") return;
+    setAnnotationMode((m) => {
+      const next = !m;
+      setActiveTool(next ? "annotate" : "hand");
+      return next;
+    });
+  }, [sessionState.state.contentMode]);
 
   const handleAutoFollowToggle = useCallback(() => {
     setAutoFollow((prev) => {
@@ -1160,9 +1321,14 @@ function LiveSessionPageInner() {
 
   if (anotherTab) return <LiveSessionAnotherTab />;
 
+  if (authExpired) return <LiveSessionAuthExpired sessionId={id} />;
+
+  const sessionDegraded =
+    sessionState.wsStatus === "reconnecting" || livekit.status === "disconnected";
+
   return (
     <div
-      className="relative flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-white"
+      className="relative flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-[var(--color-bg)]"
       dir={i18n.language?.startsWith("ar") ? "rtl" : "ltr"}
     >
       <LiveSessionToastsAndOverlays
@@ -1180,16 +1346,57 @@ function LiveSessionPageInner() {
       <main
         className={
           browserSupported
-            ? "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-[max(env(safe-area-inset-top),0.5rem)]"
-            : "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden py-[max(calc(3rem+4px),env(safe-area-inset-top),env(safe-area-inset-bottom))]"
+            ? "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-[var(--mushaf-canvas)]"
+            : "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-[var(--mushaf-canvas)] py-[max(calc(3rem+4px),env(safe-area-inset-top),env(safe-area-inset-bottom))]"
         }
         aria-label="Mushaf content"
       >
+        {room ? (
+          <LiveSessionTopBar
+            roomName={room.name}
+            roomCode={room.share_token?.slice(0, 9).toUpperCase() ?? null}
+            riwaya={room.riwaya}
+            halaqahType={room.halaqah_type}
+            elapsedLabel={elapsedLabel}
+            participantCount={sessionState.state.participants.length}
+            wsStatus={sessionState.wsStatus}
+            livekitStatus={livekit.status}
+            isTeacher={isTeacher}
+            onEndSession={() => setEndSessionOpen(true)}
+            userName={user?.name ?? user?.email ?? null}
+          />
+        ) : null}
+
+        {/* Mode row — content toggle (teacher) + auto-follow. */}
+        <div className="hidden items-center justify-center gap-3 bg-[var(--mushaf-canvas)] px-4 pt-3 md:flex">
+          {isTeacher && contentSurfaceReady ? (
+            <>
+              <ContentModeToggle mode={contentMode} onChange={handleContentModeChange} />
+              {!isBoardMode ? (
+                <AutoFollowBadge
+                  enabled={pageBroadcast}
+                  onToggle={() => setPageBroadcast((v) => !v)}
+                  variant="modePill"
+                  role="teacher"
+                />
+              ) : null}
+            </>
+          ) : null}
+          {!isTeacher && contentSurfaceReady && !isBoardMode ? (
+            <AutoFollowBadge
+              enabled={autoFollow}
+              onToggle={handleAutoFollowToggle}
+              variant="modePill"
+              role="student"
+            />
+          ) : null}
+        </div>
+
         <div
           className={cn(
             "grid min-h-0 flex-1",
             "grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-0 px-1",
-            "md:grid-cols-3 md:grid-rows-[minmax(0,1fr)_minmax(0,auto)] md:gap-2 md:px-2",
+            "md:grid-cols-1 md:grid-rows-[minmax(0,1fr)] md:px-0",
           )}
         >
           <LiveSessionMobileTopBar
@@ -1205,41 +1412,95 @@ function LiveSessionPageInner() {
                 micState={micState}
               />
             }
-            onOpenMenu={() => setNavigatorOpen(true)}
+            onOpenMenu={() => {
+              if (!isBoardMode) setNavigatorOpen(true);
+            }}
           />
 
           <div
-            className="relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md bg-white md:col-span-3 md:row-start-1"
+            className="relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--mushaf-canvas)] md:px-8 md:pb-[7.5rem] md:pt-4"
             aria-label={t("mushaf.title")}
           >
-            <ReconnectingOverlay visible={sessionState.wsStatus === "reconnecting"} />
-            <MushafReader
-              page={page}
-              onPageChange={isTeacher ? goPage : autoFollow ? noopPage : goPage}
-              riwaya={riwaya}
-              canChangePage={canNavigate}
-              hideNavigation
-              omitMenuStrip
-              className="h-full min-h-0"
-            >
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                <MushafCanvas
-                  page={page}
-                  riwaya={riwaya}
-                  highlightRange={studentAudioHighlight ?? interaction.highlightRange}
-                  activeWord={interaction.activeWord}
-                  onWordClick={isTeacher ? handleLiveWordClick : handleStudentWordClick}
-                  onWordMouseEnter={!isTeacher ? handleStudentWordEnter : undefined}
-                  onWordMouseLeave={!isTeacher ? handleStudentWordLeave : undefined}
-                  onAyahMarkerMouseEnter={!isTeacher ? handleStudentAyahMarkerEnter : undefined}
-                  onAyahMarkerMouseLeave={!isTeacher ? handleStudentAyahMarkerLeave : undefined}
-                  onAyahClick={interaction.handleAyahClick}
-                  getWordAnnotationClass={getWordAnnotationClass}
-                />
-              </div>
-            </MushafReader>
+            <ReconnectingOverlay visible={sessionDegraded} />
+
+            <SessionToolRail
+              activeTool={activeTool}
+              onToolChange={handleToolChange}
+              canAnnotate={isTeacher}
+              annotateDisabled={isBoardMode}
+              annotateDisabledTitle={t("liveSession.board.annotateUnavailable")}
+              canDraw={isTeacher}
+              onUndo={() => sessionState.sendStrokeUndo(strokeSurfacePage)}
+              onClearAll={() => setClearStrokesOpen(true)}
+            />
+
+            <div className="hidden md:block">
+              <ReciterChip
+                reciterName={
+                  activeReciterParticipant?.name ??
+                  (teacherReciterPeek?.studentName ?? null)
+                }
+                currentAyah={sessionState.state.currentAyah}
+                isTeacher={isTeacher}
+                locale={loc}
+                storageKey={`miqraa.reciterChip.${user?.id ?? "anon"}`}
+                onGiveTurn={() => setDrawerOpen(true)}
+                onEndRecitation={() => {
+                  const plan = sessionPlans.find((p) => p.plan_status === "in_progress");
+                  if (!plan) {
+                    setDrawerOpen(true);
+                    return;
+                  }
+                  setPlanEndGradePlanId(plan.id);
+                  setPlanEndGradeDialogOpen(true);
+                }}
+              />
+            </div>
+
+            {!contentSurfaceReady ? (
+              <div
+                className="mx-auto h-full min-h-[min(56vh,560px)] w-full max-w-[min(100%,42rem)] animate-pulse rounded-lg bg-[var(--mushaf-page-paper)] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_8px_24px_rgba(0,0,0,0.05)]"
+                aria-hidden
+              />
+            ) : isBoardMode ? (
+              <SessionBoardSurface
+                riwaya={riwaya}
+                className="h-full min-h-0"
+                overlay={whiteboardOverlay}
+              />
+            ) : (
+              <MushafReader
+                page={page}
+                onPageChange={isTeacher ? goPage : autoFollow ? noopPage : goPage}
+                riwaya={riwaya}
+                canChangePage={mushafNavigate}
+                hideNavigation
+                omitMenuStrip
+                fitStage
+                className="h-full min-h-0"
+                pageOverlay={whiteboardOverlay}
+              >
+                <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                  <MushafCanvas
+                    page={page}
+                    riwaya={riwaya}
+                    highlightRange={studentAudioHighlight ?? interaction.highlightRange}
+                    activeWord={interaction.activeWord}
+                    onWordClick={isTeacher ? handleLiveWordClick : handleStudentWordClick}
+                    onWordMouseEnter={!isTeacher ? handleStudentWordEnter : undefined}
+                    onWordMouseLeave={!isTeacher ? handleStudentWordLeave : undefined}
+                    onAyahMarkerMouseEnter={!isTeacher ? handleStudentAyahMarkerEnter : undefined}
+                    onAyahMarkerMouseLeave={!isTeacher ? handleStudentAyahMarkerLeave : undefined}
+                    onAyahClick={interaction.handleAyahClick}
+                    getWordAnnotationClass={getWordAnnotationClass}
+                  />
+                </div>
+              </MushafReader>
+            )}
+
+            {/* Mobile: keep compact peek until mobile chrome redesign. */}
             {isTeacher && teacherReciterPeek ? (
-              <div className="pointer-events-auto absolute start-2 top-2 z-10 max-w-[min(20rem,calc(100%-1rem))] md:max-w-[min(22rem,calc(100%-11rem))]">
+              <div className="pointer-events-auto absolute start-2 top-2 z-10 max-w-[min(20rem,calc(100%-1rem))] md:hidden">
                 <TeacherActiveReciterPeek
                   peek={teacherReciterPeek}
                   locale={loc}
@@ -1248,14 +1509,36 @@ function LiveSessionPageInner() {
                 />
               </div>
             ) : null}
-            <div className="pointer-events-auto absolute top-2 z-10 hidden end-2 md:block">
-              <SessionStatusCorner
-                wsStatus={sessionState.wsStatus}
-                livekitStatus={livekit.status}
-                elapsedLabel={elapsedLabel}
-                micState={micState}
-              />
-            </div>
+
+            <LiveSessionDesktopActionBar
+              canPublishAudio={canPublishAudio}
+              livekitConnected={livekit.status === "connected"}
+              isMicEnabled={livekit.isMicEnabled}
+              micError={livekit.micError}
+              page={page}
+              totalPages={totalPages}
+              canNavigate={mushafNavigate}
+              showPager={!isBoardMode}
+              isTeacher={isTeacher}
+              handRaised={sessionState.raisedHands.includes(user?.id ?? "")}
+              onToggleHand={
+                isTeacher
+                  ? undefined
+                  : () => {
+                      if (sessionState.raisedHands.includes(user?.id ?? "")) {
+                        sessionState.lowerHand();
+                      } else {
+                        sessionState.raiseHand();
+                      }
+                    }
+              }
+              raisedHandCount={sessionState.raisedHands.length}
+              onPageChange={goPage}
+              onToggleMic={handleToggleMic}
+              onOpenParticipants={() => setDrawerOpen(true)}
+              onOpenNavigator={() => setNavigatorOpen(true)}
+              onLeave={handleLeave}
+            />
           </div>
 
           <LiveSessionMobileBottomBar
@@ -1267,34 +1550,23 @@ function LiveSessionPageInner() {
             isMicEnabled={livekit.isMicEnabled}
             micError={livekit.micError}
             annotationMode={annotationMode}
+            handRaised={sessionState.raisedHands.includes(user?.id ?? "")}
+            onToggleHand={
+              isTeacher
+                ? undefined
+                : () => {
+                    if (sessionState.raisedHands.includes(user?.id ?? "")) {
+                      sessionState.lowerHand();
+                    } else {
+                      sessionState.raiseHand();
+                    }
+                  }
+            }
+            raisedHandCount={sessionState.raisedHands.length}
             onToggleMic={handleToggleMic}
-            onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
+            onToggleAnnotation={isTeacher ? handleToggleAnnotation : undefined}
             onOpenParticipants={() => setDrawerOpen(true)}
             onOpenMore={() => setMobileOverflowOpen(true)}
-            onLeave={handleLeave}
-            onEndSession={() => setEndSessionOpen(true)}
-          />
-
-          <LiveSessionDesktopActionBar
-            isTeacher={isTeacher}
-            isActiveReciter={isActiveReciter}
-            canPublishAudio={canPublishAudio}
-            livekitConnected={livekit.status === "connected"}
-            livekitStatus={livekit.status}
-            isMicEnabled={livekit.isMicEnabled}
-            micError={livekit.micError}
-            annotationMode={annotationMode}
-            autoFollow={autoFollow}
-            page={page}
-            surahLabel={navCornerLabels.surahLabel}
-            juzN={navCornerLabels.juzN}
-            onToggleMic={handleToggleMic}
-            onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
-            onAutoFollowToggle={handleAutoFollowToggle}
-            onOpenParticipants={() => setDrawerOpen(true)}
-            onOpenNavigator={() => setNavigatorOpen(true)}
-            onOpenInfo={() => window.alert(t("common.comingSoon"))}
-            onOpenChat={() => window.alert(t("common.comingSoon"))}
             onLeave={handleLeave}
             onEndSession={() => setEndSessionOpen(true)}
           />
@@ -1307,7 +1579,7 @@ function LiveSessionPageInner() {
         riwaya={riwaya}
         page={page}
         totalPages={totalPages}
-        canNavigate={canNavigate}
+        canNavigate={mushafNavigate}
         onNavigateToPage={goPage}
         side={navigatorSide}
       />
@@ -1328,7 +1600,13 @@ function LiveSessionPageInner() {
         onClose={() => setDrawerOpen(false)}
         participants={sessionState.state.participants}
         teacherId={sessionDetail.teacher_id}
+        myUserId={user?.id}
         isTeacher={sessionState.isTeacher}
+        raisedHands={sessionState.raisedHands}
+        activeReciterId={sessionState.state.activeReciterId}
+        onGiveTurn={(studentId) => {
+          sessionState.setReciter(studentId);
+        }}
         offlineStudents={offlineSessionStudents}
         sessionId={id}
         plans={sessionPlans}
@@ -1370,61 +1648,54 @@ function LiveSessionPageInner() {
         />
       ) : null}
 
-      {sessionState.isTeacher && id && sessionDetail ? (
-        <Dialog
-          open={planEndGradeDialogOpen}
-          onOpenChange={(next) => {
-            if (!next) {
-              setPlanEndGradeDialogOpen(false);
-              setPlanEndGradePlanId(null);
-            }
-          }}
+      {sessionState.isTeacher &&
+      id &&
+      sessionDetail &&
+      planEndGradeDialogOpen &&
+      planEndGradePlan &&
+      planEndGradeParticipant ? (
+        <div
+          className="pointer-events-none fixed inset-x-0 bottom-[5.5rem] z-40 flex justify-center px-3 md:bottom-[6.5rem]"
+          aria-live="polite"
         >
-          {planEndGradePlan && planEndGradeParticipant ? (
-            <DialogContent
-              className="max-h-[min(90dvh,800px)] gap-0 overflow-y-auto p-0 sm:max-w-lg"
-              showCloseButton
-            >
-              <div className="border-b border-border px-4 pt-4 pb-3 pe-12">
-                <DialogHeader className="gap-1 space-y-0 text-start">
-                  <DialogTitle className="text-start font-heading text-lg">
-                    {t("liveSession.gradeRecitation")}
-                  </DialogTitle>
-                  <DialogDescription className="text-start text-sm text-muted-foreground">
-                    {t("liveSession.gradeRecitationModalDescription")}
-                  </DialogDescription>
-                </DialogHeader>
-              </div>
-              <GradingPanel
-                key={`plan-end-grade-${planEndGradePlan.id}`}
-                hideTitle
-                className="border-0 bg-transparent px-4 pb-4 pt-2"
-                activeReciter={planEndGradeParticipant}
-                currentAyah={{ surah: planEndGradePlan.surah, ayah: planEndGradePlan.ayah_start }}
-                highlightRange={{
-                  surah: planEndGradePlan.surah,
-                  ayahStart: planEndGradePlan.ayah_start,
-                  ayahEnd: planEndGradePlan.ayah_end,
-                }}
-                sessionId={id}
-                roomId={sessionDetail.room_id}
-                riwaya={riwaya}
-                locale={loc}
-                gradingMode="completePlan"
-                planToComplete={planEndGradePlan}
-                onPlanCompleted={(rec) => {
-                  patchSessionRecitations((prev = []) => prev.map((p) => (p.id === rec.id ? rec : p)));
-                  setPlanEndGradeDialogOpen(false);
-                  setPlanEndGradePlanId(null);
-                  recitationFetchEpochRef.current++;
-                }}
-                onGradeSubmitted={(studentId, grade, notes) => {
-                  sessionState.sendGradeNotification(studentId, grade, notes);
-                }}
-              />
-            </DialogContent>
-          ) : null}
-        </Dialog>
+          <div className="pointer-events-auto w-full max-w-[460px] animate-in fade-in slide-in-from-bottom-3 duration-300">
+            <GradingPanel
+              key={`plan-end-grade-${planEndGradePlan.id}`}
+              variant="dock"
+              openAnnotationsCount={
+                planEndGradePlan.id === currentRecitationId
+                  ? recitationAnnotations.filter((a) => a.status === "open").length
+                  : 0
+              }
+              onDismiss={() => {
+                setPlanEndGradeDialogOpen(false);
+                setPlanEndGradePlanId(null);
+              }}
+              sessionId={id}
+              roomId={sessionDetail.room_id}
+              activeReciter={planEndGradeParticipant}
+              currentAyah={{ surah: planEndGradePlan.surah, ayah: planEndGradePlan.ayah_start }}
+              highlightRange={{
+                surah: planEndGradePlan.surah,
+                ayahStart: planEndGradePlan.ayah_start,
+                ayahEnd: planEndGradePlan.ayah_end,
+              }}
+              riwaya={riwaya}
+              locale={loc}
+              gradingMode="completePlan"
+              planToComplete={planEndGradePlan}
+              onPlanCompleted={(rec) => {
+                patchSessionRecitations((prev = []) => prev.map((p) => (p.id === rec.id ? rec : p)));
+                setPlanEndGradeDialogOpen(false);
+                setPlanEndGradePlanId(null);
+                recitationFetchEpochRef.current++;
+              }}
+              onGradeSubmitted={(studentId, grade, notes) => {
+                sessionState.sendGradeNotification(studentId, grade, notes);
+              }}
+            />
+          </div>
+        </div>
       ) : null}
 
       <LiveSessionConfirmModals
@@ -1436,6 +1707,12 @@ function LiveSessionPageInner() {
         endingSession={endingSession}
         onEndSessionCancel={() => setEndSessionOpen(false)}
         onEndSessionConfirm={() => void confirmEndSession()}
+        clearStrokesOpen={clearStrokesOpen}
+        onClearStrokesCancel={() => setClearStrokesOpen(false)}
+        onClearStrokesConfirm={() => {
+          setClearStrokesOpen(false);
+          sessionState.sendStrokesClear(strokeSurfacePage);
+        }}
         navBlockOpen={blocker.state === "blocked"}
         onNavStay={() => blocker.reset?.()}
         onNavLeave={() => {

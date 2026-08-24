@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 use chrono::{DateTime, NaiveDate, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
@@ -317,6 +317,20 @@ pub struct StudentProgressResponse {
     pub recent_recitations: i64,
     pub last_recitation_date: Option<DateTime<Utc>>,
     pub streak_days: i32,
+}
+
+/// Persisted freehand stroke for a live session (`session_strokes`).
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct SessionStrokePublic {
+    pub id: Uuid,
+    pub session_id: Uuid,
+    /// `None` = board surface; `Some(n)` = mushaf page.
+    pub page: Option<i32>,
+    pub points: serde_json::Value,
+    pub color: String,
+    pub width: f32,
+    pub created_by: Uuid,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

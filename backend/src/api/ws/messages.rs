@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::api::types::ErrorAnnotationPublic;
+use crate::api::types::{ErrorAnnotationPublic, SessionStrokePublic};
 
 /// Client → server messages.
 #[derive(Deserialize)]
@@ -30,6 +30,9 @@ pub enum ClientMessage {
     #[serde(rename = "current-page")]
     CurrentPage { page: i32 },
 
+    #[serde(rename = "set-content-mode")]
+    SetContentMode { mode: String },
+
     #[serde(rename = "grade-notification")]
     GradeNotification {
         student_id: Uuid,
@@ -52,6 +55,34 @@ pub enum ClientMessage {
     #[serde(rename = "remove-annotation")]
     RemoveAnnotation { annotation_id: Uuid },
 
+    /// Teacher freehand stroke (completed). `page` null = board surface.
+    #[serde(rename = "stroke-add")]
+    StrokeAdd {
+        page: Option<i32>,
+        points: serde_json::Value,
+        color: String,
+        width: f32,
+    },
+
+    /// Teacher: undo own most recent stroke on a surface (`page` null = board).
+    /// Client sends the surface it is viewing — must not rely on broadcast `current_page`
+    /// (teacher may have page-broadcast off or be ahead of room state).
+    #[serde(rename = "stroke-undo")]
+    StrokeUndo {
+        #[serde(default)]
+        page: Option<i32>,
+    },
+
+    /// Teacher: clear all strokes on a surface (`page` null = board).
+    #[serde(rename = "strokes-clear")]
+    StrokesClear { page: Option<i32> },
+
+    #[serde(rename = "raise-hand")]
+    RaiseHand,
+
+    #[serde(rename = "lower-hand")]
+    LowerHand,
+
     #[serde(rename = "ping")]
     Ping,
 }
@@ -65,6 +96,10 @@ pub enum ServerMessage {
         active_reciter_id: Option<Uuid>,
         current_ayah: Option<AyahPosition>,
         current_page: Option<i32>,
+        /// Live content surface: `"mushaf"` | `"board"`.
+        content_mode: String,
+        /// Student user ids with hand raised (raise-time order).
+        raised_hands: Vec<Uuid>,
         session_id: Uuid,
         room_id: Uuid,
     },
@@ -89,6 +124,9 @@ pub enum ServerMessage {
 
     #[serde(rename = "current-page")]
     CurrentPage { page: i32 },
+
+    #[serde(rename = "content-mode-changed")]
+    ContentModeChanged { mode: String },
 
     #[serde(rename = "error")]
     Error { message: String },
@@ -115,6 +153,18 @@ pub enum ServerMessage {
         /// Active reciter after this transition (`Some` when moving to in_progress).
         active_reciter_id: Option<Uuid>,
     },
+
+    #[serde(rename = "stroke-added")]
+    StrokeAdded { stroke: SessionStrokePublic },
+
+    #[serde(rename = "stroke-removed")]
+    StrokeRemoved { stroke_id: Uuid },
+
+    #[serde(rename = "strokes-cleared")]
+    StrokesCleared { page: Option<i32> },
+
+    #[serde(rename = "hand-changed")]
+    HandChanged { user_id: Uuid, raised: bool },
 }
 
 #[derive(Serialize, Clone)]

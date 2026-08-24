@@ -79,6 +79,9 @@ export interface LiveSessionMobileBottomBarProps {
   isMicEnabled?: boolean;
   micError?: MicError | null;
   annotationMode: boolean;
+  handRaised?: boolean;
+  onToggleHand?: () => void;
+  raisedHandCount?: number;
   onToggleMic?: () => void;
   onToggleAnnotation?: () => void;
   onOpenParticipants: () => void;
@@ -89,13 +92,16 @@ export interface LiveSessionMobileBottomBarProps {
 
 export function LiveSessionMobileBottomBar({
   isTeacher,
-  isActiveReciter = false,
+  isActiveReciter: _isActiveReciter = false,
   canPublishAudio = false,
   livekitConnected = false,
   livekitStatus = "idle",
   isMicEnabled = false,
   micError = null,
   annotationMode,
+  handRaised = false,
+  onToggleHand,
+  raisedHandCount = 0,
   onToggleMic,
   onToggleAnnotation,
   onOpenParticipants,
@@ -105,9 +111,6 @@ export function LiveSessionMobileBottomBar({
 }: LiveSessionMobileBottomBarProps) {
   const { t } = useTranslation();
 
-  const showComingSoon = () => {
-    window.alert(t("common.comingSoon"));
-  };
   const hasLivekitError = livekitStatus === "error";
   const canToggleMic = canPublishAudio && livekitConnected && !hasLivekitError;
   const micBlocked = micError != null;
@@ -180,12 +183,16 @@ export function LiveSessionMobileBottomBar({
       ) : (
         <button
           type="button"
-          onClick={showComingSoon}
-          title={isActiveReciter ? t("liveSession.tooltip.pointerTool") : t("liveSession.tooltip.raiseHand")}
-          aria-label={isActiveReciter ? t("liveSession.pointerTool") : t("liveSession.raiseHand")}
+          onClick={onToggleHand}
+          title={handRaised ? t("liveSession.hand.lower") : t("liveSession.hand.raise")}
+          aria-label={handRaised ? t("liveSession.hand.lower") : t("liveSession.hand.raise")}
+          aria-pressed={handRaised}
           className={cn(
             MEET_ICON_BTN_BASE,
-            "h-10 w-10 bg-gradient-to-b from-amber-50 to-amber-100/90 text-amber-800 hover:from-amber-100 hover:to-amber-200/90",
+            "h-10 w-10",
+            handRaised
+              ? "bg-[rgba(212,168,67,0.22)] text-[#9a7616] ring-2 ring-[#D4A843]/40"
+              : "bg-gradient-to-b from-amber-50 to-amber-100/90 text-amber-800 hover:from-amber-100 hover:to-amber-200/90",
           )}
         >
           <Hand className="h-5 w-5" strokeWidth={2.25} />
@@ -199,10 +206,15 @@ export function LiveSessionMobileBottomBar({
         aria-label={t("liveSession.participants")}
         className={cn(
           MEET_ICON_BTN_BASE,
-          "h-10 w-10 bg-gradient-to-b from-emerald-50 to-emerald-100/90 text-emerald-800 hover:from-emerald-100 hover:to-emerald-200/90",
+          "relative h-10 w-10 bg-gradient-to-b from-emerald-50 to-emerald-100/90 text-emerald-800 hover:from-emerald-100 hover:to-emerald-200/90",
         )}
       >
         <Users className="h-5 w-5" strokeWidth={2.25} />
+        {isTeacher && raisedHandCount > 0 ? (
+          <span className="absolute -end-0.5 -top-0.5 grid min-w-[16px] place-items-center rounded-full bg-[#D4A843] px-0.5 text-[9px] font-bold text-[#3a2c00]">
+            {raisedHandCount > 99 ? "99+" : raisedHandCount}
+          </span>
+        ) : null}
       </button>
 
       {isTeacher ? (

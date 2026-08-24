@@ -529,20 +529,20 @@
     "juz": "Juz",
     "hizb": "Hizb",
     "riwaya": "Riwaya",
-    "hafs": "Hafs",
-    "shubah": "Shuʿbah",
-    "warsh": "Warsh",
-    "qalun": "Qālūn",
-    "qunbul": "Qunbul",
-    "bazzi": "Al-Bazzī",
-    "doori": "Ad-Dūrī (Abū ʿAmr)",
-    "susi": "As-Sūsī",
-    "hisham": "Hichām",
-    "ibn_dhakwan": "Ibn Dhakwān",
-    "khalaf": "Khalaf",
-    "khallad": "Khallād",
-    "doori_kisai": "Ad-Dūrī (Al-Kisāʾī)",
-    "abu_harith": "Abū Al-Ḥārith",
+    "hafs": "Hafs ‘an ‘Asim",
+    "shubah": "Shu‘bah ‘an ‘Asim",
+    "warsh": "Warsh ‘an Nafi‘",
+    "qalun": "Qalun ‘an Nafi‘",
+    "qunbul": "Qunbul ‘an Ibn Kathir",
+    "bazzi": "al-Bazzi ‘an Ibn Kathir",
+    "doori": "al-Duri ‘an Abu ‘Amr",
+    "susi": "al-Susi ‘an Abu ‘Amr",
+    "hisham": "Hisham ‘an Ibn ‘Amir",
+    "ibn_dhakwan": "Ibn Dhakwan ‘an Ibn ‘Amir",
+    "khalaf": "Khalaf ‘an Hamzah",
+    "khallad": "Khallad ‘an Hamzah",
+    "doori_kisai": "al-Duri ‘an al-Kisai",
+    "abu_harith": "Abu al-Harith ‘an al-Kisai",
     "goToPage": "Aller à la page",
     "goToSurah": "Aller à la sourate",
     "goToJuz": "Aller au juz",
@@ -999,6 +999,10 @@
     "prevAyah": "Ayah précédente",
     "following": "Suivi",
     "freeBrowse": "Navigation libre",
+    "autoFollow": {
+      "on": "Les élèves suivent votre page",
+      "off": "Suivi automatique désactivé"
+    },
     "gradeRecitation": "Évaluer la récitation",
     "gradeRecitationModalDescription": "Évaluez la récitation et consultez les notes de cette séance.",
     "reciter": "Récitant",
@@ -1040,6 +1044,54 @@
     "reconnected": "Reconnecté",
     "connectedFromAnotherTab": "Vous êtes déjà connecté depuis un autre onglet ou une autre fenêtre.",
     "refreshPage": "Rafraîchir la page",
+    "authExpired": {
+      "title": "Session expirée",
+      "body": "Votre connexion a expiré pendant la séance. Reconnectez-vous puis rejoignez la séance.",
+      "action": "Retour à la page de la séance"
+    },
+    "turn": {
+      "noReciter": "Aucun récitant",
+      "giveTurn": "Donner le tour",
+      "endRecitation": "Terminer la récitation",
+      "recitingNow": "Récite maintenant"
+    },
+    "chatComingSoon": "Discussion — bientôt",
+    "tools": {
+      "rail": "Outils de dessin",
+      "hand": "Déplacer",
+      "annotate": "Annotation des mots",
+      "pen": "Stylo",
+      "highlighter": "Surligneur",
+      "undo": "Annuler",
+      "clearAll": "Tout effacer",
+      "clearConfirmTitle": "Effacer tous les dessins ?",
+      "clearConfirmBody": "Les dessins de cette surface seront effacés pour tous."
+    },
+    "dragToMove": "Glisser pour déplacer",
+    "hand": {
+      "raise": "Lever la main",
+      "lower": "Baisser la main",
+      "raisedGroup": "Mains levées",
+      "passTurn": "Passer le tour"
+    },
+    "drawer": {
+      "recitingGroup": "Récite maintenant",
+      "othersGroup": "Dans la halaqah"
+    },
+    "grading": {
+      "openAnnotationsNote_one": "{{count}} annotation ouverte sera enregistrée comme devoir",
+      "openAnnotationsNote_other": "{{count}} annotations ouvertes seront enregistrées comme devoir"
+    },
+    "mode": {
+      "toggle": "Mode d’affichage",
+      "mushaf": "Mushaf",
+      "board": "Tableau"
+    },
+    "board": {
+      "emptyTitle": "Tableau vide — l'élève récite de mémoire",
+      "emptyHint": "Écrivez avec le stylo depuis la barre d'outils",
+      "annotateUnavailable": "L'annotation des mots n'est disponible qu'en mode Mushaf"
+    },
     "leaveSessionConfirm": "Quitter la séance ?",
     "navigationLeaveHint": "Une séance en direct est active. Quitter et se déconnecter ?",
     "stay": "Rester",
@@ -1092,6 +1144,9 @@
       "camera": "Options caméra (bientôt).",
       "overflowMore": "Plus d’options : état de connexion, outils et suivi.",
       "autoFollowSwitch": "Activé : votre Mushaf suit la page de l’enseignant. Désactivé : navigation libre.",
+      "pageBroadcastSwitch": "Activé : les élèves suivent votre page. Désactivé : vous changez de page seul.",
+      "modeMushaf": "Afficher la page du Mushaf",
+      "modeBoard": "Afficher un tableau blanc pour la récitation de mémoire",
       "endSessionShort": "Terminer la séance pour tous. Une confirmation sera demandée."
     }
   },

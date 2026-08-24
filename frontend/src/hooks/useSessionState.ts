@@ -1,10 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ErrorAnnotation } from "../types";
-import type { ParticipantInfo, PlanStatusChangedMessage, RoomStateMessage } from "./useSessionWebSocket";
+import type {
+  ContentMode,
+  ParticipantInfo,
+  PlanStatusChangedMessage,
+  RoomStateMessage,
+  SessionStroke,
+} from "./useSessionWebSocket";
 import { useSessionWebSocket } from "./useSessionWebSocket";
+
+export type { ContentMode, SessionStroke };
 
 export interface SessionParticipant {
   userId: string;
@@ -20,6 +28,8 @@ export interface SessionState {
   currentAyah: { surah: number; ayah: number } | null;
   /** Teacher-led mushaf page; null until teacher sets or room-state omits it. */
   currentPage: number | null;
+  /** Live content surface synchronized by the teacher. */
+  contentMode: ContentMode;
   sessionId: string;
   roomId: string;
 }
@@ -29,6 +39,7 @@ const emptyState = (sessionId: string, roomId: string): SessionState => ({
   activeReciterId: null,
   currentAyah: null,
   currentPage: null,
+  contentMode: "mushaf",
   sessionId,
   roomId,
 });
@@ -54,38 +65,21 @@ export interface UseSessionStateOptions {
   onGradeNotification?: (grade: string, notes?: string) => void;
   onAnnotationAdded?: (annotation: ErrorAnnotation) => void;
   onAnnotationRemoved?: (annotationId: string) => void;
-  onOffer?: (sdp: string, from: string) => void;
-  onIceCandidate?: (candidate: string, from: string) => void;
   onAnotherTab?: () => void;
   onJoinRejected?: (message: string) => void;
   onReconnected?: () => void;
+  onAuthExpired?: () => void;
   /** After state merge — for a11y announcements */
   onParticipantJoined?: (user: ParticipantInfo) => void;
   onParticipantLeft?: (userId: string, name: string | undefined) => void;
-  onMsRtpCapabilities?: (rtpCapabilities: unknown) => void;
-  onMsTransportCreated?: (transport: {
-    id: string;
-    iceParameters: unknown;
-    iceCandidates: unknown;
-    dtlsParameters: unknown;
-  }) => void;
-  onMsTransportConnected?: (transportId: string) => void;
-  onMsProduced?: (producerId: string) => void;
-  onMsConsumed?: (consumer: {
-    id: string;
-    producerId: string;
-    kind: string;
-    rtpParameters: unknown;
-  }) => void;
-  onMsConsumerResumed?: (consumerId: string) => void;
-  onMsNewProducer?: (info: { producerId: string; userId: string; kind: string }) => void;
-  onMsProducerClosed?: (producerId: string) => void;
   onPlanStatusChanged?: (evt: PlanStatusChangedMessage) => void;
 }
 
 export interface UseSessionStateReturn {
   state: SessionState;
   wsStatus: import("./useSessionWebSocket").SessionWsStatus;
+  /** True after the first `room-state` — content mode is server-authoritative until then. */
+  hasRoomState: boolean;
   myRole: "teacher" | "student";
   isTeacher: boolean;
   isActiveReciter: boolean;
@@ -97,6 +91,24 @@ export interface UseSessionStateReturn {
   clearCurrentAyah: () => void;
   /** Teacher only: broadcast mushaf page so students follow. */
   setCurrentPage: (page: number) => void;
+  /** Teacher only: switch mushaf ↔ board for everyone. */
+  setContentMode: (mode: ContentMode) => void;
+  strokes: SessionStroke[];
+  /** Replace/merge strokes for one surface (REST seed / reconnect). */
+  replaceSurfaceStrokes: (page: number | null, strokes: SessionStroke[]) => void;
+  /** Optimistic local stroke before `stroke-added` ack. */
+  addLocalStroke: (stroke: SessionStroke) => void;
+  sendStrokeAdd: (payload: {
+    page: number | null;
+    points: number[][];
+    color: string;
+    width: number;
+  }) => void;
+  sendStrokeUndo: (page: number | null) => void;
+  sendStrokesClear: (page: number | null) => void;
+  raisedHands: string[];
+  raiseHand: () => void;
+  lowerHand: () => void;
   /** Teacher only: notify a student of a grade (forwarded by server). */
   sendGradeNotification: (studentId: string, grade: string, notes?: string) => void;
   sendCreateAnnotation: (payload: {
@@ -110,15 +122,6 @@ export interface UseSessionStateReturn {
     annotation_kind: string;
   }) => void;
   sendRemoveAnnotation: (annotationId: string) => void;
-  sendAnswer: (sdp: string) => void;
-  sendIceCandidate: (candidate: string) => void;
-  sendMsGetRtpCapabilities: () => void;
-  sendMsCreateTransport: (direction: "send" | "recv") => void;
-  sendMsConnectTransport: (transportId: string, dtlsParameters: unknown) => void;
-  sendMsProduce: (transportId: string, kind: "audio", rtpParameters: unknown) => void;
-  sendMsConsume: (transportId: string, producerId: string, rtpCapabilities: unknown) => void;
-  sendMsResumeConsumer: (consumerId: string) => void;
-  sendMsCloseProducer: (producerId: string) => void;
   disconnect: () => void;
 }
 
@@ -146,36 +149,49 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
     onGradeNotification,
     onAnnotationAdded,
     onAnnotationRemoved,
-    onOffer,
-    onIceCandidate,
     onAnotherTab,
     onJoinRejected,
     onReconnected,
+    onAuthExpired,
     onParticipantJoined,
     onParticipantLeft,
-    onMsRtpCapabilities,
-    onMsTransportCreated,
-    onMsTransportConnected,
-    onMsProduced,
-    onMsConsumed,
-    onMsConsumerResumed,
-    onMsNewProducer,
-    onMsProducerClosed,
     onPlanStatusChanged,
   } = options;
 
   const [state, setState] = useState<SessionState>(() => emptyState(sessionId, ""));
+  const [hasRoomState, setHasRoomState] = useState(false);
+  const [strokes, setStrokes] = useState<SessionStroke[]>([]);
+  const strokesRef = useRef(strokes);
+  strokesRef.current = strokes;
+  /** Raise-time ordered student ids. */
+  const [raisedHands, setRaisedHands] = useState<string[]>([]);
+  /** After undoing an unacked `local:` stroke, ignore the matching `stroke-added` ack. */
+  const ignoreStrokeAddBySurface = useRef<Map<string, number>>(new Map());
+
+  const surfaceKey = (page: number | null) => (page == null ? "board" : `p:${page}`);
+
+  useEffect(() => {
+    setState(emptyState(sessionId, ""));
+    setHasRoomState(false);
+    setStrokes([]);
+    setRaisedHands([]);
+    ignoreStrokeAddBySurface.current.clear();
+  }, [sessionId]);
 
   const applyRoomState = useCallback(
     (msg: RoomStateMessage) => {
+      const mode = msg.content_mode === "board" ? "board" : "mushaf";
       setState({
         participants: msg.participants.map(mapParticipant),
         activeReciterId: msg.active_reciter_id,
         currentAyah: msg.current_ayah,
         currentPage: msg.current_page ?? null,
+        contentMode: mode,
         sessionId: msg.session_id,
         roomId: msg.room_id,
       });
+      setRaisedHands(Array.isArray(msg.raised_hands) ? msg.raised_hands : []);
+      setHasRoomState(true);
     },
     [],
   );
@@ -206,6 +222,7 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
           activeReciterId: prev.activeReciterId === userId ? null : prev.activeReciterId,
         };
       });
+      setRaisedHands((prev) => prev.filter((id) => id !== userId));
     },
     onReciterChanged: (userId) => {
       setState((prev) => ({ ...prev, activeReciterId: userId }));
@@ -227,23 +244,72 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
     onCurrentPage: (page) => {
       setState((prev) => ({ ...prev, currentPage: page }));
     },
+    onContentModeChanged: (mode) => {
+      setState((prev) => ({ ...prev, contentMode: mode }));
+    },
+    onStrokeAdded: (stroke) => {
+      const key = surfaceKey(stroke.page);
+      const ignore = ignoreStrokeAddBySurface.current.get(key) ?? 0;
+      if (ignore > 0) {
+        ignoreStrokeAddBySurface.current.set(key, ignore - 1);
+        // Drop one optimistic local on this surface if still present (race).
+        setStrokes((prev) => {
+          let droppedLocal = false;
+          return prev.filter((s) => {
+            if (droppedLocal) return true;
+            const sameSurface =
+              stroke.page == null ? s.page == null : s.page === stroke.page;
+            if (sameSurface && s.id.startsWith("local:")) {
+              droppedLocal = true;
+              return false;
+            }
+            return true;
+          });
+        });
+        return;
+      }
+      setStrokes((prev) => {
+        if (prev.some((s) => s.id === stroke.id)) return prev;
+        // Drop one optimistic local stroke on the same surface (FIFO).
+        let droppedLocal = false;
+        const withoutLocal = prev.filter((s) => {
+          if (droppedLocal) return true;
+          const sameSurface =
+            stroke.page == null ? s.page == null : s.page === stroke.page;
+          if (sameSurface && s.id.startsWith("local:")) {
+            droppedLocal = true;
+            return false;
+          }
+          return true;
+        });
+        return [...withoutLocal, stroke];
+      });
+    },
+    onStrokeRemoved: (strokeId) => {
+      setStrokes((prev) => prev.filter((s) => s.id !== strokeId));
+    },
+    onStrokesCleared: (page) => {
+      setStrokes((prev) =>
+        page == null ? prev.filter((s) => s.page != null) : prev.filter((s) => s.page !== page),
+      );
+    },
+    onHandChanged: (userId, raised) => {
+      setRaisedHands((prev) => {
+        if (raised) {
+          if (prev.includes(userId)) return prev;
+          return [...prev, userId];
+        }
+        return prev.filter((id) => id !== userId);
+      });
+    },
     onSessionEnded,
     onGradeNotification,
     onAnnotationAdded,
     onAnnotationRemoved,
-    onOffer,
-    onIceCandidate,
     onAnotherTab,
     onJoinRejected,
     onReconnected,
-    onMsRtpCapabilities,
-    onMsTransportCreated,
-    onMsTransportConnected,
-    onMsProduced,
-    onMsConsumed,
-    onMsConsumerResumed,
-    onMsNewProducer,
-    onMsProducerClosed,
+    onAuthExpired,
     onPlanStatusChanged,
   });
 
@@ -287,6 +353,92 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
     [ws],
   );
 
+  const setContentMode = useCallback(
+    (mode: ContentMode) => {
+      // Optimistic — otherwise mushaf flashes then room-state/board wins the race visually,
+      // and a slow/missed `content-mode-changed` feels like the toggle "doesn't work".
+      setState((prev) => (prev.contentMode === mode ? prev : { ...prev, contentMode: mode }));
+      ws.sendSetContentMode(mode);
+    },
+    [ws],
+  );
+
+  const replaceSurfaceStrokes = useCallback((page: number | null, next: SessionStroke[]) => {
+    setStrokes((prev) => {
+      const onSurface = (s: SessionStroke) =>
+        page == null ? s.page == null : s.page === page;
+      const other = prev.filter((s) => !onSurface(s));
+      const byId = new Map<string, SessionStroke>();
+      for (const s of next) byId.set(s.id, s);
+      // Keep WS/optimistic strokes the REST snapshot hasn't caught up with yet.
+      for (const s of prev) {
+        if (onSurface(s) && !byId.has(s.id)) byId.set(s.id, s);
+      }
+      const merged = Array.from(byId.values()).sort((a, b) =>
+        a.created_at.localeCompare(b.created_at),
+      );
+      return [...other, ...merged];
+    });
+  }, []);
+
+  const addLocalStroke = useCallback((stroke: SessionStroke) => {
+    setStrokes((prev) => (prev.some((s) => s.id === stroke.id) ? prev : [...prev, stroke]));
+  }, []);
+
+  const sendStrokeAdd = useCallback(
+    (payload: { page: number | null; points: number[][]; color: string; width: number }) => {
+      ws.sendStrokeAdd(payload);
+    },
+    [ws],
+  );
+
+  const sendStrokeUndo = useCallback(
+    (page: number | null) => {
+      const onSurface = (s: SessionStroke) =>
+        page == null ? s.page == null : s.page === page;
+      const prev = strokesRef.current;
+      let lastIdx = -1;
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (onSurface(prev[i])) {
+          lastIdx = i;
+          break;
+        }
+      }
+      if (lastIdx < 0) return;
+      const last = prev[lastIdx];
+      setStrokes(prev.filter((_, i) => i !== lastIdx));
+      if (last.id.startsWith("local:")) {
+        const key = surfaceKey(page);
+        ignoreStrokeAddBySurface.current.set(
+          key,
+          (ignoreStrokeAddBySurface.current.get(key) ?? 0) + 1,
+        );
+        return;
+      }
+      ws.sendStrokeUndo(page);
+    },
+    [ws],
+  );
+
+  const sendStrokesClear = useCallback(
+    (page: number | null) => {
+      // Optimistic — clear confirm previously threw on a removed setter and never reached WS.
+      setStrokes((prev) =>
+        page == null ? prev.filter((s) => s.page != null) : prev.filter((s) => s.page !== page),
+      );
+      ws.sendStrokesClear(page);
+    },
+    [ws],
+  );
+
+  const raiseHand = useCallback(() => {
+    ws.sendRaiseHand();
+  }, [ws]);
+
+  const lowerHand = useCallback(() => {
+    ws.sendLowerHand();
+  }, [ws]);
+
   const sendGradeNotification = useCallback(
     (studentId: string, grade: string, notes?: string) => {
       ws.sendGradeNotification(studentId, grade, notes);
@@ -312,6 +464,7 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
     () => ({
       state,
       wsStatus: ws.status,
+      hasRoomState,
       myRole,
       isTeacher,
       isActiveReciter,
@@ -322,23 +475,25 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
       setCurrentAyah,
       clearCurrentAyah,
       setCurrentPage,
+      setContentMode,
+      strokes,
+      replaceSurfaceStrokes,
+      addLocalStroke,
+      sendStrokeAdd,
+      sendStrokeUndo,
+      sendStrokesClear,
+      raisedHands,
+      raiseHand,
+      lowerHand,
       sendGradeNotification,
       sendCreateAnnotation,
       sendRemoveAnnotation,
-      sendAnswer: ws.sendAnswer,
-      sendIceCandidate: ws.sendIceCandidate,
-      sendMsGetRtpCapabilities: ws.sendMsGetRtpCapabilities,
-      sendMsCreateTransport: ws.sendMsCreateTransport,
-      sendMsConnectTransport: ws.sendMsConnectTransport,
-      sendMsProduce: ws.sendMsProduce,
-      sendMsConsume: ws.sendMsConsume,
-      sendMsResumeConsumer: ws.sendMsResumeConsumer,
-      sendMsCloseProducer: ws.sendMsCloseProducer,
       disconnect: ws.disconnect,
     }),
     [
       state,
       ws.status,
+      hasRoomState,
       myRole,
       isTeacher,
       isActiveReciter,
@@ -349,18 +504,19 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
       setCurrentAyah,
       clearCurrentAyah,
       setCurrentPage,
+      setContentMode,
+      strokes,
+      replaceSurfaceStrokes,
+      addLocalStroke,
+      sendStrokeAdd,
+      sendStrokeUndo,
+      sendStrokesClear,
+      raisedHands,
+      raiseHand,
+      lowerHand,
       sendGradeNotification,
       sendCreateAnnotation,
       sendRemoveAnnotation,
-      ws.sendAnswer,
-      ws.sendIceCandidate,
-      ws.sendMsGetRtpCapabilities,
-      ws.sendMsCreateTransport,
-      ws.sendMsConnectTransport,
-      ws.sendMsProduce,
-      ws.sendMsConsume,
-      ws.sendMsResumeConsumer,
-      ws.sendMsCloseProducer,
       ws.disconnect,
     ],
   );

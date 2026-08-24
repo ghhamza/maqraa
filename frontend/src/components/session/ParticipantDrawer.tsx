@@ -25,15 +25,22 @@ import { NowRecitingCard } from "./plan-rows/NowRecitingCard";
 import { PausedPlanRow } from "./plan-rows/PausedPlanRow";
 import { NotInPlanRow } from "./plan-rows/NotInPlanRow";
 import { OfflineStudentRow } from "./plan-rows/OfflineStudentRow";
+import { HalaqahParticipantRow, RaisedHandRow } from "./plan-rows/HandRaiseRows";
 
 interface ParticipantDrawerProps {
   open: boolean;
   onClose: () => void;
   participants: SessionParticipant[];
   teacherId: string;
+  myUserId?: string;
   isTeacher: boolean;
   /** Same pattern as mushaf navigator: LTR → right edge, RTL → left edge. */
   side?: "left" | "right";
+  /** Raise-time ordered student ids. */
+  raisedHands?: string[];
+  activeReciterId?: string | null;
+  /** Teacher: set active reciter (pass / give turn). */
+  onGiveTurn?: (userId: string) => void;
 
   /** Enrolled students not in the live room (from session attendance); no session plan row for them. */
   offlineStudents: { student_id: string; student_name: string }[];
@@ -54,9 +61,13 @@ export function ParticipantDrawer({
   onClose,
   participants,
   teacherId,
+  myUserId,
   isTeacher,
   offlineStudents,
   side: sideProp,
+  raisedHands = [],
+  activeReciterId = null,
+  onGiveTurn,
   sessionId,
   plans,
   onPlansChange,
@@ -136,6 +147,30 @@ export function ParticipantDrawer({
     [onlineStudents],
   );
 
+  const raisedParticipants = useMemo(() => {
+    const byId = new Map(participants.map((p) => [p.userId, p]));
+    return raisedHands
+      .map((id) => byId.get(id))
+      .filter((p): p is SessionParticipant => Boolean(p));
+  }, [participants, raisedHands]);
+
+  const raisedSet = useMemo(() => new Set(raisedHands), [raisedHands]);
+
+  const halaqahOthers = useMemo(
+    () =>
+      sorted.filter(
+        (p) =>
+          p.userId !== activeReciterId &&
+          !raisedSet.has(p.userId),
+      ),
+    [sorted, activeReciterId, raisedSet],
+  );
+
+  const activeReciterParticipant = useMemo(
+    () => (activeReciterId ? participants.find((p) => p.userId === activeReciterId) ?? null : null),
+    [participants, activeReciterId],
+  );
+
   const wrapPlanOp = (fn: () => Promise<void>) => {
     void fn().catch((e: unknown) => {
       onPlanTransitionError(userFacingApiError(e));
@@ -184,7 +219,51 @@ export function ParticipantDrawer({
           style={{ fontFamily: "var(--font-ui)" }}
         >
           <div className="space-y-4 pb-4">
-            {teacher ? <TeacherRow participant={teacher} /> : null}
+            {activeReciterParticipant ? (
+              <ZoneSection title={t("liveSession.drawer.recitingGroup")}>
+                <HalaqahParticipantRow
+                  participant={activeReciterParticipant}
+                  isTeacher={isTeacher}
+                  isSelf={activeReciterParticipant.userId === myUserId}
+                  isReciting
+                />
+              </ZoneSection>
+            ) : null}
+
+            {raisedParticipants.length > 0 ? (
+              <ZoneSection title={t("liveSession.hand.raisedGroup")}>
+                {raisedParticipants.map((p) => (
+                  <RaisedHandRow
+                    key={p.userId}
+                    participant={p}
+                    isTeacher={isTeacher}
+                    onPassTurn={() => onGiveTurn?.(p.userId)}
+                  />
+                ))}
+              </ZoneSection>
+            ) : null}
+
+            {halaqahOthers.length > 0 ? (
+              <ZoneSection title={t("liveSession.drawer.othersGroup")}>
+                {halaqahOthers.map((p) => (
+                  <HalaqahParticipantRow
+                    key={p.userId}
+                    participant={p}
+                    isTeacher={isTeacher}
+                    isSelf={p.userId === myUserId}
+                    onGiveTurn={
+                      isTeacher && p.role === "student"
+                        ? () => onGiveTurn?.(p.userId)
+                        : undefined
+                    }
+                  />
+                ))}
+              </ZoneSection>
+            ) : null}
+
+            {teacher && !halaqahOthers.some((p) => p.userId === teacherId) && !activeReciterParticipant ? (
+              <TeacherRow participant={teacher} />
+            ) : null}
 
             {donePlans.length > 0 ? (
               <ZoneSection title={t("liveSession.zoneDone")}>

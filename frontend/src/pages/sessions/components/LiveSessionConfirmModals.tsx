@@ -24,6 +24,10 @@ export interface LiveSessionConfirmModalsProps {
   micPermissionOpen: boolean;
   onMicPermissionDismiss: () => void;
   onMicPermissionRetry: () => void;
+  // Clear whiteboard strokes
+  clearStrokesOpen: boolean;
+  onClearStrokesCancel: () => void;
+  onClearStrokesConfirm: () => void;
 }
 
 export function LiveSessionConfirmModals(props: LiveSessionConfirmModalsProps) {
@@ -94,6 +98,24 @@ export function LiveSessionConfirmModals(props: LiveSessionConfirmModalsProps) {
           </Button>
           <Button type="button" variant="primary" onClick={props.onMicPermissionRetry}>
             {t("liveSession.micPermissionDenied.retry")}
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={props.clearStrokesOpen}
+        title={t("liveSession.tools.clearConfirmTitle")}
+        onClose={props.onClearStrokesCancel}
+      >
+        <p className="mb-6 text-sm text-[var(--color-text-muted)]">
+          {t("liveSession.tools.clearConfirmBody")}
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={props.onClearStrokesCancel}>
+            {t("common.cancel")}
+          </Button>
+          <Button type="button" variant="danger" onClick={props.onClearStrokesConfirm}>
+            {t("liveSession.tools.clearAll")}
           </Button>
         </div>
       </Modal>

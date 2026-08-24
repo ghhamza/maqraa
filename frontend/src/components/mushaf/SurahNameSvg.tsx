@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { getSurah } from "../../lib/quranService";
-import { getSurahNameSvgUrl } from "../../lib/surahNameSvg";
+import { getSurahNameSvgMarkup } from "../../lib/surahNameSvg";
 import { cn } from "@/lib/utils";
 
 export interface SurahNameSvgProps {
@@ -12,22 +12,34 @@ export interface SurahNameSvgProps {
   fallbackLabel?: string;
 }
 
+function viewBoxAspect(markup: string): number | undefined {
+  const m = /\bviewBox=["']?\s*([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)/i.exec(markup);
+  if (!m) return undefined;
+  const w = Number(m[3]);
+  const h = Number(m[4]);
+  if (!(w > 0 && h > 0)) return undefined;
+  return w / h;
+}
+
 /**
- * Arabic surah title artwork from `assets/surah-names/svg/{n}.svg`.
+ * Arabic surah title calligraphy from `assets/surah-names/svg/{n}.svg`.
  *
- * We render a normal `<img>` and tint with CSS `filter` (see `.mushaf-surah-title-img` in `index.css`).
- * The previous mask + solid background approach breaks in WebKit: failed `mask-image` on external SVGs
- * paints the full box as `--mushaf-surah-title-color` (solid blue rectangle).
+ * Inlined with `fill="currentColor"` so the glyph uses
+ * `--mushaf-surah-title-color`. Aspect ratio is taken from the SVG viewBox so the
+ * glyph keeps a visible box (height alone is not enough for inline SVG sizing).
  */
 export function SurahNameSvg({ surah, className, fallbackLabel }: SurahNameSvgProps) {
-  const url = getSurahNameSvgUrl(surah);
+  const markup = getSurahNameSvgMarkup(surah);
   const s = getSurah(surah);
   const label = fallbackLabel ?? (s ? `سورة ${s.nameAr}` : `Surah ${surah}`);
 
-  if (!url) {
+  if (!markup) {
     return (
       <span
-        className={cn("inline-block font-semibold text-[var(--mushaf-surah-title-color)]", className)}
+        className={cn(
+          "inline-block font-semibold text-[var(--mushaf-surah-title-color)]",
+          className,
+        )}
         style={{ fontFamily: "var(--font-mushaf-title)" }}
       >
         {s?.nameAr ?? String(surah)}
@@ -35,17 +47,18 @@ export function SurahNameSvg({ surah, className, fallbackLabel }: SurahNameSvgPr
     );
   }
 
+  const aspect = viewBoxAspect(markup);
+
   return (
-    <div className="relative inline-block max-w-full min-w-0" role="img" aria-label={label}>
-      <img
-        src={url}
-        alt=""
-        className={cn(
-          "mushaf-surah-title-img block h-auto w-auto max-w-full object-contain object-center",
-          className,
-        )}
-        draggable={false}
-      />
-    </div>
+    <span
+      role="img"
+      aria-label={label}
+      className={cn(
+        "inline-block max-w-full text-[var(--mushaf-surah-title-color)] [&_svg]:block [&_svg]:h-full [&_svg]:w-full",
+        className,
+      )}
+      style={aspect != null ? { aspectRatio: String(aspect) } : undefined}
+      dangerouslySetInnerHTML={{ __html: markup }}
+    />
   );
 }
