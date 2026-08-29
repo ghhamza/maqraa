@@ -256,16 +256,22 @@
     "quranMapDescription": "114 surahs. Each square fills in as you cover the surah with your teacher.",
     "studentStartingTitle": "You're all set up",
     "studentStartingDescription": "Your recitations and progress will appear here once your teacher logs your first one.",
-    "teacherEmptyTitle": "Welcome to Maqraa",
-    "teacherEmptyDescription": "Create your first halaqah to start teaching students.",
-    "teacherEmptyCta": "Create your first halaqah",
+    "teacherEmptyTitle": "Create your first session",
+    "teacherEmptyDescription": "Start a session — a halaqah is created for you automatically to hold roster, invites, and progress.",
+    "teacherEmptyCta": "Create your first session",
     "studentEmptyTitle": "Find your first halaqah",
-    "studentEmptyDescription": "Browse public halaqat and join one to start your Quran journey.",
+    "studentEmptyDescription": "Ask your teacher for an invite link, or browse public halaqat and join one to start your Quran journey.",
     "studentEmptyCta": "Browse halaqat",
-    "gettingStartedTitle": "Getting started",
-    "gettingStartedStep1": "Create your first halaqah",
+    "gettingStartedTitle": "Let's start with simple steps",
+    "gettingStartedStep1": "Create your first session",
+    "gettingStartedStep1Hint": "A halaqah is created for you automatically",
     "gettingStartedStep2": "Schedule your first session",
     "gettingStartedStep3": "Enroll your first student",
+    "gettingStartedStep2Title": "Invite your students",
+    "gettingStartedStep2v2": "Share the invite link",
+    "gettingStartedStep3v2": "Complete your first session",
+    "gettingStartedStep3Hint": "Log your first recitation",
+    "gettingStartedProgress": "{{done}} of {{total}} completed",
     "moreStats": "More stats",
     "createHalaqah": "Create halaqah",
     "streakTitle": "Streak",
@@ -280,7 +286,8 @@
       "students": "students",
       "thisWeek": "This week",
       "recitationsLabel": "recitations",
-      "completedSessions": "{{count}} completed sessions",
+      "completedSessions_one": "{{count}} completed session",
+      "completedSessions_other": "{{count}} completed sessions",
       "attendanceRate": "{{rate}}% attendance"
     },
     "totalRecitations": "Total recitations",
@@ -298,15 +305,50 @@
     "noGradesYet": "No recitations graded yet",
     "startStreak": "Start your streak today",
     "studentRooms": "My halaqat",
-    "whatsNewTitle": "Since {{since}}",
+    "whatsNewTitle": "{{since}}",
     "whatsNew": {
-      "recitationsTeacher": "{{count}} new recitations graded",
-      "recitationsStudent": "{{count}} new recitations graded",
-      "enrollments": "{{count}} new enrollments",
-      "pending": "{{count}} pending requests",
-      "sessions": "{{count}} sessions completed",
-      "sessionsAttended": "{{count}} sessions attended"
+      "recitationsTeacher_one": "{{count}} new recitation graded",
+      "recitationsTeacher_other": "{{count}} new recitations graded",
+      "recitationsStudent_one": "{{count}} new recitation graded",
+      "recitationsStudent_other": "{{count}} new recitations graded",
+      "enrollments_one": "{{count}} new enrollment",
+      "enrollments_other": "{{count}} new enrollments",
+      "pending_one": "{{count}} pending request",
+      "pending_other": "{{count}} pending requests",
+      "sessions_one": "{{count}} session completed",
+      "sessions_other": "{{count}} sessions completed",
+      "sessionsAttended_one": "{{count}} session attended",
+      "sessionsAttended_other": "{{count}} sessions attended"
     }
+  },
+  "roomTabs": {
+    "overview": "Overview",
+    "students": "Students",
+    "sessions": "Sessions",
+    "progress": "Progress",
+    "next3": "Upcoming sessions",
+    "viewCalendar": "View calendar",
+    "moreMenu": "More"
+  },
+  "cockpit": {
+    "liveNow": "Session live now",
+    "resume": "Resume session",
+    "startsIn": "Starts in {{time}}",
+    "logRecitations": "Log the last session's recitations",
+    "inviteTitle": "Invite your students",
+    "scheduleNext": "Schedule your next session",
+    "nextSession": "Next session: {{date}}",
+    "firstSession": "Create your first session"
+  },
+  "studentHome": {
+    "liveNow": "Session live now",
+    "joinNow": "Join now",
+    "noUpcoming": "No upcoming session",
+    "reviewTitle": "To review",
+    "openCorrections_one": "{{count}} open correction",
+    "openCorrections_other": "{{count}} open corrections",
+    "latestIn": "Latest in {{surah}}",
+    "lastRecitation": "Last recitation"
   },
   "users": {
     "title": "Users",
@@ -425,7 +467,7 @@
     "maxStudentsShort": "Max: {{count}} students",
     "status": "Status",
     "createdAt": "Created",
-    "deleteConfirm": "Are you sure you want to delete halaqah {{name}}?",
+    "deleteConfirm": "Permanently delete halaqah {{name}}? Sessions, enrollments, and history will be removed. This cannot be undone.",
     "noRooms": "No halaqat yet",
     "totalRooms": "Total halaqat",
     "activeRooms": "Active",
@@ -450,6 +492,7 @@
     "noTeachersOption": "No teachers",
     "selectTeacher": "Select a teacher for the halaqah.",
     "deleteTitle": "Confirm deletion",
+    "deletePermanent": "Delete permanently",
     "archiveTitle": "Archive halaqah",
     "archiveConfirm": "Archive halaqah {{name}}? Students will no longer see it; enrollments and history are kept.",
     "archivedRoomsPageTitle": "Archived halaqat",
@@ -457,6 +500,8 @@
     "archivedRoomsEmpty": "No archived halaqat.",
     "archivedEmptyDescription": "Archived halaqat will appear here.",
     "archivedRoomNotice": "This halaqah is archived. Enrolling students, new sessions, and new recitations are disabled until you restore it.",
+    "archivedSessionsHiddenTitle": "Sessions hidden while archived",
+    "archivedSessionsHiddenDescription": "Restore this halaqah to see its sessions, attendance, and recitations again.",
     "statsTotalLabel": "Total halaqat",
     "statsActiveLabel": "Active",
     "statsInactiveLabel": "Inactive",
@@ -509,6 +554,9 @@
     "hideRejected": "Hide rejected applications",
     "emptyTeacherTitle": "No halaqat yet",
     "emptyTeacherDescription": "Create your first halaqah to start teaching.",
+    "emptyActiveTitle": "No active halaqat",
+    "emptyActiveDescription": "Your halaqat are archived (inactive). Switch the status filter to Inactive to restore one, or create a new halaqah.",
+    "showInactive": "Show inactive",
     "emptyStudentTitle": "No public halaqat available",
     "emptyStudentDescription": "Check back soon — teachers create new halaqat regularly.",
     "emptyMyRoomsTitle": "You haven't joined any halaqat yet",
@@ -601,6 +649,8 @@
     "removeConfirm": "Remove {{name}} from this halaqah?",
     "enrolledOn": "Enrolled on",
     "noStudents": "No students enrolled in this halaqah",
+    "emptyStudentsTitle": "No students yet",
+    "emptyStudentsHint": "Share the halaqah link so your students join by themselves.",
     "roomFull": "Halaqah is full",
     "alreadyEnrolled": "Student already enrolled",
     "studentCount": "{{count}} enrolled",
@@ -1074,6 +1124,30 @@
       "clearConfirmTitle": "Clear all drawings?",
       "clearConfirmBody": "Drawings on this surface will be cleared for everyone."
     },
+    "tour": {
+      "progress": "{{current}} / {{total}}",
+      "next": "Next",
+      "finish": "Got it",
+      "skip": "Skip tour",
+      "steps": {
+        "welcome": {
+          "title": "Your live session",
+          "body": "This is the teaching workspace. A short tour of the main controls — you can skip anytime."
+        },
+        "tools": {
+          "title": "Teacher tools",
+          "body": "Pan, draw with pen or highlighter, and annotate words on the Mushaf. Undo and clear affect everyone."
+        },
+        "dock": {
+          "title": "Mic & participants",
+          "body": "Mute yourself, open the students drawer to give turns, turn pages, or leave the session."
+        },
+        "correct": {
+          "title": "Correct on the Mushaf",
+          "body": "Select Annotate, then tap a word to mark an error, note, or praise while the student recites."
+        }
+      }
+    },
     "dragToMove": "Drag to move",
     "hand": {
       "raise": "Raise hand",
@@ -1248,7 +1322,6 @@
     "liveNow": "Live now",
     "joinNow": "Join now",
     "firstSession": "First session: {{date}}",
-    "meccaTime": "Mecca time",
     "telegram": "Telegram",
     "shareImage": "Share image…",
     "downloadPng": "Download PNG",
@@ -1258,7 +1331,7 @@
     "qrOnly": "QR only",
     "inviteByEmail": "Invite by email",
     "stats": "{{joined}}/{{max}} joined · {{visits}} link visits",
-    "inviteMessageDated": "Join the {{name}} halaqah ({{type}} · {{riwaya}}) on Maqraa. First session {{date}} Mecca time."
+    "inviteMessageDated": "Join the {{name}} halaqah ({{type}} · {{riwaya}}) on Maqraa. First session {{date}}."
   },
   "instanceInvite": {
     "title": "Invite to Al-Maqraa",
@@ -1276,6 +1349,18 @@
   },
   "invite": {
     "invite": "Invite students",
+    "inviteStudents": "Invite students",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied",
+    "shareWhatsapp": "Share on WhatsApp",
+    "howItWorks": "The student opens the link, signs in or creates an account, and joins the halaqah directly.",
+    "whatsappMessage": "Assalamu alaykum,\nYou are invited to join the halaqah \"{{halaqahName}}\" on Maqraa.\n{{nextSessionLine}}Join through this link:\n{{link}}",
+    "whatsappNextSession": "Next session: {{date}}\n",
+    "invitesCardTitle": "Invitations",
+    "joinsViaLink": "Joined via link: {{count}}",
+    "pendingRequests": "Pending join requests: {{count}}",
+    "adminDirectAdd": "Add student directly",
+    "teacherEnrollForbidden": "Direct enrollment is admin-only. Invite your students through the halaqah link.",
     "emailsPlaceholder": "Enter one or more emails",
     "autoApprove": "Auto-approve",
     "autoApproveHint": "Invitees are approved directly, no review",
@@ -1418,6 +1503,32 @@
       }
     }
   },
+  "adminFunnel": {
+    "title": "Activation funnel",
+    "nav": "Activation funnel",
+    "wathTitle": "Weekly active teaching halaqat",
+    "wathHint": "Halaqat with at least one session containing a logged recitation in the last 7 days",
+    "teacherFunnel": "Teacher funnel",
+    "studentFunnel": "Student funnel",
+    "steps": {
+      "registered": "Registered",
+      "demo_started": "Started demo",
+      "demo_completed": "Completed demo",
+      "halaqah_created": "Created a halaqah",
+      "invite_link_created": "Created invite link",
+      "session_scheduled": "Scheduled a session",
+      "session_started": "Started a session",
+      "recitation_logged": "Logged a recitation",
+      "session_completed": "Completed a session",
+      "joined_via_link": "Joined via link",
+      "attended_session": "Attended a session"
+    },
+    "days": {
+      "7": "7 days",
+      "30": "30 days",
+      "90": "90 days"
+    }
+  },
   "activation": {
     "noStudentsTitle": "No students yet — share the link before {{weekday}}",
     "nextSession": "Next session",
@@ -1429,5 +1540,113 @@
     "schedule": "Schedule a session",
     "upcoming": "Next: {{date}}",
     "counters": "{{sessions}} completed · {{students}} students"
+  },
+  "demo": {
+    "entryTitle": "How it works",
+    "entrySubtitle": "A short guided tour of the live session — tools, mic, and Mushaf correction",
+    "entryCta": "Start the tour",
+    "stripTitle": "How Maqraa works",
+    "stripText": "A short tour of the live session",
+    "stripCta": "Start the tour",
+    "stripDismiss": "Dismiss",
+    "modeBadge": "Demo mode",
+    "modeBanner": "Demo sandbox — no real students, audio, or saved data",
+    "introTitle": "This is a practice session",
+    "introBody": "It looks like a real live class so you can explore the tools safely. Nothing here is saved or shared with students.",
+    "introPoint1": "Anas is a sample student — not a real person in the room.",
+    "introPoint2": "Mic and invitations are for show; they do not connect anyone.",
+    "introPoint3": "Word corrections stay on this page only.",
+    "introStart": "Start guided tour",
+    "introSkip": "Skip to practice",
+    "step1": "You are the teacher in this demo session; Anas is a student reciting Al-Fatiha. Tap any word to correct it.",
+    "step2": "Choose the error type and add a comment if you wish.",
+    "step3": "The correction reached Anas instantly — without interrupting his recitation. Now try marking another word as \"well done\".",
+    "studentViewTitle": "What Anas sees now",
+    "finaleTitle": "This is how Maqraa keeps your students' progress",
+    "finaleSummary": "1 recitation · Al-Fatiha 1–7 · 2 corrections",
+    "finaleCta": "Create your halaqah now",
+    "backHome": "Back to home",
+    "skip": "Skip",
+    "showStudentView": "Show student view",
+    "studentName": "Anas",
+    "elapsedLabel": "Demo",
+    "tour": {
+      "progress": "{{current}} / {{total}}",
+      "next": "Next",
+      "finish": "Try it",
+      "skip": "Skip tour",
+      "steps": {
+        "welcome": {
+          "title": "Same layout as a live session",
+          "body": "Everything you see here matches a real class. We'll highlight the main controls in a few steps — this remains a demo."
+        },
+        "tools": {
+          "title": "Teacher tools",
+          "body": "Switch between hand, pen, highlighter, and annotate. Undo and clear reset your drawings."
+        },
+        "dock": {
+          "title": "Mic & participants",
+          "body": "In a real class these control audio and students. Here they open the sample drawer only."
+        },
+        "correct": {
+          "title": "Correct on the Mushaf",
+          "body": "With Annotate selected, tap any word (try الصراط) to mark an error or praise. Ready when you are."
+        }
+      }
+    }
+  },
+  "newSession": {
+    "button": "New session",
+    "now": "Start a session now",
+    "nowDesc": "Go live immediately with your students",
+    "later": "Session for later",
+    "laterDesc": "Pick a date and time on the calendar",
+    "recurring": "Recurring session",
+    "recurringDesc": "Repeat on chosen days of the week"
+  },
+  "sessionForm": {
+    "autoHalaqah": "New halaqah automatically",
+    "groupName": "Group name (optional)",
+    "groupNamePlaceholder": "{{name}}'s halaqah"
+  },
+  "agenda": {
+    "emptyDay": "No sessions on this day",
+    "emptySubtitle": "Start a session — the halaqah is created automatically to keep your students, invites, and progress.",
+    "today": "Today"
+  },
+  "session": {
+    "halaqahChip": "Halaqah: {{name}}"
+  },
+  "instant": {
+    "start": "Start a session now",
+    "pickHalaqah": "Choose the halaqah",
+    "newHalaqah": "New halaqah",
+    "defaultHalaqahName": "{{name}}'s halaqah",
+    "inviteStrip": "You are alone in the session — invite your students",
+    "inviteStripTitle": "You're alone in this session",
+    "inviteStripHint": "Invite students so they can join the live room now.",
+    "inviteNudgeBody": "Share the halaqah link or send invites — they will appear here when they join.",
+    "inviteLater": "I'll invite later",
+    "completeLater": "Complete later"
+  },
+  "tz": {
+    "roomTime": "halaqah time ({{city}})",
+    "yourTime": "your time: {{time}}",
+    "timezoneLabel": "Timezone",
+    "detected": "Detected automatically — you can change it"
+  },
+  "reminder": {
+    "whatsapp": "WhatsApp reminder",
+    "whatsappMessage": "Assalamu alaykum,\nReminder: the halaqah \"{{halaqahName}}\" session {{when}}.\nJoin link:\n{{link}}",
+    "teacherEmailSubject": "Your session starts soon — remind your students"
+  },
+  "memory": {
+    "lastStop": "Last stopped at {{surah}} {{ayah}}",
+    "recurringError": "Recurring error: {{category}}",
+    "nextTarget": "Next target: {{range}}",
+    "setTarget": "Set next session's target",
+    "emailSubject": "Your session summary — {{halaqahName}}",
+    "emailRecited": "Today you recited {{surah}} {{range}}",
+    "emailCorrections": "Corrections: {{summary}}"
   }
 }

@@ -4,7 +4,7 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useApiMutation } from "../lib/useApiMutation";
-import { sessionKeys } from "../lib/queryKeys";
+import { annotationKeys, sessionKeys } from "../lib/queryKeys";
 import { api } from "../lib/api";
 import type { AnnotationKind, ErrorAnnotation, ErrorCategory, ErrorSeverity } from "../types";
 
@@ -207,4 +207,22 @@ export function useAnnotations(recitationId: string | null) {
     getWordAnnotations,
     ayahHasErrors,
   };
+}
+
+/**
+ * Open error annotations for the signed-in student (or a specific student for teachers).
+ * Uses GET `/error-annotations?status=open&kind=error`.
+ */
+export function useOpenErrorAnnotations(studentId: string | null | undefined, enabled = true) {
+  return useQuery({
+    queryKey: annotationKeys.open(studentId ?? null),
+    queryFn: async ({ signal }) => {
+      const params: Record<string, string> = { status: "open", kind: "error" };
+      if (studentId) params.student_id = studentId;
+      const { data } = await api.get<ErrorAnnotation[]>("/error-annotations", { signal, params });
+      return data ?? [];
+    },
+    enabled: enabled && !!studentId,
+    staleTime: 60_000,
+  });
 }

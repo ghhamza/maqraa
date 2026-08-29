@@ -23,6 +23,7 @@ fn sample() -> PublicHalaqah {
         created_at: Utc::now(),
         first_session_at: Some(Utc::now() + Duration::days(5)),
         schedule_days: vec![6, 1, 3], // Sun, Tue, Thu (Mon=0)
+        timezone: "Asia/Riyadh".into(),
     }
 }
 

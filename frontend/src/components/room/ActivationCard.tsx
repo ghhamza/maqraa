@@ -7,14 +7,15 @@ import type { Room } from "../../types";
 import { Button } from "../ui/Button";
 import { ShareCard } from "../share/ShareCard";
 import { ShareButton } from "../share/ShareButton";
+import { SessionTimeDisplay } from "../time/SessionTimeDisplay";
 import { useStartSession } from "../../data/sessions";
 import { useAuthStore } from "../../stores/authStore";
 import {
   formatRelativeTo,
-  formatSessionMecca,
-  formatWeekdayMecca,
+  formatSessionTimeInviteLine,
+  formatWeekdayInTz,
   startsWithinMinutes,
-} from "../../lib/meccaTime";
+} from "../../lib/sessionTime";
 import { cn } from "@/lib/utils";
 
 export interface ActivationCardProps {
@@ -41,8 +42,8 @@ export function ActivationCard({ room, onScheduleSession }: ActivationCardProps)
   // State A — no students
   if (enrolled === 0) {
     const weekday = upcoming
-      ? formatWeekdayMecca(upcoming.scheduled_at, i18n.language)
-      : t("share.meccaTime");
+      ? formatWeekdayInTz(upcoming.scheduled_at, room.timezone, i18n.language)
+      : t("tz.roomTime", { city: room.timezone.split("/").pop()?.replace(/_/g, " ") ?? "" });
     return (
       <div id="activation-card" className="space-y-4">
         <h2 className="text-xl font-semibold text-foreground">
@@ -70,9 +71,13 @@ export function ActivationCard({ room, onScheduleSession }: ActivationCardProps)
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-sm text-[var(--color-text-muted)]">{t("activation.nextSession")}</p>
-                <p className="mt-1 font-[family-name:Amiri,serif] text-2xl text-[#1B5E20]">
-                  {formatSessionMecca(upcoming.scheduled_at, i18n.language)}
-                </p>
+                <SessionTimeDisplay
+                  scheduledAt={upcoming.scheduled_at}
+                  roomTz={room.timezone}
+                  userTz={user?.timezone}
+                  primaryClassName="mt-1 font-[family-name:Amiri,serif] text-2xl text-[#1B5E20]"
+                  showRoomLabel
+                />
                 <p className="mt-2 text-sm text-[var(--color-text-muted)]">
                   {t("activation.enrolledStartsIn", {
                     count: enrolled,
@@ -143,7 +148,13 @@ export function ActivationCard({ room, onScheduleSession }: ActivationCardProps)
             </Button>
             <span className="text-sm text-[var(--color-text)]">
               {t("activation.upcoming", {
-                date: formatSessionMecca(upcoming.scheduled_at, i18n.language),
+                date: formatSessionTimeInviteLine(
+                  upcoming.scheduled_at,
+                  room.timezone,
+                  user?.timezone,
+                  i18n.language,
+                  t,
+                ),
               })}
             </span>
           </>

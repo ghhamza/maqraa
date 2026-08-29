@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { BookOpen, Clock, Users } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ConnectionStatus } from "../../../components/session/ConnectionStatus";
 import type { SessionWsStatus } from "../../../hooks/useSessionWebSocket";
@@ -17,6 +18,7 @@ const HALAQAH_I18N: Record<HalaqahType, string> = {
 };
 
 export interface LiveSessionTopBarProps {
+  roomId: string;
   roomName: string;
   roomCode?: string | null;
   riwaya: QuranRiwaya;
@@ -33,6 +35,7 @@ export interface LiveSessionTopBarProps {
 
 /** Desktop live-session top chrome (mockup Mushaf 2). */
 export function LiveSessionTopBar({
+  roomId,
   roomName,
   roomCode,
   riwaya,
@@ -73,6 +76,13 @@ export function LiveSessionTopBar({
           ) : null}
         </div>
       </div>
+
+      <Link
+        to={`/rooms/${roomId}`}
+        className="inline-flex h-9 max-w-[12rem] items-center truncate rounded-[10px] border border-[rgba(15,23,42,0.10)] bg-[var(--color-primary)]/8 px-3 text-[13px] font-medium text-[var(--color-primary)] hover:underline"
+      >
+        {t("session.halaqahChip", { name: roomName })}
+      </Link>
 
       <span className="flex-1" />
 

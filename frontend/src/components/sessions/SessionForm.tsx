@@ -8,8 +8,12 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { FormSelect } from "../ui/select";
 import { formatDatetimeLocalValue } from "../../lib/calendarUtils";
+import { useAuthStore } from "../../stores/authStore";
 import { useRoomsList } from "../../data/rooms";
 import { useCreateSession, useUpdateSession } from "../../data/sessions";
+
+/** Sentinel: POST sessions with room_id null → backend auto-creates a halaqah. */
+export const SESSION_FORM_AUTO_ROOM = "__auto__";
 
 export interface SessionFormProps {
   mode: "create" | "edit";
@@ -22,6 +26,8 @@ export interface SessionFormProps {
   defaultTitle?: string;
   defaultDatetime?: Date | null;
   presetMorningStart?: boolean;
+  /** When true, open the create form with repeat toggled on. */
+  defaultRepeat?: boolean;
   editScope?: "this" | "this_and_future" | "all";
   active: boolean;
   formId?: string;
@@ -40,6 +46,7 @@ export function SessionForm({
   defaultTitle,
   defaultDatetime,
   presetMorningStart,
+  defaultRepeat = false,
   editScope,
   active,
   formId,
@@ -49,7 +56,9 @@ export function SessionForm({
   onPendingChange,
 }: SessionFormProps) {
   const { t } = useTranslation();
+  const user = useAuthStore((s) => s.user);
   const [roomId, setRoomId] = useState("");
+  const [groupName, setGroupName] = useState("");
   const [title, setTitle] = useState("");
   const [datetimeLocal, setDatetimeLocal] = useState("");
   const [duration, setDuration] = useState(60);
@@ -69,6 +78,7 @@ export function SessionForm({
     setError(null);
     if (mode === "edit" && session) {
       setRoomId(session.room_id);
+      setGroupName("");
       setTitle(session.title ?? "");
       setDatetimeLocal(formatDatetimeLocalValue(new Date(session.scheduled_at)));
       setDuration(session.duration_minutes);
@@ -91,11 +101,12 @@ export function SessionForm({
         }
       }
       setRoomId(effectiveDefaultRoomId ?? "");
+      setGroupName("");
       setTitle((defaultTitle ?? lockedRoomName)?.trim() ?? "");
       setDatetimeLocal(formatDatetimeLocalValue(dt));
       setDuration(60);
       setNotes("");
-      setRepeatEnabled(false);
+      setRepeatEnabled(defaultRepeat);
       setRepeatDays([]);
       setRepeatWeeks(4);
       setRepeatEndMode("weeks");
@@ -111,31 +122,39 @@ export function SessionForm({
     presetMorningStart,
     lockedRoomName,
     defaultTitle,
+    defaultRepeat,
   ]);
 
-  const roomsQuery = useRoomsList("session-form", undefined, {
+  const roomsQuery = useRoomsList("session-form", { active: true }, {
     enabled: active && !lockedRoomId,
     staleTime: 5 * 60_000,
   });
 
   const rooms = roomsQuery.data ?? [];
   const loadingRooms = roomsQuery.isPending && active;
+  const hideRoomSelect = mode === "create" && !lockedRoomId && !loadingRooms && rooms.length === 0;
+  const isAutoRoom = roomId === SESSION_FORM_AUTO_ROOM;
+  const showGroupName = mode === "create" && isAutoRoom && repeatEnabled;
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || mode === "edit") return;
     if (lockedRoomId) {
       setRoomId(lockedRoomId);
       return;
     }
-    if (rooms.length === 0) return;
+    if (loadingRooms) return;
     setRoomId((prev) => {
+      if (rooms.length === 0) return SESSION_FORM_AUTO_ROOM;
+      if (prev === SESSION_FORM_AUTO_ROOM) return prev;
       if (prev && rooms.some((r) => r.id === prev)) return prev;
       if (effectiveDefaultRoomId && rooms.some((r) => r.id === effectiveDefaultRoomId)) {
         return effectiveDefaultRoomId;
       }
-      return rooms[0]?.id ?? "";
+      if (rooms.length === 1) return rooms[0]!.id;
+      // Several rooms: require an explicit choice (keep empty unless already set).
+      return "";
     });
-  }, [active, rooms, effectiveDefaultRoomId, lockedRoomId]);
+  }, [active, mode, rooms, effectiveDefaultRoomId, lockedRoomId, loadingRooms]);
 
   useEffect(() => {
     if (!repeatEnabled || !datetimeLocal) return;
@@ -215,12 +234,14 @@ export function SessionForm({
     const iso = scheduled.toISOString();
 
     if (mode === "create") {
+      const auto = effectiveRoomId === SESSION_FORM_AUTO_ROOM;
       const payload: CreatePayload = {
-        room_id: effectiveRoomId,
+        room_id: auto ? null : effectiveRoomId,
         title: title.trim() || null,
         scheduled_at: iso,
         duration_minutes: duration,
         notes: notes.trim() || null,
+        group_name: auto && repeatEnabled ? groupName.trim() || null : null,
       };
 
       if (repeatEnabled && repeatDays.length > 0) {
@@ -247,38 +268,54 @@ export function SessionForm({
     }
   }
 
+  const roomOptions = loadingRooms
+    ? [{ value: "", label: t("common.loading") }]
+    : [
+        { value: SESSION_FORM_AUTO_ROOM, label: t("sessionForm.autoHalaqah") },
+        ...rooms.map((r) => ({ value: r.id, label: r.name })),
+      ];
+
+  const defaultGroupPlaceholder = t("sessionForm.groupNamePlaceholder", {
+    name: user?.name?.trim() || "—",
+  });
+
   return (
     <form id={formId} onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="mb-1 block text-sm font-medium text-[var(--color-text)]" htmlFor="session-room">
-          {t("sessions.room")}
-        </label>
-        {lockedRoomId ? (
-          <p
-            id="session-room"
-            className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-[var(--color-text)]"
-          >
-            {lockedRoomName ?? lockedRoomId}
-          </p>
-        ) : (
-          <FormSelect
-            id="session-room"
-            triggerClassName="w-full rounded-xl border border-gray-200 bg-white py-2 text-sm text-[var(--color-text)]"
-            triggerStyle={{ color: "var(--color-text)" }}
-            value={roomId}
-            onValueChange={setRoomId}
-            disabled={roomPickerDisabled}
-            required
-            options={
-              loadingRooms
-                ? [{ value: "", label: t("common.loading") }]
-                : rooms.length === 0
-                  ? [{ value: "", label: t("rooms.noRooms") }]
-                  : rooms.map((r) => ({ value: r.id, label: r.name }))
-            }
-          />
-        )}
-      </div>
+      {!hideRoomSelect ? (
+        <div>
+          <label className="mb-1 block text-sm font-medium text-[var(--color-text)]" htmlFor="session-room">
+            {t("sessions.room")}
+          </label>
+          {lockedRoomId ? (
+            <p
+              id="session-room"
+              className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-[var(--color-text)]"
+            >
+              {lockedRoomName ?? lockedRoomId}
+            </p>
+          ) : (
+            <FormSelect
+              id="session-room"
+              triggerClassName="w-full rounded-xl border border-gray-200 bg-white py-2 text-sm text-[var(--color-text)]"
+              triggerStyle={{ color: "var(--color-text)" }}
+              value={roomId}
+              onValueChange={setRoomId}
+              disabled={roomPickerDisabled}
+              required
+              options={roomOptions}
+            />
+          )}
+        </div>
+      ) : null}
+      {showGroupName ? (
+        <Input
+          label={t("sessionForm.groupName")}
+          name="group_name"
+          value={groupName}
+          onChange={(e) => setGroupName(e.target.value)}
+          placeholder={defaultGroupPlaceholder}
+        />
+      ) : null}
       <Input
         label={t("sessions.sessionTitle")}
         name="title"

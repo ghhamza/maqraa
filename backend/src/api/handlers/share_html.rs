@@ -18,6 +18,7 @@ use crate::api::handlers::share_card::{
     seats_available, PublicHalaqah,
 };
 use crate::api::AppState;
+use crate::timezone::{default_timezone, tz_city_label};
 
 const SITE_NAME: &str = "المقرأة";
 const SHARE_LOGO_PATH: &str = "/logo-icon.svg";
@@ -279,12 +280,8 @@ pub fn html_escape(s: &str) -> String {
     out
 }
 
-fn format_session_time(state: &AppState, at: DateTime<Utc>, lang: &str) -> String {
-    let tz: Tz = state
-        .config
-        .app_display_tz
-        .parse()
-        .unwrap_or(chrono_tz::Asia::Riyadh);
+fn format_session_time_in_tz(at: DateTime<Utc>, lang: &str, tz_name: &str) -> String {
+    let tz: Tz = tz_name.parse().unwrap_or(chrono_tz::Asia::Riyadh);
     let local = at.with_timezone(&tz);
     match lang {
         "en" => local.format("%A %d %B %Y, %H:%M").to_string(),
@@ -411,6 +408,7 @@ body {{
   font-size: 0.95rem;
 }}
 .session-box .rhythm {{ color: #6B7280; font-size: 0.85rem; margin-top: 4px; }}
+.session-box .your-time {{ color: #6B7280; font-size: 0.85rem; margin-top: 4px; }}
 .ctas {{ display: flex; flex-direction: column; gap: 12px; margin-top: 28px; }}
 .btn {{
   display: block;
@@ -465,6 +463,29 @@ body {{
   <img class="logo-img" src="{logo_src}" alt="{site_name}" width="120" height="120">
   <div class="card">{body}</div>
 </div>
+<script>
+(function(){{
+  var el = document.querySelector("[data-session-iso]");
+  if (!el) return;
+  var iso = el.getAttribute("data-session-iso");
+  var roomTz = el.getAttribute("data-room-tz");
+  var lang = document.documentElement.lang || "ar";
+  var userTz;
+  try {{ userTz = Intl.DateTimeFormat().resolvedOptions().timeZone; }} catch (e) {{ return; }}
+  if (!iso || !roomTz || !userTz || userTz === roomTz) return;
+  var time = new Intl.DateTimeFormat(lang, {{
+    timeZone: userTz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true
+  }}).format(new Date(iso));
+  var label = lang === "fr" ? "votre heure : " : lang === "en" ? "your time: " : "بتوقيتك: ";
+  var span = document.createElement("div");
+  span.className = "your-time";
+  span.textContent = label + time;
+  el.appendChild(span);
+}})();
+</script>
 </body>
 </html>"#,
         lang = locale.lang,
@@ -582,7 +603,7 @@ fn render_success_page(
 }
 
 fn render_halaqah_body(
-    state: &AppState,
+    _state: &AppState,
     locale: &ShareLocale,
     teaser: &HalaqahTeaser,
     description: Option<&str>,
@@ -618,18 +639,34 @@ fn render_halaqah_body(
         .map(|d| format!(r#"<p class="desc">{}</p>"#, html_escape(d)))
         .unwrap_or_default();
 
-    let tz = state.config.app_display_tz.as_str();
+    let tz = card_data
+        .map(|c| c.timezone.as_str())
+        .filter(|t| !t.trim().is_empty())
+        .unwrap_or(default_timezone());
+    let city = tz_city_label(locale.lang, tz);
+    let room_tz_label = match locale.lang {
+        "en" => format!("halaqah time ({city})"),
+        "fr" => format!("heure de la halaqa ({city})"),
+        _ => format!("بتوقيت الحلقة ({city})"),
+    };
     let session_block = match card_data.and_then(|c| c.first_session_at) {
         Some(at) => {
             let date = format_session_ar(at, tz);
-            let rhythm = card_data
+            let rhythm_days = card_data
                 .map(|c| format_rhythm_ar(&c.schedule_days))
-                .unwrap_or_else(|| "بتوقيت مكة".to_string());
+                .unwrap_or_default();
+            let rhythm = if rhythm_days.is_empty() {
+                room_tz_label.clone()
+            } else {
+                format!("{room_tz_label} · {rhythm_days}")
+            };
             format!(
-                r#"<div class="session-box">
+                r#"<div class="session-box" data-session-iso="{iso}" data-room-tz="{room_tz}">
   <div><strong>{date}</strong></div>
   <div class="rhythm">{rhythm}</div>
 </div>"#,
+                iso = html_escape(&at.to_rfc3339()),
+                room_tz = html_escape(tz),
                 date = html_escape(&date),
                 rhythm = html_escape(&rhythm),
             )
@@ -671,9 +708,10 @@ fn render_halaqah_body(
         .map(|at| format_session_ar(at, tz))
         .unwrap_or_else(|| "قريبًا".to_string());
     let meta_desc = format!(
-        "مع المعلّم {} · الحصة الأولى {} بتوقيت مكة · {} مقعدًا متاحًا",
+        "مع المعلّم {} · الحصة الأولى {} بتوقيت {} · {} مقعدًا متاحًا",
         teaser.teacher_name,
         date_for_og,
+        city,
         to_arabic_indic_digits(&seats.to_string()),
     );
 
@@ -731,7 +769,18 @@ fn render_session_body(
             teacher = teacher,
         )
     } else {
-        let when = html_escape(&format_session_time(state, teaser.scheduled_at, locale.lang));
+        let tz = if teaser.timezone.trim().is_empty() {
+            default_timezone()
+        } else {
+            teaser.timezone.as_str()
+        };
+        let when = html_escape(&format_session_time_in_tz(teaser.scheduled_at, locale.lang, tz));
+        let city = tz_city_label(locale.lang, tz);
+        let room_tz_label = match locale.lang {
+            "en" => format!("halaqah time ({city})"),
+            "fr" => format!("heure de la halaqa ({city})"),
+            _ => format!("بتوقيت الحلقة ({city})"),
+        };
         let duration = format!("{} {}", teaser.duration_minutes, t(locale.lang, "teaser.minutes"));
         let base = state.config.public_base_url.trim_end_matches('/');
         let ics_url = html_escape(&format!("{base}/s/{}/ics", urlencoding_path_segment(token)));
@@ -740,7 +789,10 @@ fn render_session_body(
             r#"<h1>{title}</h1>
 <p class="meta"><strong>{room_label}:</strong> {room}</p>
 <p class="meta"><strong>{teacher_label}:</strong> {teacher}</p>
-<p class="meta"><strong>{session_at}:</strong> {when}</p>
+<div class="session-box" data-session-iso="{iso}" data-room-tz="{room_tz}">
+  <div><strong>{when}</strong></div>
+  <div class="rhythm">{tz_label}</div>
+</div>
 <p class="meta"><strong>{duration_label}:</strong> {duration}</p>
 <p class="meta" style="margin-top:16px;">
   <a class="calendar-link" href="{ics_url}" style="color:#1B5E20;font-weight:600;text-decoration:none;">
@@ -752,8 +804,10 @@ fn render_session_body(
             room = room,
             teacher_label = html_escape(t(locale.lang, "teaser.teacher")),
             teacher = teacher,
-            session_at = html_escape(t(locale.lang, "teaser.session_at")),
+            iso = html_escape(&teaser.scheduled_at.to_rfc3339()),
+            room_tz = html_escape(tz),
             when = when,
+            tz_label = html_escape(&room_tz_label),
             duration_label = html_escape(t(locale.lang, "teaser.duration")),
             duration = html_escape(&duration),
             ics_url = ics_url,

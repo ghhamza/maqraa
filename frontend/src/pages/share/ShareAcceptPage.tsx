@@ -7,6 +7,8 @@ import { useTranslation } from "react-i18next";
 import axios from "axios";
 import { api } from "../../lib/api";
 import { Button } from "../../components/ui/Button";
+import { useAuthStore } from "../../stores/authStore";
+import { stashProfileDeferLive, consumeProfileDeferOpted } from "../../lib/safeNext";
 
 type AcceptShareResponse = {
   target_type: string;
@@ -14,12 +16,14 @@ type AcceptShareResponse = {
   route: string;
   enrollment_status?: string;
   joined: boolean;
+  session_id?: string | null;
 };
 
 export function ShareAcceptPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const user = useAuthStore((s) => s.user);
   const [errorKind, setErrorKind] = useState<"invalid" | "wrongAccount" | null>(null);
 
   useEffect(() => {
@@ -36,6 +40,24 @@ export function ShareAcceptPage() {
           `share-links/${encodeURIComponent(token.trim())}/accept`,
         );
         if (cancelled) return;
+
+        const liveRoute =
+          data.session_id && data.route.includes("/live")
+            ? data.route
+            : data.session_id
+              ? `/sessions/${data.session_id}/live`
+              : null;
+
+        if (liveRoute && user?.profile_completion_pending) {
+          stashProfileDeferLive(liveRoute);
+          if (consumeProfileDeferOpted()) {
+            navigate(liveRoute, { replace: true });
+            return;
+          }
+          navigate("/profile/complete", { replace: true, state: { deferLive: liveRoute } });
+          return;
+        }
+
         navigate(data.route, { replace: true });
       } catch (err) {
         if (cancelled) return;
@@ -53,7 +75,7 @@ export function ShareAcceptPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, navigate]);
+  }, [token, navigate, user?.profile_completion_pending]);
 
   if (errorKind) {
     const message =

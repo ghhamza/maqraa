@@ -4,7 +4,7 @@
 import { useCallback, useMemo } from "react";
 import { keepPreviousData, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { recitationKeys, sessionKeys, userKeys } from "../lib/queryKeys";
+import { recitationKeys, sessionKeys, userKeys, roomKeys } from "../lib/queryKeys";
 import { useApiMutation } from "../lib/useApiMutation";
 import type { Paginated, RecitationPublic, RecitationStats } from "../types";
 
@@ -384,6 +384,72 @@ type CreateRecitationFormInput = {
   teacher_notes: null;
   riwaya: string;
 };
+
+/** Create a planned next-target row (`plan_status=planned`, no grade). */
+export function useCreatePlannedTarget(
+  sessionId: string | undefined,
+  onSuccess?: (data: RecitationPublic) => void,
+  onError?: (m: string) => void,
+) {
+  const qc = useQueryClient();
+  return useApiMutation<
+    RecitationPublic,
+    {
+      student_id: string;
+      room_id: string;
+      session_id?: string;
+      surah: number;
+      ayah_start: number;
+      ayah_end: number;
+      riwaya: string;
+    }
+  >({
+    mutationFn: async (input) => {
+      const { data } = await api.request<RecitationPublic>({
+        method: "post",
+        url: "recitations",
+        data: { ...input, plan_status: "planned" },
+      });
+      return data;
+    },
+    invalidates: [recitationKeys.lists(), recitationKeys.stats()],
+    onSuccess: async (data) => {
+      if (sessionId) {
+        qc.setQueryData<RecitationPublic[]>(recitationKeys.list({ session: sessionId }), (prev = []) => [
+          data,
+          ...prev,
+        ]);
+        await qc.invalidateQueries({ queryKey: sessionKeys.plans(sessionId) });
+      }
+      if (data.room_id) {
+        await qc.invalidateQueries({ queryKey: roomKeys.studentMemory(data.room_id) });
+      }
+      if (data.student_id) {
+        await qc.invalidateQueries({ queryKey: userKeys.studentRecitations(data.student_id) });
+      }
+      onSuccess?.(data);
+    },
+    onError: (m) => onError?.(m),
+  });
+}
+
+/** Earliest planned recitation for the current student (next target). */
+export function useMyNextTarget(enabled = true) {
+  return useQuery({
+    queryKey: [...recitationKeys.lists(), { minePlanned: true }] as const,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
+        signal,
+        params: { plan_status: "planned", limit: 20 },
+      });
+      const planned = [...data.items].sort((a, b) => a.order_index - b.order_index);
+      return planned[0] ?? null;
+    },
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
 export function useCreateRecitationFromForm(onSuccess?: () => void, onError?: (m: string) => void) {
   const qc = useQueryClient();
   return useApiMutation<RecitationPublic, CreateRecitationFormInput>({

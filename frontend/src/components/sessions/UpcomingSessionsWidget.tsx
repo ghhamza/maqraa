@@ -5,10 +5,11 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useMemo } from "react";
 import type { SessionPublic } from "../../types";
-import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { Badge } from "../ui/Badge";
+import { SessionTimeDisplay } from "../time/SessionTimeDisplay";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 import { useUpcomingSessions } from "../../data/sessions";
+import { useAuthStore } from "../../stores/authStore";
 
 function sessionStatusVariant(s: SessionPublic["status"]): "green" | "gray" | "blue" {
   if (s === "cancelled") return "gray";
@@ -49,7 +50,7 @@ export interface UpcomingSessionsWidgetProps {
 
 export function UpcomingSessionsWidget({ maxItems, showViewCalendarLink, excludeIds }: UpcomingSessionsWidgetProps) {
   const { t, i18n } = useTranslation();
-  const { mediumTime } = useLocaleDate();
+  const user = useAuthStore((s) => s.user);
 
   const upcomingQuery = useUpcomingSessions(true);
 
@@ -93,7 +94,13 @@ export function UpcomingSessionsWidget({ maxItems, showViewCalendarLink, exclude
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="font-medium text-[var(--color-text)]">{s.room_name}</p>
-                  <p className="text-sm text-[var(--color-text-muted)]">{mediumTime(s.scheduled_at)}</p>
+                  <p className="text-sm text-[var(--color-text-muted)]">
+                    <SessionTimeDisplay
+                      scheduledAt={s.scheduled_at}
+                      roomTz={s.room_timezone}
+                      userTz={user?.timezone}
+                    />
+                  </p>
                   <p className="mt-1 text-xs text-[var(--color-primary)]">
                     {sessionCountdownLabel(s.scheduled_at, t, intlLocaleForAppLanguage(i18n.language))}
                   </p>

@@ -11,6 +11,7 @@ use super::data::{
     short_display_url, truncate_chars, PublicHalaqah,
 };
 use super::qr::qr_svg_path;
+use crate::timezone::{default_timezone, tz_city_label};
 
 const FONT_AMIRI_BOLD: &[u8] = include_bytes!("../../../../assets/fonts/Amiri-Bold.ttf");
 const FONT_IBM_REGULAR: &[u8] =
@@ -232,20 +233,24 @@ pub fn build_svg(
     let htype = arabic_type_label(&halaqah.halaqah_type);
     let riwaya = arabic_riwaya_label(&halaqah.riwaya);
 
-    let (date_line, rhythm_line) = match halaqah.first_session_at {
-        Some(at) => (
-            format_session_ar(at, tz),
-            format_rhythm_ar(&halaqah.schedule_days),
-        ),
-        None => (
-            "المواعيد تُعلن قريبًا".to_string(),
-            "بتوقيت مكة".to_string(),
-        ),
-    };
-    let rhythm_display = if rhythm_line == "بتوقيت مكة" {
-        rhythm_line.clone()
-    } else {
-        format!("بتوقيت مكة · {rhythm_line}")
+    let (date_line, rhythm_display) = match halaqah.first_session_at {
+        Some(at) => {
+            let city = tz_city_label("ar", tz);
+            let rhythm_days = format_rhythm_ar(&halaqah.schedule_days);
+            let rhythm = if rhythm_days.is_empty() {
+                format!("بتوقيت {city}")
+            } else {
+                format!("بتوقيت {city} · {rhythm_days}")
+            };
+            (format_session_ar(at, tz), rhythm)
+        }
+        None => {
+            let city = tz_city_label("ar", tz);
+            (
+                "المواعيد تُعلن قريبًا".to_string(),
+                format!("بتوقيت {city}"),
+            )
+        }
     };
 
     let short = short_display_url(public_base, &halaqah.token);
@@ -290,7 +295,12 @@ pub fn render_card_png(
     format: CardFormat,
     public_base: &str,
 ) -> Result<Vec<u8>, String> {
-    let svg = build_svg(halaqah, format, public_base, "Asia/Riyadh")?;
+    let tz = if halaqah.timezone.trim().is_empty() {
+        default_timezone()
+    } else {
+        halaqah.timezone.as_str()
+    };
+    let svg = build_svg(halaqah, format, public_base, tz)?;
     let (w, h) = format.pixel_size();
 
     let mut opt = Options::default();

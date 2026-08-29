@@ -76,6 +76,7 @@ export function normalizeUserFromApi(data: User): User {
     email_verified: Boolean(data.email_verified),
     preferred_language: data.preferred_language ?? "ar",
     has_password: data.has_password !== false,
+    timezone: typeof data.timezone === "string" && data.timezone.trim() ? data.timezone.trim() : null,
   };
 }
 

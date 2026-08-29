@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BookMarked, Plus, TrendingUp, Users } from "lucide-react";
+import { BookMarked, TrendingUp, Users } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import type {
-  SessionPublic,
+  Room,
   User,
 } from "../types";
 import { Button } from "../components/ui/Button";
-import { UpcomingSessionsWidget, sessionCountdownLabel } from "../components/sessions/UpcomingSessionsWidget";
+import { UpcomingSessionsWidget } from "../components/sessions/UpcomingSessionsWidget";
+import { NewSessionMenu } from "../components/sessions/NewSessionMenu";
 import { RecentRecitationsList } from "../components/recitations/RecentRecitationsList";
 import { GradeDistributionBar } from "../components/recitations/GradeDistributionBar";
 import { SurahProgressRing } from "../components/recitations/SurahProgressRing";
 import { SurahProgressGrid } from "../components/recitations/SurahProgressGrid";
-import { useLocaleDate } from "../hooks/useLocaleDate";
 import { intlLocaleForAppLanguage } from "../lib/intlLocale";
 import { riwayaBadgeClass } from "../lib/riwayaUi";
 import { PageShell } from "../components/layout/PageShell";
@@ -25,30 +25,32 @@ import { LiveNowDashboardCard } from "../components/home/LiveNowDashboardCard";
 import { WhatsNewStrip } from "../components/home/WhatsNewStrip";
 import { CombinedStreakCard } from "../components/home/CombinedStreakCard";
 import { GettingStartedChecklist } from "../components/home/GettingStartedChecklist";
+import { TodayAgenda } from "../components/home/TodayAgenda";
+import { DemoEntry } from "../components/home/DemoEntry";
 import { StudentEmptyHero } from "../components/home/StudentEmptyHero";
-import { TeacherEmptyHero } from "../components/home/TeacherEmptyHero";
-import { sessionNavigatePath } from "../lib/sessionNav";
+import { TeacherActionCard } from "../components/home/TeacherActionCard";
+import { StudentNextSessionCard } from "../components/home/StudentNextSessionCard";
+import { StudentReviewCard } from "../components/home/StudentReviewCard";
+import { InstantHalaqahPickerModal } from "../components/sessions/InstantHalaqahPickerModal";
+import { InviteStudentsModal } from "../components/enrollment/InviteStudentsModal";
+import { isTeacherActivated, selectTeacherCockpitState } from "../lib/teacherCockpit";
+import { useLiveSessions } from "../contexts/LiveSessionsContext";
 import { useStudentProgress, useStudentRecitations, useUsersStats } from "../data/users";
-import { useRecitationsFeed, useRecitationsStats } from "../data/recitations";
+import {
+  useMyNextTarget,
+  useRecitationsFeed,
+  useRecitationsStats,
+  useSessionRecitations,
+} from "../data/recitations";
+import { getSurahNameWithArabic } from "../lib/quranService";
+import { useOpenErrorAnnotations } from "../data/annotations";
 import { useRoomsList, useRoomsStats } from "../data/rooms";
-import { useSessionStats, useUpcomingSessions } from "../data/sessions";
-
-function isSameLocalDay(iso: string, ref: Date): boolean {
-  const d = new Date(iso);
-  return (
-    d.getFullYear() === ref.getFullYear() &&
-    d.getMonth() === ref.getMonth() &&
-    d.getDate() === ref.getDate()
-  );
-}
-
-function findFirstSessionToday(sessions: SessionPublic[]): SessionPublic | null {
-  const now = new Date();
-  for (const s of sessions) {
-    if (isSameLocalDay(s.scheduled_at, now)) return s;
-  }
-  return null;
-}
+import {
+  useCreateInstantSession,
+  useSessionStats,
+  useSessionsList,
+  useUpcomingSessions,
+} from "../data/sessions";
 
 function useTodayDateLine(): string {
   const { i18n } = useTranslation();
@@ -142,22 +144,68 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
   const { t } = useTranslation();
   const navigate = useNavigate();
   const dateLine = useTodayDateLine();
-  const { mediumTime } = useLocaleDate();
+  const { sessions: liveSessions } = useLiveSessions();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [instantError, setInstantError] = useState<string | null>(null);
+  const [inviteRoom, setInviteRoom] = useState<Room | null>(null);
+  const [newSessionMenuOpen, setNewSessionMenuOpen] = useState(false);
 
-  const roomsQuery = useRoomsList("teacher-home", undefined, {
-    select: (items) => items.filter((r) => r.teacher_id === user.id),
+  const roomsQuery = useRoomsList("teacher-home", { active: true }, {
+    select: (items) => items.filter((r) => r.teacher_id === user.id && r.is_active),
     staleTime: 60_000,
   });
 
   const roomStatsQuery = useRoomsStats(true);
-
   const recStatsQuery = useRecitationsStats();
-
   const recentRecsQuery = useRecitationsFeed("teacher-home-recent", { limit: 5, staleTime: 30_000 });
-
   const upcomingQuery = useUpcomingSessions(true);
-
   const sessionStatsQuery = useSessionStats(true);
+
+  const fortyEightHoursAgo = useMemo(
+    () => new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+    [],
+  );
+  const completedRecentQuery = useSessionsList(
+    "teacher-cockpit-completed-48h",
+    {
+      status: "completed",
+      from: fortyEightHoursAgo,
+      limit: 20,
+    },
+    true,
+  );
+
+  const recentCompleted = useMemo(() => {
+    const items = completedRecentQuery.data?.items ?? [];
+    return (
+      items
+        .filter((s) => s.teacher_id === user.id)
+        .slice()
+        .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime())[0] ??
+      null
+    );
+  }, [completedRecentQuery.data?.items, user.id]);
+
+  const sessionRecsQuery = useSessionRecitations(
+    recentCompleted?.id,
+    1,
+    !!recentCompleted,
+  );
+
+  const instantMutation = useCreateInstantSession(
+    (data) => {
+      setPickerOpen(false);
+      setInstantError(null);
+      void navigate(`/sessions/${data.session_id}/live`);
+    },
+    (message, code) => {
+      if (code === "room_required") {
+        setPickerOpen(true);
+        return;
+      }
+      setInstantError(message);
+    },
+  );
 
   const rooms = roomsQuery.data ?? [];
   const roomStats = roomStatsQuery.data ?? null;
@@ -175,17 +223,71 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
     sessionStatsQuery.isPending;
 
   const myStudents = useMemo(() => rooms.reduce((a, r) => a + r.enrolled_count, 0), [rooms]);
-  const todaySession = useMemo(() => findFirstSessionToday(upcoming), [upcoming]);
-  const sessionTitle = (s: SessionPublic) => s.title?.trim() || t("sessions.untitledTitle");
-  const isEmptyTeacher = (roomStats?.total ?? -1) === 0;
+  const hasEnrolledStudent = rooms.some((r) => r.enrolled_count > 0);
+  const hasAnyRecitation = useMemo(() => {
+    if (!recStats) return false;
+    const g = recStats.by_grade;
+    return g.excellent + g.good + g.needs_work + g.weak > 0 || recStats.recent_count > 0;
+  }, [recStats]);
+  /** Checklist step 3 matches “complete a session” — logging recitations is a separate cockpit prompt. */
+  const firstSessionDone = (sessionStats?.completed ?? 0) > 0;
+  const hasAnySession = (sessionStats?.total ?? 0) > 0;
+  const activeRoomCount = roomStats?.active ?? rooms.length;
+  const activated = isTeacherActivated({
+    roomTotal: activeRoomCount,
+    hasEnrolledStudent,
+    completedSessions: sessionStats?.completed ?? 0,
+    hasAnyRecitation,
+  });
+
+  const recentCompletedHasZeroRecitations =
+    !!recentCompleted &&
+    !sessionRecsQuery.isPending &&
+    (sessionRecsQuery.data?.length ?? 0) === 0;
+
+  // Ignore live sessions whose room is no longer in the active list (e.g. just archived).
+  const liveForActiveRooms = useMemo(() => {
+    if (rooms.length === 0) return [];
+    const ids = new Set(rooms.map((r) => r.id));
+    return liveSessions.filter((s) => ids.has(s.room_id));
+  }, [liveSessions, rooms]);
+
+  const cockpitState = useMemo(
+    () =>
+      selectTeacherCockpitState({
+        teacherId: user.id,
+        rooms,
+        liveSessions: liveForActiveRooms,
+        upcomingScheduled: upcoming,
+        recentCompleted,
+        recentCompletedHasZeroRecitations,
+      }),
+    [user.id, rooms, liveForActiveRooms, upcoming, recentCompleted, recentCompletedHasZeroRecitations],
+  );
+
+  const hideLiveNowCard = cockpitState.kind === "live";
+
+  function startInstant(roomId: string | null, createNew = false) {
+    setInstantError(null);
+    instantMutation.mutate({ room_id: roomId, create_new: createNew });
+  }
+
+  function handleInstantClick() {
+    setInstantError(null);
+    if (rooms.length >= 2) {
+      setPickerOpen(true);
+      return;
+    }
+    startInstant(rooms.length === 1 ? rooms[0]!.id : null);
+  }
+
+  function openInviteForFirstRoom() {
+    const room = rooms[0];
+    if (room) setInviteRoom(room);
+  }
 
   const headerActions = (
-    <Button type="button" variant="primary" onClick={() => void navigate("/rooms/new")}>
-      <span className="inline-flex items-center gap-2">
-        <Plus className="h-4 w-4" />
-        {t("home.createHalaqah")}
-      </span>
-    </Button>
+    <NewSessionMenu open={newSessionMenuOpen} onOpenChange={setNewSessionMenuOpen} />
   );
 
   if (loading) {
@@ -193,29 +295,6 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
       <div className="flex justify-center py-16">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
       </div>
-    );
-  }
-
-  if (isEmptyTeacher) {
-    return (
-      <PageShell
-        titleSize="hero"
-        title={homeGreeting}
-        meta={dateLine}
-        description={t("home.teacherDashboard")}
-        contentClassName="space-y-8"
-        actions={headerActions}
-      >
-        <WhatsNewStrip role="teacher" />
-        <LiveNowDashboardCard />
-        <TeacherEmptyHero onCreateClick={() => void navigate("/rooms/new")} />
-        <GettingStartedChecklist
-          roomTotal={roomStats?.total ?? 0}
-          sessionTotal={sessionStats?.total ?? 0}
-          hasEnrolledStudent={rooms.some((r) => r.enrolled_count > 0)}
-          firstRoomId={rooms[0]?.id ?? null}
-        />
-      </PageShell>
     );
   }
 
@@ -228,102 +307,136 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
       contentClassName="space-y-8"
       actions={headerActions}
     >
-      <WhatsNewStrip role="teacher" />
-      <LiveNowDashboardCard />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <button
-          type="button"
-          onClick={() => void navigate("/rooms")}
-          className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
-        >
-          <div className="flex items-center gap-3">
-            <Users className="h-8 w-8 text-[var(--color-primary)]" />
-            <p className="text-xs text-[var(--color-text-muted)]">{t("home.stats.myHalaqat")}</p>
-          </div>
-          <div className="mt-2 flex items-end gap-2 text-sm text-[var(--color-text-muted)]">
-            <span className="text-2xl font-bold text-[var(--color-gold)]">{roomStats?.total ?? 0}</span>
-            <span>{t("home.stats.rooms")}</span>
-            <span aria-hidden>·</span>
-            <span className="text-2xl font-bold text-[var(--color-gold)]">{myStudents}</span>
-            <span>{t("home.stats.students")}</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => void navigate("/recitations")}
-          className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
-        >
-          <div className="flex items-center gap-3">
-            <TrendingUp className="h-8 w-8 text-[var(--color-gold)]" />
-            <p className="text-xs text-[var(--color-text-muted)]">{t("home.stats.thisWeek")}</p>
-          </div>
-          <div className="mt-1 flex items-end gap-2">
-            <span className="text-2xl font-bold text-[var(--color-gold)]">{recStats?.recent_count ?? 0}</span>
-            <span className="text-sm text-[var(--color-text-muted)]">{t("home.stats.recitationsLabel")}</span>
-          </div>
-          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-            {t("home.stats.completedSessions", { count: sessionStats?.completed ?? 0 })} ·{" "}
-            {t("home.stats.attendanceRate", {
-              rate: sessionStats != null ? sessionStats.avg_attendance_pct.toFixed(1) : "0.0",
-            })}
-          </p>
-        </button>
-
-        <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 shadow-sm">
-          <h2 className="mb-3 text-xs text-[var(--color-text-muted)]">{t("home.gradeDistribution")}</h2>
-          <GradeDistributionBar
-            excellent={recStats?.by_grade.excellent ?? 0}
-            good={recStats?.by_grade.good ?? 0}
-            needs_work={recStats?.by_grade.needs_work ?? 0}
-            weak={recStats?.by_grade.weak ?? 0}
-          />
-        </section>
-      </div>
-
-      {todaySession ? (
-        <div
-          className="rounded-2xl border border-[var(--color-primary)]/20 p-5 shadow-sm"
-          style={{ backgroundColor: "#E8F5E9" }}
-        >
-          <p className="text-sm font-semibold text-[var(--color-primary)]">{t("home.todaySession")}</p>
-          <p className="mt-1 font-medium text-[var(--color-text)]">{todaySession.room_name}</p>
-          <p className="text-sm text-[var(--color-text-muted)]">{sessionTitle(todaySession)}</p>
-          <p className="mt-1 text-sm text-[var(--color-text-muted)]">{mediumTime(todaySession.scheduled_at)}</p>
-          <div className="mt-4">
-            <Button type="button" variant="primary" onClick={() => void navigate(sessionNavigatePath(todaySession))}>
-              {t("sessions.start")}
-            </Button>
-          </div>
-        </div>
+      <InstantHalaqahPickerModal
+        open={pickerOpen}
+        rooms={rooms}
+        loading={instantMutation.isPending}
+        onClose={() => setPickerOpen(false)}
+        onPick={(roomId) => startInstant(roomId)}
+        onNewHalaqah={() => startInstant(null, true)}
+      />
+      {inviteRoom ? (
+        <InviteStudentsModal open room={inviteRoom} onClose={() => setInviteRoom(null)} />
+      ) : null}
+      {instantError ? (
+        <p className="text-sm text-red-600" role="alert">
+          {instantError}
+        </p>
       ) : null}
 
-      <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("home.teacherRecentRecitationsTitle")}</h2>
-        <div className="mt-4">
-          <RecentRecitationsList items={recentRecs} showStudent />
-        </div>
-        <div className="mt-4 text-center">
-          <Link to="/recitations" className="text-sm font-medium text-[var(--color-primary)] hover:underline">
-            {t("home.viewAll")}
-          </Link>
-        </div>
-      </section>
+      {/* Action zone */}
+      {hasAnySession && !activated ? (
+        <GettingStartedChecklist
+          hasAnySession={hasAnySession}
+          hasEnrolledStudent={hasEnrolledStudent}
+          firstSessionDone={firstSessionDone}
+          firstRoomId={rooms[0]?.id ?? null}
+          onCreateFirstSession={() => setNewSessionMenuOpen(true)}
+          onInvite={openInviteForFirstRoom}
+          onCompleteFirstSession={handleInstantClick}
+        />
+      ) : null}
 
-      <UpcomingSessionsWidget
-        maxItems={3}
-        showViewCalendarLink
-        excludeIds={todaySession ? [todaySession.id] : []}
+      <TeacherActionCard
+        state={cockpitState}
+        rooms={rooms}
+        instantLoading={instantMutation.isPending}
+        onInstantStart={handleInstantClick}
+        onInvite={(room) => setInviteRoom(room)}
+        onSchedule={(room) => void navigate(`/rooms/${room.id}`)}
       />
+      {!hideLiveNowCard ? <LiveNowDashboardCard /> : null}
+
+      {!hasAnySession ? (
+        <DemoEntry variant="card" hasCompletedSession={(sessionStats?.completed ?? 0) > 0} />
+      ) : null}
+
+      <TodayAgenda />
+
+      {hasAnySession ? (
+        <DemoEntry variant="strip" hasCompletedSession={(sessionStats?.completed ?? 0) > 0} />
+      ) : null}
+
+      {activated ? <WhatsNewStrip role="teacher" /> : null}
+
+      {/* Stats demoted below the fold */}
+      {activeRoomCount > 0 ? (
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => void navigate("/rooms")}
+              className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
+            >
+              <div className="flex items-center gap-3">
+                <Users className="h-8 w-8 text-[var(--color-primary)]" />
+                <p className="text-xs text-[var(--color-text-muted)]">{t("home.stats.myHalaqat")}</p>
+              </div>
+              <div className="mt-2 flex items-end gap-2 text-sm text-[var(--color-text-muted)]">
+                <span className="text-2xl font-bold text-[var(--color-gold)]">{activeRoomCount}</span>
+                <span>{t("home.stats.rooms")}</span>
+                <span aria-hidden>·</span>
+                <span className="text-2xl font-bold text-[var(--color-gold)]">{myStudents}</span>
+                <span>{t("home.stats.students")}</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void navigate("/recitations")}
+              className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
+            >
+              <div className="flex items-center gap-3">
+                <TrendingUp className="h-8 w-8 text-[var(--color-gold)]" />
+                <p className="text-xs text-[var(--color-text-muted)]">{t("home.stats.thisWeek")}</p>
+              </div>
+              <div className="mt-1 flex items-end gap-2">
+                <span className="text-2xl font-bold text-[var(--color-gold)]">{recStats?.recent_count ?? 0}</span>
+                <span className="text-sm text-[var(--color-text-muted)]">{t("home.stats.recitationsLabel")}</span>
+              </div>
+              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                {t("home.stats.completedSessions", { count: sessionStats?.completed ?? 0 })} ·{" "}
+                {t("home.stats.attendanceRate", {
+                  rate: sessionStats != null ? sessionStats.avg_attendance_pct.toFixed(1) : "0.0",
+                })}
+              </p>
+            </button>
+
+            <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 shadow-sm">
+              <h2 className="mb-3 text-xs text-[var(--color-text-muted)]">{t("home.gradeDistribution")}</h2>
+              <GradeDistributionBar
+                excellent={recStats?.by_grade.excellent ?? 0}
+                good={recStats?.by_grade.good ?? 0}
+                needs_work={recStats?.by_grade.needs_work ?? 0}
+                weak={recStats?.by_grade.weak ?? 0}
+              />
+            </section>
+          </div>
+
+          <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-[var(--color-text)]">
+              {t("home.teacherRecentRecitationsTitle")}
+            </h2>
+            <div className="mt-4">
+              <RecentRecitationsList items={recentRecs} showStudent />
+            </div>
+            <div className="mt-4 text-center">
+              <Link to="/recitations" className="text-sm font-medium text-[var(--color-primary)] hover:underline">
+                {t("home.viewAll")}
+              </Link>
+            </div>
+          </section>
+        </>
+      ) : null}
     </PageShell>
   );
 }
 
 function StudentDashboard({ user, homeGreeting }: { user: User; homeGreeting: string }) {
   const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
   const dateLine = useTodayDateLine();
-  const { mediumTime } = useLocaleDate();
+  const { sessions: liveSessions } = useLiveSessions();
+  const loc = i18n.language === "ar" ? "ar" : i18n.language === "fr" ? "fr" : "en";
 
   const progressQuery = useStudentProgress(user?.id, !!user?.id);
 
@@ -345,11 +458,16 @@ function StudentDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
     },
   );
 
+  const openAnnotationsQuery = useOpenErrorAnnotations(user?.id, !!user?.id);
+  const nextTargetQuery = useMyNextTarget(!!user?.id);
+
   const progress = progressQuery.data ?? null;
   const rooms = enrolledRoomsQuery.data ?? [];
   const recentRecs = recentRecsQuery.data ?? [];
   const upcoming = upcomingQuery.data ?? [];
   const publicRooms = publicRoomsQuery.data ?? [];
+  const openAnnotations = openAnnotationsQuery.data ?? [];
+  const nextTarget = nextTargetQuery.data ?? null;
 
   const loading =
     !!user?.id &&
@@ -359,12 +477,64 @@ function StudentDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
       upcomingQuery.isPending ||
       publicRoomsQuery.isPending);
 
-  const nextSession = upcoming[0] ?? null;
+  const liveSession = useMemo(() => {
+    const enrolledRoomIds = new Set(rooms.map((r) => r.id));
+    return (
+      liveSessions.find(
+        (s) => s.status === "in_progress" && enrolledRoomIds.has(s.room_id),
+      ) ?? null
+    );
+  }, [liveSessions, rooms]);
+
+  const nextSession = useMemo(() => {
+    if (liveSession) return null;
+    return upcoming.find((s) => s.status === "scheduled" || s.status === "in_progress") ?? upcoming[0] ?? null;
+  }, [upcoming, liveSession]);
+
+  const latestOpenSurah = useMemo(() => {
+    if (openAnnotations.length === 0) return null;
+    const latest = [...openAnnotations].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    )[0];
+    return latest?.surah ?? null;
+  }, [openAnnotations]);
+
+  const lastRecitation = recentRecs[0] ?? null;
   const hasNoRecitations = (progress?.total_recitations ?? 0) === 0;
   const gd = progress?.grade_distribution;
   const surahCount = progress?.surahs_covered.length ?? 0;
   const gradeSum =
     (gd?.excellent ?? 0) + (gd?.good ?? 0) + (gd?.needs_work ?? 0) + (gd?.weak ?? 0);
+
+  const actionZone = (
+    <>
+      <StudentNextSessionCard liveSession={liveSession} nextSession={nextSession} />
+      <StudentReviewCard
+        count={openAnnotations.length}
+        latestSurah={latestOpenSurah}
+        reviewTo={`/students/${user.id}/progress`}
+      />
+      {lastRecitation ? (
+        <section className="rounded-xl bg-white p-4 shadow-sm" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <h2 className="mb-3 text-sm font-semibold text-[var(--color-text)]">
+            {t("studentHome.lastRecitation")}
+          </h2>
+          <RecentRecitationsList items={[lastRecitation]} />
+          {nextTarget ? (
+            <p className="mt-3 text-sm font-semibold" style={{ color: "#D4A843" }}>
+              {t("memory.nextTarget", {
+                range: `${getSurahNameWithArabic(nextTarget.surah, loc)} ${
+                  nextTarget.ayah_start === nextTarget.ayah_end
+                    ? nextTarget.ayah_start
+                    : `${nextTarget.ayah_start}–${nextTarget.ayah_end}`
+                }`,
+              })}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+    </>
+  );
 
   if (loading) {
     return (
@@ -384,7 +554,6 @@ function StudentDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
         contentClassName="space-y-8"
       >
         <WhatsNewStrip role="student" />
-        <LiveNowDashboardCard />
         <StudentEmptyHero />
       </PageShell>
     );
@@ -399,34 +568,13 @@ function StudentDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
         description={t("home.studentSubtitle")}
         contentClassName="space-y-8"
       >
-        <WhatsNewStrip role="student" />
-        <LiveNowDashboardCard />
-
+        {actionZone}
         <EmptyState
           size="large"
           icon={<BookMarked className="h-16 w-16" />}
           title={t("home.studentStartingTitle")}
           description={t("home.studentStartingDescription")}
         />
-
-        {nextSession ? (
-          <div
-            className="rounded-2xl border border-[var(--color-primary)]/20 p-5 shadow-sm"
-            style={{ backgroundColor: "#E8F5E9" }}
-          >
-            <p className="text-sm font-semibold text-[var(--color-primary)]">{t("home.nextSession")}</p>
-            <p className="mt-1 font-medium text-[var(--color-text)]">{nextSession.room_name}</p>
-            <p className="text-sm text-[var(--color-text-muted)]">{mediumTime(nextSession.scheduled_at)}</p>
-            <p className="mt-1 text-xs text-[var(--color-primary)]">
-              {sessionCountdownLabel(nextSession.scheduled_at, t, intlLocaleForAppLanguage(i18n.language))}
-            </p>
-            <div className="mt-4">
-              <Button type="button" variant="primary" onClick={() => void navigate(sessionNavigatePath(nextSession))}>
-                {t("sessions.start")}
-              </Button>
-            </div>
-          </div>
-        ) : null}
 
         <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -493,8 +641,10 @@ function StudentDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
         </Button>
       }
     >
+      {actionZone}
+
       <WhatsNewStrip role="student" />
-      <LiveNowDashboardCard />
+
       {progress ? (
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -557,76 +707,57 @@ function StudentDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
         </section>
       ) : null}
 
-      {nextSession ? (
-        <div
-          className="rounded-2xl border border-[var(--color-primary)]/20 p-5 shadow-sm"
-          style={{ backgroundColor: "#E8F5E9" }}
-        >
-          <p className="text-sm font-semibold text-[var(--color-primary)]">{t("home.nextSession")}</p>
-          <p className="mt-1 font-medium text-[var(--color-text)]">{nextSession.room_name}</p>
-          <p className="text-sm text-[var(--color-text-muted)]">{mediumTime(nextSession.scheduled_at)}</p>
-          <p className="mt-1 text-xs text-[var(--color-primary)]">
-            {sessionCountdownLabel(nextSession.scheduled_at, t, intlLocaleForAppLanguage(i18n.language))}
-          </p>
-          <div className="mt-4">
-            <Button type="button" variant="primary" onClick={() => void navigate(sessionNavigatePath(nextSession))}>
-              {t("sessions.start")}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
       <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("home.studentRooms")}</h2>
-        {rooms.length === 0 ? (
-          <div className="mt-4 text-center">
-            <p className="text-sm text-[var(--color-text-muted)]">{t("home.noRoomsStudent")}</p>
-            <Link
-              to="/rooms"
-              className="mt-2 inline-block text-sm font-medium text-[var(--color-primary)] hover:underline"
-            >
-              {t("home.browseRooms")}
-            </Link>
+        <ul className="mt-4 space-y-3">
+          {rooms.map((r) => (
+            <li key={r.id}>
+              <Link
+                to={`/rooms/${r.id}`}
+                className="block rounded-xl border border-gray-100 bg-[var(--color-bg)] p-4 transition hover:border-[var(--color-primary)]/30"
+              >
+                <p className="font-medium text-[var(--color-text)]">{r.name}</p>
+                <p className="text-sm text-[var(--color-text-muted)]">{r.teacher_name}</p>
+                <span
+                  className={`mt-2 inline-flex rounded-lg border px-2 py-0.5 text-xs font-semibold ${riwayaBadgeClass(r.riwaya)}`}
+                >
+                  {t(`mushaf.${r.riwaya}`)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("home.discoverHalaqatTitle")}</h2>
+            <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">{t("home.discoverHalaqatDescription")}</p>
           </div>
+          {publicRooms.length > 0 ? (
+            <Link to="/rooms" className="text-sm font-medium text-[var(--color-primary)] hover:underline">
+              {t("home.discoverHalaqatSeeAll")}
+            </Link>
+          ) : null}
+        </div>
+        {publicRooms.length === 0 ? (
+          <p className="text-sm text-[var(--color-text-muted)]">{t("home.discoverHalaqatEmpty")}</p>
         ) : (
-          <ul className="mt-4 space-y-3">
-            {rooms.map((r) => (
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {publicRooms.map((r) => (
               <li key={r.id}>
                 <Link
                   to={`/rooms/${r.id}`}
                   className="block rounded-xl border border-gray-100 bg-[var(--color-bg)] p-4 transition hover:border-[var(--color-primary)]/30"
                 >
                   <p className="font-medium text-[var(--color-text)]">{r.name}</p>
-                  <p className="text-sm text-[var(--color-text-muted)]">{r.teacher_name}</p>
-                  <span
-                    className={`mt-2 inline-flex rounded-lg border px-2 py-0.5 text-xs font-semibold ${riwayaBadgeClass(r.riwaya)}`}
-                  >
-                    {t(`mushaf.${r.riwaya}`)}
-                  </span>
+                  <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">{r.teacher_name}</p>
                 </Link>
               </li>
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("home.studentRecitationWidgetTitle")}</h2>
-        {recentRecs.length === 0 ? (
-          <p className="mt-4 text-sm text-[var(--color-text-muted)]">{t("home.noRecitationsYet")}</p>
-        ) : (
-          <div className="mt-4">
-            <RecentRecitationsList items={recentRecs} />
-          </div>
-        )}
-        <div className="mt-4 text-center">
-          <Link
-            to={`/students/${user.id}/progress`}
-            className="text-sm font-medium text-[var(--color-primary)] hover:underline"
-          >
-            {t("home.viewFullProgress")}
-          </Link>
-        </div>
       </section>
     </PageShell>
   );

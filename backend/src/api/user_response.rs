@@ -25,6 +25,7 @@ struct UserProfileRow {
     email_verified_at: Option<DateTime<Utc>>,
     preferred_language: String,
     has_password: bool,
+    timezone: Option<String>,
 }
 
 pub async fn load_user_response(db: &PgPool, user_id: Uuid) -> Result<UserResponse, sqlx::Error> {
@@ -33,7 +34,7 @@ pub async fn load_user_response(db: &PgPool, user_id: Uuid) -> Result<UserRespon
          u.profile_completion_pending, u.gender, u.date_of_birth, u.country, \
          u.birth_year, u.country_code, u.phone, \
          u.spoken_languages, u.qiraat_taught, u.email_verified_at, u.preferred_language, \
-         (u.password_hash IS NOT NULL) AS has_password \
+         (u.password_hash IS NOT NULL) AS has_password, u.timezone \
          FROM users u \
          WHERE u.id = $1",
     )
@@ -58,6 +59,7 @@ pub async fn load_user_response(db: &PgPool, user_id: Uuid) -> Result<UserRespon
         email_verified: row.email_verified_at.is_some(),
         preferred_language: row.preferred_language,
         has_password: row.has_password,
+        timezone: row.timezone,
     })
 }
 

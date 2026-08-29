@@ -47,7 +47,11 @@ pub async fn list_students(
         return Err(StatusCode::FORBIDDEN);
     }
 
+    // Available-for-room listing (exclude_room_id) is admin-only — teachers invite via share link.
     if let Some(rid) = params.exclude_room_id {
+        if auth.role != "admin" {
+            return Err(StatusCode::FORBIDDEN);
+        }
         let students = sqlx::query_as::<_, StudentOption>(
             "SELECT u.id, u.name FROM users u \
              WHERE u.role = 'student'::user_role \
@@ -140,6 +144,17 @@ pub async fn create_enrollment(
     Path(room_id): Path<Uuid>,
     Json(req): Json<CreateEnrollmentRequest>,
 ) -> Result<(StatusCode, Json<EnrollmentPublic>), (StatusCode, Json<ApiMessage>)> {
+    // Direct enrollment of existing accounts is admin-only; teachers invite via share link.
+    if auth.role != "admin" {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiMessage {
+                message: "إضافة الطلاب مباشرة متاحة للمشرف فقط. ادعُ طلابك عبر رابط الحلقة.",
+                code: "teacher_enroll_forbidden",
+            }),
+        ));
+    }
+
     let is_student: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND role = 'student'::user_role)",
     )
@@ -244,7 +259,8 @@ pub async fn create_enrollment(
     let enrollment_id = Uuid::new_v4();
 
     let insert = sqlx::query(
-        "INSERT INTO enrollments (id, room_id, student_id, status) VALUES ($1, $2, $3, 'approved')",
+        "INSERT INTO enrollments (id, room_id, student_id, status, enrolled_via) \
+         VALUES ($1, $2, $3, 'approved', 'teacher_added')",
     )
     .bind(enrollment_id)
     .bind(room_id)
@@ -322,6 +338,18 @@ pub async fn create_enrollment(
             }),
         )
     })?;
+
+    crate::services::product_events::track(
+        &state.db,
+        "student_enrolled",
+        Some(auth.id),
+        Some(auth.role.as_str()),
+        serde_json::json!({
+            "room_id": room_id,
+            "via": "teacher_added",
+        }),
+    )
+    .await;
 
     Ok((StatusCode::CREATED, Json(row)))
 }
@@ -436,6 +464,7 @@ pub async fn enroll_student(
     room_id: Uuid,
     student_id: Uuid,
     force_approved: bool,
+    enrolled_via: &str,
 ) -> Result<EnrollOutcome, EnrollStudentError> {
     let room_row: Option<(Uuid, i32, bool, bool, bool, bool)> = sqlx::query_as(
         "SELECT teacher_id, max_students, is_active, is_public, enrollment_open, requires_approval \
@@ -491,12 +520,14 @@ pub async fn enroll_student(
     let enrollment_id = Uuid::new_v4();
 
     sqlx::query(
-        "INSERT INTO enrollments (id, room_id, student_id, status) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO enrollments (id, room_id, student_id, status, enrolled_via) \
+         VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(enrollment_id)
     .bind(room_id)
     .bind(student_id)
     .bind(status)
+    .bind(enrolled_via)
     .execute(&mut **tx)
     .await
     .map_err(EnrollStudentError::Db)?;
@@ -681,7 +712,7 @@ pub async fn join_room(
 
     let mut tx = state.db.begin().await.map_err(|_| server_error_msg())?;
 
-    let outcome = enroll_student(&mut tx, room_id, auth.id, false)
+    let outcome = enroll_student(&mut tx, room_id, auth.id, false, "self_join")
         .await
         .map_err(enroll_student_http_error)?;
 
@@ -703,6 +734,20 @@ pub async fn join_room(
 
     if created && status == "pending" {
         notify_pending_enrollment_request(&state, room_id, auth.id).await;
+    }
+
+    if created && status == "approved" {
+        crate::services::product_events::track(
+            &state.db,
+            "student_enrolled",
+            Some(auth.id),
+            Some(auth.role.as_str()),
+            serde_json::json!({
+                "room_id": room_id,
+                "via": "self_join",
+            }),
+        )
+        .await;
     }
 
     let message = if status == "pending" {
@@ -784,8 +829,8 @@ pub async fn approve_enrollment(
         ));
     }
 
-    let current: Option<(String, Uuid)> = sqlx::query_as(
-        "SELECT status, student_id FROM enrollments WHERE id = $1 AND room_id = $2",
+    let current: Option<(String, Uuid, String)> = sqlx::query_as(
+        "SELECT status, student_id, enrolled_via FROM enrollments WHERE id = $1 AND room_id = $2",
     )
     .bind(enrollment_id)
     .bind(room_id)
@@ -793,7 +838,7 @@ pub async fn approve_enrollment(
     .await
     .map_err(|_| server_error_msg())?;
 
-    let Some((status, student_id)) = current else {
+    let Some((status, student_id, enrolled_via)) = current else {
         return Err((
             StatusCode::NOT_FOUND,
             Json(ApiMessage {
@@ -893,6 +938,23 @@ pub async fn approve_enrollment(
     .fetch_one(&state.db)
     .await
     .map_err(|_| server_error_msg())?;
+
+    let via = if enrolled_via == "share_link" {
+        "share_link"
+    } else {
+        "self_join"
+    };
+    crate::services::product_events::track(
+        &state.db,
+        "student_enrolled",
+        Some(auth.id),
+        Some(auth.role.as_str()),
+        serde_json::json!({
+            "room_id": room_id,
+            "via": via,
+        }),
+    )
+    .await;
 
     Ok(Json(row))
 }

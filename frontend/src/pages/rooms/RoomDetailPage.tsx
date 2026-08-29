@@ -3,16 +3,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
-import { Archive, Pencil, RotateCcw, UserPlus } from "lucide-react";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Archive, MoreHorizontal, Pencil, Radio, RotateCcw, Trash2, UserPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { Enrollment, Room } from "../../types";
-import { ShareButton } from "../../components/share/ShareButton";
-import { ShareLinkList } from "../../components/share/ShareLinkList";
-import { InviteLinkList } from "../../components/share/InviteLinkList";
-import { InviteStudentsModal } from "../../components/share/InviteStudentsModal";
+import type { Enrollment, Room, SessionPublic } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../../components/ui/Button";
+import { WhatsAppReminderButton } from "../../components/reminder/WhatsAppReminderButton";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -21,26 +18,35 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import { Badge } from "../../components/ui/Badge";
 import { RoomFormModal } from "../../components/rooms/RoomFormModal";
 import { ArchiveRoomModal } from "../../components/rooms/ArchiveRoomModal";
+import { DeleteRoomModal } from "../../components/rooms/DeleteRoomModal";
 import { EnrollStudentModal } from "../../components/enrollment/EnrollStudentModal";
+import { InviteStudentsModal } from "../../components/enrollment/InviteStudentsModal";
+import { RoomInvitesCard } from "../../components/enrollment/RoomInvitesCard";
 import { RemoveStudentModal } from "../../components/enrollment/RemoveStudentModal";
 import { SessionFormModal } from "../../components/sessions/SessionFormModal";
 import { RecitationFormModal } from "../../components/recitations/RecitationFormModal";
 import { PageShell } from "../../components/layout/PageShell";
 import { halaqahBadgeClass } from "../../lib/halaqahUi";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
-import {
-  calendarGridEnd,
-  calendarGridStart,
-  endOfMonth,
-  startOfMonth,
-} from "../../lib/calendarUtils";
-import { ActivationCard } from "../../components/room/ActivationCard";
 import { roomKeys } from "../../lib/queryKeys";
+import { isSessionTodayOrSoon } from "../../lib/teacherCockpit";
+import { sessionNavigatePath } from "../../lib/sessionNav";
+import { useLiveSessions } from "../../contexts/LiveSessionsContext";
+import { SessionTimeDisplay } from "../../components/time/SessionTimeDisplay";
 import { RoomOverviewSection } from "./sections/RoomOverviewSection";
 import { RoomStudentsSection } from "./sections/RoomStudentsSection";
-import { RoomSessionsSection, type RoomSessionsViewMode } from "./sections/RoomSessionsSection";
+import { RoomSessionsSection } from "./sections/RoomSessionsSection";
 import { RoomRecitationsSection } from "./sections/RoomRecitationsSection";
 import {
   useJoinRoom,
@@ -52,7 +58,7 @@ import {
   useUnarchiveRoom,
   useWithdrawRoom,
 } from "../../data/rooms";
-import { useCalendarSessions } from "../../data/sessions";
+import { useCalendarSessions, useCreateInstantSession, useUpcomingSessions } from "../../data/sessions";
 
 function canManage(user: { id: string; role: string } | null, room: Room): boolean {
   if (!user) return false;
@@ -64,56 +70,60 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+type RoomTab = "overview" | "students" | "sessions" | "progress";
+
+function parseTab(raw: string | null): RoomTab {
+  if (raw === "students" || raw === "sessions" || raw === "progress" || raw === "overview") return raw;
+  return "overview";
+}
+
+function sessionStatusLabelKey(status: SessionPublic["status"]): string {
+  return status === "in_progress" ? "inProgress" : status;
+}
+
 export function RoomDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === "admin";
+  const { sessions: liveSessions } = useLiveSessions();
+
+  const activeTab = parseTab(searchParams.get("tab"));
 
   const [formOpen, setFormOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [removeEnrollment, setRemoveEnrollment] = useState<Enrollment | null>(null);
-  const [sessionsViewMode, setSessionsViewMode] = useState<RoomSessionsViewMode>("calendar");
-  const [calendarCursor, setCalendarCursor] = useState(() => new Date());
-  const [listMonthCursor, setListMonthCursor] = useState(() => {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
-  });
   const [sessionFormOpen, setSessionFormOpen] = useState(false);
-  const [sessionPrefillDate, setSessionPrefillDate] = useState<Date | null>(null);
-  const [sessionPresetMorning, setSessionPresetMorning] = useState(false);
   const [recitationFormOpen, setRecitationFormOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [studentConfirm, setStudentConfirm] = useState<"leave" | "cancel" | null>(null);
+  const [instantError, setInstantError] = useState<string | null>(null);
+
   const invalidateRoomSessions = useInvalidateRoomSessions(id ?? "");
   const invalidateRoomRecitations = useInvalidateRoomRecitations(id ?? "");
 
   const roomQuery = useRoom(id);
-
   const room = roomQuery.data ?? null;
   const forbidden =
     (roomQuery.error as { response?: { status?: number } } | null)?.response?.status === 403;
   const canManageRoom = !!room && !!user && canManage(user, room);
 
   const enrollmentsQuery = useRoomEnrollments(id, canManageRoom);
-
   const enrollments = enrollmentsQuery.data ?? [];
 
   const sessionsRange = useMemo(() => {
-    if (sessionsViewMode === "calendar") {
-      return {
-        from: calendarGridStart(calendarCursor).toISOString(),
-        to: calendarGridEnd(calendarCursor).toISOString(),
-      };
-    }
-    return {
-      from: startOfMonth(listMonthCursor).toISOString(),
-      to: endOfMonth(listMonthCursor).toISOString(),
-    };
-  }, [sessionsViewMode, calendarCursor, listMonthCursor]);
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(from.getDate() - 30);
+    const to = new Date(now);
+    to.setDate(to.getDate() + 90);
+    return { from: from.toISOString(), to: to.toISOString() };
+  }, []);
 
   const sessionsQuery = useCalendarSessions(
     sessionsRange.from,
@@ -129,24 +139,51 @@ export function RoomDetailPage() {
 
   const sessions = useMemo(() => {
     const items = sessionsQuery.data ?? [];
-    if (sessionsViewMode === "list") {
-      return [...items].sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
-    }
-    return items;
-  }, [sessionsQuery.data, sessionsViewMode]);
+    const now = Date.now();
+    return [...items].sort((a, b) => {
+      const aUpcoming = new Date(a.scheduled_at).getTime() >= now - 60_000;
+      const bUpcoming = new Date(b.scheduled_at).getTime() >= now - 60_000;
+      if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
+      if (aUpcoming) {
+        return new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime();
+      }
+      return new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime();
+    });
+  }, [sessionsQuery.data]);
   const sessionsLoading = sessionsQuery.isFetching;
 
-  const recitationsQuery = useRoomRecentRecitations(id, !!room);
+  const upcomingQuery = useUpcomingSessions(!!room);
+  const roomUpcoming = useMemo(
+    () => (upcomingQuery.data ?? []).filter((s) => s.room_id === id),
+    [upcomingQuery.data, id],
+  );
 
+  const liveSession = useMemo(
+    () => liveSessions.find((s) => s.room_id === id && s.status === "in_progress") ?? null,
+    [liveSessions, id],
+  );
+
+  const nextSession = liveSession ?? roomUpcoming[0] ?? null;
+  const nextThree = useMemo(() => roomUpcoming.slice(0, 3), [roomUpcoming]);
+
+  const recitationsQuery = useRoomRecentRecitations(id, !!room);
   const roomRecitations = recitationsQuery.data ?? [];
   const recitationsLoading = recitationsQuery.isPending;
   const loading = roomQuery.isPending;
 
   const restoreMutation = useUnarchiveRoom();
-
   const joinMutation = useJoinRoom(undefined, (message) => window.alert(message));
+  const withdrawMutation = useWithdrawRoom(id ?? "", () => setStudentConfirm(null), (message) =>
+    window.alert(message),
+  );
 
-  const withdrawMutation = useWithdrawRoom(id ?? "", () => setStudentConfirm(null), (message) => window.alert(message));
+  const instantMutation = useCreateInstantSession(
+    (data) => {
+      setInstantError(null);
+      void navigate(`/sessions/${data.session_id}/live`);
+    },
+    (message) => setInstantError(message),
+  );
 
   const restoreLoading = restoreMutation.isPending;
   const studentActionLoading = joinMutation.isPending || withdrawMutation.isPending;
@@ -166,15 +203,30 @@ export function RoomDetailPage() {
     withdrawMutation.mutate();
   }
 
+  function setTab(tab: RoomTab) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (tab === "overview") next.delete("tab");
+        else next.set("tab", tab);
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
   const showActions = room ? canManage(user, room) : false;
   const enrolledCount = room?.enrolled_count ?? 0;
   const isArchived = room ? !room.is_active : false;
-  const isRoomTeacher = user?.role === "teacher" && !!room && user.id === room.teacher_id;
 
   const showStudentsSection =
     showActions || (user?.role === "student" && room?.my_status === "approved");
   const showRecitationsSection =
     showActions || (user?.role === "student" && room?.my_status === "approved");
+
+  const primaryIsStart =
+    !!nextSession &&
+    (nextSession.status === "in_progress" || isSessionTodayOrSoon(nextSession.scheduled_at));
 
   if (loading) {
     return (
@@ -210,6 +262,13 @@ export function RoomDetailPage() {
     return <Navigate to={`/rooms/${room.id}/setup`} replace />;
   }
 
+  const effectiveTab: RoomTab =
+    activeTab === "students" && !showStudentsSection
+      ? "overview"
+      : activeTab === "progress" && !showRecitationsSection
+        ? "overview"
+        : activeTab;
+
   return (
     <PageShell
       breadcrumb={[
@@ -218,86 +277,7 @@ export function RoomDetailPage() {
         { label: room.name },
       ]}
       title={room.name}
-      titleAside={
-        <div className="inline-flex items-center gap-2">
-          <span
-            className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-semibold ${riwayaBadgeClass(room.riwaya)}`}
-          >
-            {t(`mushaf.${room.riwaya}`)}
-          </span>
-          <span
-            className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-semibold ${halaqahBadgeClass(room.halaqah_type)}`}
-          >
-            {t(`rooms.halaqah${capitalize(room.halaqah_type)}`)}
-          </span>
-        </div>
-      }
-      actions={
-        showActions ? (
-          <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:flex-wrap">
-            <ShareButton
-              targetType="halaqah"
-              targetId={room.id}
-              displayName={room.name}
-              fullWidth
-              className="md:w-auto"
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              fullWidth
-              className="md:w-auto"
-              onClick={() => setInviteOpen(true)}
-            >
-              <span className="inline-flex items-center gap-2">
-                <UserPlus className="size-4" />
-                {t("invite.invite")}
-              </span>
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              fullWidth
-              className="md:w-auto"
-              onClick={() => setFormOpen(true)}
-            >
-              <span className="inline-flex items-center gap-2">
-                <Pencil className="size-4" />
-                {t("common.edit")}
-              </span>
-            </Button>
-            {isArchived ? (
-              <Button
-                type="button"
-                variant="primary"
-                size="lg"
-                fullWidth
-                className="md:w-auto"
-                loading={restoreLoading}
-                onClick={() => void handleRestore()}
-              >
-                <span className="inline-flex items-center gap-2">
-                  <RotateCcw className="size-5" />
-                  {t("common.restore")}
-                </span>
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="secondary"
-                fullWidth
-                className="md:w-auto"
-                onClick={() => setArchiveOpen(true)}
-              >
-                <span className="inline-flex items-center gap-2 text-amber-800">
-                  <Archive className="size-4" />
-                  {t("common.archive")}
-                </span>
-              </Button>
-            )}
-          </div>
-        ) : undefined
-      }
+      contentClassName="space-y-6"
     >
       {isArchived ? (
         <div
@@ -308,103 +288,310 @@ export function RoomDetailPage() {
         </div>
       ) : null}
 
-      {(isRoomTeacher || (user?.role === "admin" && showActions)) && !isArchived ? (
-        <ActivationCard
-          room={room}
-          onScheduleSession={() => {
-            setSessionPrefillDate(null);
-            setSessionPresetMorning(false);
-            setSessionFormOpen(true);
-          }}
-        />
-      ) : null}
+      {/* Action block */}
+      <section
+        className="rounded-xl bg-white p-5 shadow-sm sm:p-6"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-[family-name:var(--font-heading)] text-xl text-[var(--color-text)] sm:text-2xl">
+              {room.name}
+            </h2>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-semibold ${riwayaBadgeClass(room.riwaya)}`}
+              >
+                {t(`mushaf.${room.riwaya}`)}
+              </span>
+              <span
+                className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-semibold ${halaqahBadgeClass(room.halaqah_type)}`}
+              >
+                {t(`rooms.halaqah${capitalize(room.halaqah_type)}`)}
+              </span>
+              <span className="text-xs text-[var(--color-text-muted)]">
+                {room.is_public ? t("rooms.publicRoom") : t("rooms.enrollmentStatus.not_public")}
+              </span>
+            </div>
+          </div>
+          {showActions ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t("roomTabs.moreMenu")}
+                >
+                  <MoreHorizontal className="size-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[12rem]">
+                <DropdownMenuItem onClick={() => setFormOpen(true)}>
+                  <Pencil className="size-4" />
+                  {t("common.edit")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFormOpen(true)}>
+                  {t("rooms.enrollmentOpen")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {isArchived ? (
+                  <>
+                    <DropdownMenuItem
+                      disabled={restoreLoading}
+                      onClick={() => void handleRestore()}
+                    >
+                      <RotateCcw className="size-4" />
+                      {t("common.restore")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+                      <Trash2 className="size-4" />
+                      {t("rooms.deletePermanent")}
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <DropdownMenuItem variant="destructive" onClick={() => setArchiveOpen(true)}>
+                    <Archive className="size-4" />
+                    {t("common.archive")}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </div>
 
-      <div className="space-y-6">
-        <RoomOverviewSection
-          room={room}
-          user={user}
-          isArchived={isArchived}
-          studentActionLoading={studentActionLoading}
-          onStudentJoin={() => void handleStudentJoin()}
-          onLeaveRoom={() => setStudentConfirm("leave")}
-          onCancelPendingRequest={() => setStudentConfirm("cancel")}
-        />
+        <div className="mt-4 border-t border-gray-100 pt-4">
+          {nextSession ? (
+            <p className="text-sm text-[var(--color-text-muted)]">
+              <span className="font-medium text-[var(--color-text)]">{t("home.nextSession")}</span>
+              {" · "}
+              {nextSession.title?.trim() || t("sessions.untitledTitle")}
+              {" · "}
+              <SessionTimeDisplay
+                scheduledAt={nextSession.scheduled_at}
+                roomTz={nextSession.room_timezone || room.timezone}
+                userTz={user?.timezone}
+                className="inline"
+              />
+              {nextSession.status === "in_progress" ? (
+                <>
+                  {" · "}
+                  <span className="font-semibold text-[var(--color-primary)]">
+                    {t("studentHome.liveNow")}
+                  </span>
+                </>
+              ) : null}
+            </p>
+          ) : (
+            <p className="text-sm text-[var(--color-text-muted)]">{t("studentHome.noUpcoming")}</p>
+          )}
+
+          {showActions && !isArchived ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {primaryIsStart && nextSession ? (
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => void navigate(sessionNavigatePath(nextSession))}
+                >
+                  {nextSession.status === "in_progress"
+                    ? t("cockpit.resume")
+                    : t("sessions.start")}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => setSessionFormOpen(true)}
+                >
+                  {t("activation.schedule")}
+                </Button>
+              )}
+              {primaryIsStart && nextSession && nextSession.status !== "in_progress" ? (
+                <WhatsAppReminderButton session={nextSession} room={room} size="default" />
+              ) : null}
+              <Button
+                type="button"
+                variant="secondary"
+                loading={instantMutation.isPending}
+                onClick={() => {
+                  setInstantError(null);
+                  instantMutation.mutate({ room_id: room.id });
+                }}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Radio className="size-4" />
+                  {t("instant.start")}
+                </span>
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setInviteOpen(true)}>
+                <span className="inline-flex items-center gap-2">
+                  <UserPlus className="size-4" />
+                  {t("invite.inviteStudents")}
+                </span>
+              </Button>
+            </div>
+          ) : null}
+          {instantError ? (
+            <p className="mt-2 text-sm text-red-600" role="alert">
+              {instantError}
+            </p>
+          ) : null}
+        </div>
+      </section>
+
+      <Tabs
+        value={effectiveTab}
+        onValueChange={(v) => setTab(parseTab(v))}
+        className="space-y-4"
+      >
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0">
+          <TabsTrigger
+            value="overview"
+            className="flex-none rounded-none border-b-2 border-transparent px-3 py-2 data-[state=active]:border-[var(--color-primary)] data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+          >
+            {t("roomTabs.overview")}
+          </TabsTrigger>
+          {showStudentsSection ? (
+            <TabsTrigger
+              value="students"
+              className="flex-none rounded-none border-b-2 border-transparent px-3 py-2 data-[state=active]:border-[var(--color-primary)] data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+            >
+              {t("roomTabs.students")}
+            </TabsTrigger>
+          ) : null}
+          <TabsTrigger
+            value="sessions"
+            className="flex-none rounded-none border-b-2 border-transparent px-3 py-2 data-[state=active]:border-[var(--color-primary)] data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+          >
+            {t("roomTabs.sessions")}
+          </TabsTrigger>
+          {showRecitationsSection ? (
+            <TabsTrigger
+              value="progress"
+              className="flex-none rounded-none border-b-2 border-transparent px-3 py-2 data-[state=active]:border-[var(--color-primary)] data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+            >
+              {t("roomTabs.progress")}
+            </TabsTrigger>
+          ) : null}
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          <RoomOverviewSection
+            room={room}
+            user={user}
+            isArchived={isArchived}
+            studentActionLoading={studentActionLoading}
+            onStudentJoin={() => void handleStudentJoin()}
+            onLeaveRoom={() => setStudentConfirm("leave")}
+            onCancelPendingRequest={() => setStudentConfirm("cancel")}
+          />
+          {showActions ? <RoomInvitesCard room={room} onInviteOpen={() => setInviteOpen(true)} /> : null}
+          {!isArchived ? (
+          <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-base font-semibold text-[var(--color-text)]">{t("roomTabs.next3")}</h3>
+              <Link
+                to={`/calendar?room=${room.id}`}
+                className="text-sm font-medium text-[var(--color-primary)] hover:underline"
+              >
+                {t("roomTabs.viewCalendar")}
+              </Link>
+            </div>
+            {nextThree.length === 0 ? (
+              <p className="text-sm text-[var(--color-text-muted)]">{t("studentHome.noUpcoming")}</p>
+            ) : (
+              <ul className="space-y-2">
+                {nextThree.map((s) => (
+                  <li key={s.id}>
+                    <Link
+                      to={sessionNavigatePath(s)}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-100 bg-[var(--color-bg)] px-3 py-2.5 transition hover:border-[var(--color-primary)]/30"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-[var(--color-text)]">
+                          {s.title?.trim() || t("sessions.untitledTitle")}
+                        </p>
+                        <p className="text-xs text-[var(--color-text-muted)]">
+                          <SessionTimeDisplay
+                            scheduledAt={s.scheduled_at}
+                            roomTz={s.room_timezone || room.timezone}
+                            userTz={user?.timezone}
+                          />
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          s.status === "in_progress"
+                            ? "blue"
+                            : s.status === "cancelled" || s.status === "completed"
+                              ? "gray"
+                              : "green"
+                        }
+                      >
+                        {t(`sessions.${sessionStatusLabelKey(s.status)}`)}
+                      </Badge>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          ) : null}
+        </TabsContent>
 
         {showStudentsSection ? (
-          <RoomStudentsSection
-            room={room}
-            user={user}
-            enrollments={enrollments}
-            enrolledCount={enrolledCount}
-            showActions={showActions}
-            isArchived={isArchived}
-            onRefresh={() => {
-              // No-op: PendingRequestsList invalidates its own keys.
-            }}
-            onEnrollOpen={() => setEnrollOpen(true)}
-            onRemoveEnrollment={(e) => setRemoveEnrollment(e)}
-            onShareFocus={() =>
-              document.getElementById("activation-card")?.scrollIntoView({ behavior: "smooth" })
-            }
-          />
+          <TabsContent value="students">
+            <RoomStudentsSection
+              room={room}
+              user={user}
+              enrollments={enrollments}
+              enrolledCount={enrolledCount}
+              showActions={showActions}
+              isArchived={isArchived}
+              onRefresh={() => {
+                /* PendingRequestsList invalidates its own keys */
+              }}
+              onInviteOpen={() => setInviteOpen(true)}
+              onEnrollOpen={isAdmin ? () => setEnrollOpen(true) : undefined}
+              onRemoveEnrollment={(e) => setRemoveEnrollment(e)}
+            />
+          </TabsContent>
         ) : null}
 
-        <RoomSessionsSection
-          room={room}
-          user={user}
-          roomRouteId={id}
-          sessions={sessions}
-          sessionsLoading={sessionsLoading}
-          sessionsViewMode={sessionsViewMode}
-          setSessionsViewMode={setSessionsViewMode}
-          calendarCursor={calendarCursor}
-          setCalendarCursor={setCalendarCursor}
-          listMonthCursor={listMonthCursor}
-          setListMonthCursor={setListMonthCursor}
-          isArchived={isArchived}
-          onSessionFormOpen={() => {
-            setSessionPrefillDate(null);
-            setSessionPresetMorning(false);
-            setSessionFormOpen(true);
-          }}
-          onCalendarDayClick={(d) => {
-            setSessionPrefillDate(d);
-            setSessionPresetMorning(true);
-            setSessionFormOpen(true);
-          }}
-        />
+        <TabsContent value="sessions">
+          <RoomSessionsSection
+            room={room}
+            user={user}
+            sessions={sessions}
+            sessionsLoading={sessionsLoading}
+            isArchived={isArchived}
+            onSessionFormOpen={() => setSessionFormOpen(true)}
+          />
+        </TabsContent>
 
         {showRecitationsSection ? (
-          <RoomRecitationsSection
-            room={room}
-            user={user}
-            roomRecitations={roomRecitations}
-            recitationsLoading={recitationsLoading}
-            isArchived={isArchived}
-            onRecitationFormOpen={() => setRecitationFormOpen(true)}
-          />
+          <TabsContent value="progress">
+            <RoomRecitationsSection
+              room={room}
+              user={user}
+              roomRecitations={roomRecitations}
+              recitationsLoading={recitationsLoading}
+              isArchived={isArchived}
+              onRecitationFormOpen={() => setRecitationFormOpen(true)}
+            />
+          </TabsContent>
         ) : null}
-
-        {showActions ? (
-          <>
-            <InviteLinkList roomId={room.id} />
-            <ShareLinkList targetType="halaqah" targetId={room.id} />
-          </>
-        ) : null}
-      </div>
+      </Tabs>
 
       <SessionFormModal
         open={sessionFormOpen}
         mode="create"
         session={null}
         defaultRoomId={room.id}
-        defaultDatetime={sessionPrefillDate}
-        presetMorningStart={sessionPresetMorning}
-        onClose={() => {
-          setSessionFormOpen(false);
-          setSessionPrefillDate(null);
-          setSessionPresetMorning(false);
-        }}
+        defaultDatetime={null}
+        presetMorningStart={false}
+        onClose={() => setSessionFormOpen(false)}
         onSaved={() => {
           void invalidateRoomSessions();
           void queryClient.invalidateQueries({ queryKey: roomKeys.detail(room.id) });
@@ -430,7 +617,7 @@ export function RoomDetailPage() {
         isAdmin={isAdmin}
         onClose={() => setFormOpen(false)}
         onSaved={() => {
-          // No-op: RoomFormModal invalidates room keys itself.
+          /* RoomFormModal invalidates room keys */
         }}
       />
 
@@ -442,18 +629,26 @@ export function RoomDetailPage() {
         onArchived={() => navigate("/rooms", { replace: true })}
       />
 
+      <DeleteRoomModal
+        open={deleteOpen}
+        roomId={room.id}
+        roomName={room.name}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={() => navigate("/rooms", { replace: true })}
+      />
+
       <EnrollStudentModal
-        open={enrollOpen}
+        open={enrollOpen && isAdmin}
         roomId={room.id}
         maxStudents={room.max_students}
         currentCount={enrolledCount}
         onClose={() => setEnrollOpen(false)}
         onEnrolled={() => {
-          // No-op: EnrollStudentModal invalidates enrollment keys itself.
+          /* EnrollStudentModal invalidates enrollment keys */
         }}
       />
 
-      <InviteStudentsModal open={inviteOpen} roomId={room.id} onClose={() => setInviteOpen(false)} />
+      <InviteStudentsModal open={inviteOpen} room={room} onClose={() => setInviteOpen(false)} />
 
       <RemoveStudentModal
         open={removeEnrollment !== null}
@@ -461,7 +656,7 @@ export function RoomDetailPage() {
         enrollment={removeEnrollment}
         onClose={() => setRemoveEnrollment(null)}
         onRemoved={() => {
-          // No-op: RemoveStudentModal invalidates enrollment keys itself.
+          /* RemoveStudentModal invalidates enrollment keys */
         }}
       />
 

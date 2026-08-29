@@ -7,7 +7,7 @@ import { Check, Copy, Download, Mail, QrCode, Share2 } from "lucide-react";
 import type { Room, RoomFirstSession } from "../../types";
 import { Button } from "../ui/Button";
 import { InputControl } from "../ui/Input";
-import { InviteStudentsModal } from "./InviteStudentsModal";
+import { EmailInviteStudentsModal } from "./EmailInviteStudentsModal";
 import {
   findActiveShareLink,
   findPrimaryShareLink,
@@ -26,7 +26,8 @@ import {
   shareOrDownloadPng,
   shareTeaserUrl,
 } from "../../lib/shareIntents";
-import { formatSessionMecca } from "../../lib/meccaTime";
+import { formatSessionTimeInviteLine } from "../../lib/sessionTime";
+import { useAuthStore } from "../../stores/authStore";
 import { cn } from "@/lib/utils";
 
 const autoCreateInFlight = new Set<string>();
@@ -65,6 +66,7 @@ export function ShareCard({
   className,
 }: ShareCardProps) {
   const { t, i18n } = useTranslation();
+  const user = useAuthStore((s) => s.user);
   const linksQuery = useShareLinks("halaqah", roomId, true);
   const createMutation = useCreateShareLink("halaqah", roomId);
   const activeLink = useMemo(() => findPrimaryShareLink(linksQuery.data), [linksQuery.data]);
@@ -80,7 +82,13 @@ export function ShareCard({
   const shareUrl = activeLink?.share_url ?? (token ? shareTeaserUrl(token) : "");
 
   const dateLabel = firstSession
-    ? formatSessionMecca(firstSession.scheduled_at, i18n.language)
+    ? formatSessionTimeInviteLine(
+        firstSession.scheduled_at,
+        room?.timezone ?? "Asia/Riyadh",
+        user?.timezone,
+        i18n.language,
+        t,
+      )
     : null;
 
   const typeLabel = room?.halaqah_type
@@ -187,9 +195,7 @@ export function ShareCard({
     !linksQuery.isPending &&
     (createMutation.isPending || autoCreateInFlight.has(autoKey));
 
-  const sessionLine = dateLabel
-    ? `${t("share.firstSession", { date: dateLabel })} · ${t("share.meccaTime")}`
-    : null;
+  const sessionLine = dateLabel ? t("share.firstSession", { date: dateLabel }) : null;
 
   return (
     <div
@@ -425,7 +431,7 @@ export function ShareCard({
         </div>
       )}
 
-      <InviteStudentsModal open={inviteOpen} onClose={() => setInviteOpen(false)} roomId={roomId} />
+      <EmailInviteStudentsModal open={inviteOpen} onClose={() => setInviteOpen(false)} roomId={roomId} />
     </div>
   );
 }

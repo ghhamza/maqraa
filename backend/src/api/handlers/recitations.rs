@@ -37,6 +37,8 @@ pub struct ListRecitationsQuery {
     pub offset: Option<i64>,
     pub riwaya: Option<String>,
     pub turn_type: Option<String>,
+    /// Filter by plan lifecycle status (`planned`, `in_progress`, …).
+    pub plan_status: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -53,6 +55,9 @@ pub struct CreateRecitationRequest {
     pub turn_type: Option<String>,
     pub pages_count: Option<f64>,
     pub star_rating: Option<i16>,
+    /// When `"planned"`, creates a next-target / plan row (grade forced NULL).
+    /// Omitted: existing behavior (`session_id` ⇒ planned, else None).
+    pub plan_status: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -256,6 +261,20 @@ fn push_recitation_list_filters<'a>(
             qb.push_bind(tt.trim());
         }
     }
+    if let Some(ref ps) = params.plan_status {
+        let t = ps.trim();
+        if matches!(
+            t,
+            "planned" | "in_progress" | "paused" | "completed" | "skipped"
+        ) {
+            qb.push(" AND rec.plan_status = ");
+            qb.push_bind(t);
+        }
+    }
+    // Hide recitations from archived halaqat everywhere (feeds, stats consumers, room tabs).
+    qb.push(
+        " AND EXISTS (SELECT 1 FROM rooms r WHERE r.id = rec.room_id AND r.is_active = true)",
+    );
     Ok(())
 }
 
@@ -393,7 +412,21 @@ pub async fn create_recitation(
         "hafs".to_string()
     };
 
-    let grade_sql: Option<&str> = req.grade.as_ref().and_then(|s| parse_grade(s));
+    let explicit_planned = match req.plan_status.as_deref() {
+        None => false,
+        Some("planned") => true,
+        Some(_) => return Err(StatusCode::BAD_REQUEST),
+    };
+    if explicit_planned && room_id.is_none() {
+        // student_id + room + ayah range required for quick next-target creation
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let grade_sql: Option<&str> = if explicit_planned {
+        None
+    } else {
+        req.grade.as_ref().and_then(|s| parse_grade(s))
+    };
     let turn_type = req.turn_type.as_deref().unwrap_or("dars");
     parse_turn_type(turn_type)?;
     let star_rating = match req.star_rating {
@@ -409,14 +442,29 @@ pub async fn create_recitation(
         .fetch_one(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    } else if explicit_planned {
+        let rid = room_id.ok_or(StatusCode::BAD_REQUEST)?;
+        sqlx::query_scalar(
+            "SELECT COALESCE(MAX(order_index), -1) + 1 FROM recitations \
+             WHERE student_id = $1 AND room_id = $2 AND plan_status = 'planned'",
+        )
+        .bind(req.student_id)
+        .bind(rid)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     } else {
         0
     };
 
-    // Session-linked rows start as planned; lifecycle uses dedicated POST endpoints.
-    let plan_status: Option<&'static str> = match session_id {
-        Some(_) => Some("planned"),
-        None => None,
+    // Explicit planned, or session-linked rows start as planned; lifecycle uses dedicated POSTs.
+    let plan_status: Option<&'static str> = if explicit_planned {
+        Some("planned")
+    } else {
+        match session_id {
+            Some(_) => Some("planned"),
+            None => None,
+        }
     };
 
     let id: Uuid = sqlx::query_scalar(
@@ -447,6 +495,19 @@ pub async fn create_recitation(
     let rec = fetch_recitation_public(&state.db, id)
         .await?
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    crate::services::product_events::track(
+        &state.db,
+        "recitation_logged",
+        Some(auth.id),
+        Some(auth.role.as_str()),
+        serde_json::json!({
+            "recitation_id": id,
+            "session_id": session_id,
+            "room_id": room_id,
+        }),
+    )
+    .await;
 
     if let Some(grade) = grade_sql {
         if let Ok(Some((student_name, student_email, preferred_language))) =
@@ -1000,15 +1061,18 @@ async fn top_surahs(
     teacher_id: Option<Uuid>,
     student_id: Option<Uuid>,
 ) -> Result<Vec<SurahCount>, StatusCode> {
-    let mut qb = QueryBuilder::new("SELECT surah, COUNT(*)::bigint AS count FROM recitations");
+    let mut qb = QueryBuilder::new(
+        "SELECT rec.surah, COUNT(*)::bigint AS count FROM recitations rec \
+         INNER JOIN rooms r ON r.id = rec.room_id WHERE r.is_active = true",
+    );
     if let Some(t) = teacher_id {
-        qb.push(" WHERE teacher_id = ");
+        qb.push(" AND rec.teacher_id = ");
         qb.push_bind(t);
     } else if let Some(s) = student_id {
-        qb.push(" WHERE student_id = ");
+        qb.push(" AND rec.student_id = ");
         qb.push_bind(s);
     }
-    qb.push(" GROUP BY surah ORDER BY COUNT(*) DESC LIMIT 10");
+    qb.push(" GROUP BY rec.surah ORDER BY COUNT(*) DESC LIMIT 10");
     let rows: Vec<(i32, i64)> = qb
         .build_query_as::<(i32, i64)>()
         .fetch_all(pool)
@@ -1029,12 +1093,14 @@ pub async fn stats(
             "admin" => sqlx::query_as(
                 "SELECT \
                  COUNT(*)::bigint, \
-                 COUNT(*) FILTER (WHERE grade = 'excellent')::bigint, \
-                 COUNT(*) FILTER (WHERE grade = 'good')::bigint, \
-                 COUNT(*) FILTER (WHERE grade = 'needs_work')::bigint, \
-                 COUNT(*) FILTER (WHERE grade = 'weak')::bigint, \
-                 COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::bigint \
-                 FROM recitations",
+                 COUNT(*) FILTER (WHERE rec.grade = 'excellent')::bigint, \
+                 COUNT(*) FILTER (WHERE rec.grade = 'good')::bigint, \
+                 COUNT(*) FILTER (WHERE rec.grade = 'needs_work')::bigint, \
+                 COUNT(*) FILTER (WHERE rec.grade = 'weak')::bigint, \
+                 COUNT(*) FILTER (WHERE rec.created_at >= NOW() - INTERVAL '7 days')::bigint \
+                 FROM recitations rec \
+                 INNER JOIN rooms r ON r.id = rec.room_id \
+                 WHERE r.is_active = true",
             )
             .fetch_one(&state.db)
             .await
@@ -1042,12 +1108,14 @@ pub async fn stats(
             "teacher" => sqlx::query_as(
                 "SELECT \
                  COUNT(*)::bigint, \
-                 COUNT(*) FILTER (WHERE grade = 'excellent')::bigint, \
-                 COUNT(*) FILTER (WHERE grade = 'good')::bigint, \
-                 COUNT(*) FILTER (WHERE grade = 'needs_work')::bigint, \
-                 COUNT(*) FILTER (WHERE grade = 'weak')::bigint, \
-                 COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::bigint \
-                 FROM recitations WHERE teacher_id = $1",
+                 COUNT(*) FILTER (WHERE rec.grade = 'excellent')::bigint, \
+                 COUNT(*) FILTER (WHERE rec.grade = 'good')::bigint, \
+                 COUNT(*) FILTER (WHERE rec.grade = 'needs_work')::bigint, \
+                 COUNT(*) FILTER (WHERE rec.grade = 'weak')::bigint, \
+                 COUNT(*) FILTER (WHERE rec.created_at >= NOW() - INTERVAL '7 days')::bigint \
+                 FROM recitations rec \
+                 INNER JOIN rooms r ON r.id = rec.room_id \
+                 WHERE rec.teacher_id = $1 AND r.is_active = true",
             )
             .bind(auth.id)
             .fetch_one(&state.db)
@@ -1056,12 +1124,14 @@ pub async fn stats(
             "student" => sqlx::query_as(
                 "SELECT \
                  COUNT(*)::bigint, \
-                 COUNT(*) FILTER (WHERE grade = 'excellent')::bigint, \
-                 COUNT(*) FILTER (WHERE grade = 'good')::bigint, \
-                 COUNT(*) FILTER (WHERE grade = 'needs_work')::bigint, \
-                 COUNT(*) FILTER (WHERE grade = 'weak')::bigint, \
-                 COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::bigint \
-                 FROM recitations WHERE student_id = $1",
+                 COUNT(*) FILTER (WHERE rec.grade = 'excellent')::bigint, \
+                 COUNT(*) FILTER (WHERE rec.grade = 'good')::bigint, \
+                 COUNT(*) FILTER (WHERE rec.grade = 'needs_work')::bigint, \
+                 COUNT(*) FILTER (WHERE rec.grade = 'weak')::bigint, \
+                 COUNT(*) FILTER (WHERE rec.created_at >= NOW() - INTERVAL '7 days')::bigint \
+                 FROM recitations rec \
+                 LEFT JOIN rooms r ON r.id = rec.room_id \
+                 WHERE rec.student_id = $1 AND (rec.room_id IS NULL OR r.is_active = true)",
             )
             .bind(auth.id)
             .fetch_one(&state.db)

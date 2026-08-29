@@ -99,3 +99,32 @@ export function useAdminDashboard(days: DashboardRangeDays) {
     staleTime: 60_000,
   });
 }
+
+export type FunnelRangeDays = 7 | 30 | 90;
+
+export interface FunnelStep {
+  step: string;
+  count: number;
+}
+
+export interface AdminFunnel {
+  window_days: number;
+  teacher_funnel: FunnelStep[];
+  student_funnel: FunnelStep[];
+  weekly_active_teaching_halaqat: number;
+  wath_trend: { week_start: string; count: number }[];
+}
+
+export function useAdminFunnel(days: FunnelRangeDays) {
+  return useQuery({
+    queryKey: adminKeys.funnel(days),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<AdminFunnel>("admin/funnel", {
+        signal,
+        params: { days },
+      });
+      return data;
+    },
+    staleTime: 60_000,
+  });
+}

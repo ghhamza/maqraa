@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import type { StudentOption } from "../../types";
 import { Input } from "../ui/Input";
 import { useAvailableStudentsForRoom, useEnrollStudent } from "../../data/rooms";
+import { useAuthStore } from "../../stores/authStore";
 
 export interface EnrollStudentFormProps {
   roomId: string;
@@ -25,6 +26,8 @@ export function EnrollStudentForm({
   onEnrolled,
 }: EnrollStudentFormProps) {
   const { t } = useTranslation();
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === "admin";
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -37,10 +40,11 @@ export function EnrollStudentForm({
     }
   }, [active, resetKey]);
 
-  const studentsQuery = useAvailableStudentsForRoom(roomId, active);
+  // Admin-only endpoint — never call as teacher (403).
+  const studentsQuery = useAvailableStudentsForRoom(roomId, active && isAdmin);
 
   const students = studentsQuery.data ?? [];
-  const loading = studentsQuery.isPending && active;
+  const loading = studentsQuery.isPending && active && isAdmin;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -59,13 +63,21 @@ export function EnrollStudentForm({
   const submitting = enrollMutation.isPending;
 
   function enroll(s: StudentOption) {
-    if (full || submitting) return;
+    if (!isAdmin || full || submitting) return;
     setError(null);
     enrollMutation.mutate(s, {
       onSuccess: () => {
         setSearch("");
       },
     });
+  }
+
+  if (!isAdmin) {
+    return (
+      <p className="text-center text-sm text-[var(--color-text-muted)]" role="alert">
+        {t("invite.teacherEnrollForbidden")}
+      </p>
+    );
   }
 
   return (
@@ -104,7 +116,7 @@ export function EnrollStudentForm({
                 <button
                   type="button"
                   disabled={full || submitting}
-                  className="w-full px-4 py-3 text-right transition hover:bg-gray-50 disabled:opacity-50"
+                  className="w-full px-4 py-3 text-start transition hover:bg-gray-50 disabled:opacity-50"
                   onClick={() => void enroll(s)}
                 >
                   <span className="font-medium text-[var(--color-text)]">{s.name}</span>

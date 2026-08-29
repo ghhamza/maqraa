@@ -2,4 +2,5 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 pub mod ics;
+pub mod product_events;
 pub mod storage;

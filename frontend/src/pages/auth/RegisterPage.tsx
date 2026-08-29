@@ -21,6 +21,7 @@ import {
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LanguageSwitcher } from "../../components/ui/LanguageSwitcher";
+import { detectBrowserTimezone } from "../../lib/sessionTime";
 
 type RegisterLocationState = {
   googleCredential?: string;
@@ -116,6 +117,7 @@ export function RegisterPage() {
           password,
           role,
           locale: (i18n.language || "ar").split("-")[0],
+          timezone: detectBrowserTimezone(),
           ...(shareToken ? { share_token: shareToken } : {}),
           ...demographicsPayload(demographics, { omitEmpty: true }),
         },

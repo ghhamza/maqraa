@@ -119,6 +119,7 @@ pub struct SessionTeaser {
     pub status: String,
     pub room_name: String,
     pub teacher_name: String,
+    pub timezone: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -157,6 +158,9 @@ pub struct AcceptShareResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enrollment_status: Option<String>,
     pub joined: bool,
+    /// When the target room has a live session the student can enter.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<Uuid>,
 }
 
 const LINK_COLS: &str = "id, token, target_type, target_id, created_by, auto_approve, \
@@ -193,6 +197,7 @@ struct SessionTeaserRow {
     status: String,
     room_name: String,
     teacher_name: String,
+    timezone: String,
 }
 
 fn generate_share_token() -> String {
@@ -203,6 +208,54 @@ fn generate_share_token() -> String {
             TOKEN_ALPHABET[idx] as char
         })
         .collect()
+}
+
+/// Ensure an active halaqah share link exists. Returns `(token, newly_created)`.
+pub async fn ensure_halaqah_share_link(
+    pool: &sqlx::PgPool,
+    room_id: Uuid,
+    created_by: Uuid,
+) -> Result<(String, bool), sqlx::Error> {
+    let existing: Option<String> = sqlx::query_scalar(
+        "SELECT token FROM share_links \
+         WHERE target_type = 'halaqah' AND target_id = $1 \
+           AND revoked_at IS NULL \
+           AND (expires_at IS NULL OR expires_at > NOW()) \
+           AND (max_uses IS NULL OR use_count < max_uses) \
+         ORDER BY created_at ASC \
+         LIMIT 1",
+    )
+    .bind(room_id)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some(token) = existing {
+        return Ok((token, false));
+    }
+
+    for _ in 0..5 {
+        let token = generate_share_token();
+        let result = sqlx::query(
+            "INSERT INTO share_links \
+             (token, target_type, target_id, created_by, auto_approve, email_bound, expires_at, max_uses) \
+             VALUES ($1, 'halaqah', $2, $3, false, NULL, NULL, NULL)",
+        )
+        .bind(&token)
+        .bind(room_id)
+        .bind(created_by)
+        .execute(pool)
+        .await;
+
+        match result {
+            Ok(_) => return Ok((token, true)),
+            Err(e) if is_unique_violation(&e) => continue,
+            Err(e) => return Err(e),
+        }
+    }
+
+    Err(sqlx::Error::Protocol(
+        "failed to allocate unique share token".into(),
+    ))
 }
 
 fn share_url(config: &crate::config::AppConfig, token: &str) -> String {
@@ -431,6 +484,36 @@ pub async fn create_link(
 
         match result {
             Ok(link) => {
+                let room_id = match target_type {
+                    "halaqah" | "invite" => req.target_id,
+                    "session" => {
+                        if let Some(session_id) = req.target_id {
+                            sqlx::query_scalar::<_, Uuid>(
+                                "SELECT room_id FROM sessions WHERE id = $1",
+                            )
+                            .bind(session_id)
+                            .fetch_optional(&state.db)
+                            .await
+                            .ok()
+                            .flatten()
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+
+                if let Some(room_id) = room_id {
+                    crate::services::product_events::track(
+                        &state.db,
+                        "invite_link_created",
+                        Some(auth.id),
+                        Some(auth.role.as_str()),
+                        serde_json::json!({ "room_id": room_id }),
+                    )
+                    .await;
+                }
+
                 return Ok((
                     StatusCode::CREATED,
                     Json(share_link_response(&link, &state.config)),
@@ -922,7 +1005,7 @@ async fn fetch_session_teaser(
 ) -> Result<Option<SessionTeaserRow>, sqlx::Error> {
     sqlx::query_as::<_, SessionTeaserRow>(
         "SELECT s.title, s.scheduled_at, s.duration_minutes, s.status::text AS status, \
-         r.name AS room_name, u.name AS teacher_name \
+         r.name AS room_name, u.name AS teacher_name, r.timezone \
          FROM sessions s \
          INNER JOIN rooms r ON r.id = s.room_id \
          INNER JOIN users u ON u.id = r.teacher_id \
@@ -1026,6 +1109,7 @@ async fn load_teaser_for_link(
                     status: row.status,
                     room_name: row.room_name,
                     teacher_name: row.teacher_name,
+                    timezone: row.timezone,
                 },
             })
         }
@@ -1139,13 +1223,34 @@ pub async fn accept_share(
                     let force_approved =
                         link.target_type == "invite" && link.auto_approve;
                     let mut tx = state.db.begin().await.map_err(|_| server_error())?;
-                    match enroll_student(&mut tx, room_id, auth.id, force_approved).await {
+                    match enroll_student(&mut tx, room_id, auth.id, force_approved, "share_link").await {
                         Ok(EnrollOutcome::Created { status }) => {
                             tx.commit().await.map_err(|_| server_error())?;
                             joined = true;
                             enrollment_status = Some(status.clone());
                             if status == "pending" {
                                 notify_pending_enrollment_request(&state, room_id, auth.id).await;
+                            }
+                            crate::services::product_events::track(
+                                &state.db,
+                                "student_joined_via_link",
+                                Some(auth.id),
+                                Some(auth.role.as_str()),
+                                serde_json::json!({ "room_id": room_id }),
+                            )
+                            .await;
+                            if status == "approved" {
+                                crate::services::product_events::track(
+                                    &state.db,
+                                    "student_enrolled",
+                                    Some(auth.id),
+                                    Some(auth.role.as_str()),
+                                    serde_json::json!({
+                                        "room_id": room_id,
+                                        "via": "share_link",
+                                    }),
+                                )
+                                .await;
                             }
                         }
                         Ok(EnrollOutcome::AlreadyEnrolled { status }) => {
@@ -1198,12 +1303,35 @@ pub async fn accept_share(
                 .map_err(|_| server_error())?;
             }
 
+            let live_session_id: Option<Uuid> = sqlx::query_scalar(
+                "SELECT id FROM sessions \
+                 WHERE room_id = $1 AND status::text = 'in_progress' \
+                 ORDER BY scheduled_at DESC \
+                 LIMIT 1",
+            )
+            .bind(room_id)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(|_| server_error())?;
+
+            let can_enter_live = live_session_id.is_some()
+                && (auth.role == "admin"
+                    || enrollment_status.as_deref() == Some("approved"));
+
+            let (route, session_id) = if can_enter_live {
+                let sid = live_session_id.unwrap();
+                (format!("/sessions/{sid}/live"), Some(sid))
+            } else {
+                (format!("/rooms/{room_id}"), None)
+            };
+
             Ok(Json(AcceptShareResponse {
                 target_type: link.target_type,
                 target_id: Some(room_id),
-                route: format!("/rooms/{room_id}"),
+                route,
                 enrollment_status,
                 joined,
+                session_id,
             }))
         }
         "session" => {
@@ -1243,13 +1371,34 @@ pub async fn accept_share(
 
                 if enrollment_open == Some(true) {
                     let mut tx = state.db.begin().await.map_err(|_| server_error())?;
-                    match enroll_student(&mut tx, row.room_id, auth.id, false).await {
+                    match enroll_student(&mut tx, row.room_id, auth.id, false, "share_link").await {
                         Ok(EnrollOutcome::Created { status }) => {
                             tx.commit().await.map_err(|_| server_error())?;
                             joined = true;
                             enrollment_status = Some(status.clone());
                             if status == "pending" {
                                 notify_pending_enrollment_request(&state, row.room_id, auth.id).await;
+                            }
+                            crate::services::product_events::track(
+                                &state.db,
+                                "student_joined_via_link",
+                                Some(auth.id),
+                                Some(auth.role.as_str()),
+                                serde_json::json!({ "room_id": row.room_id }),
+                            )
+                            .await;
+                            if status == "approved" {
+                                crate::services::product_events::track(
+                                    &state.db,
+                                    "student_enrolled",
+                                    Some(auth.id),
+                                    Some(auth.role.as_str()),
+                                    serde_json::json!({
+                                        "room_id": row.room_id,
+                                        "via": "share_link",
+                                    }),
+                                )
+                                .await;
                             }
                         }
                         Ok(EnrollOutcome::AlreadyEnrolled { status }) => {
@@ -1319,6 +1468,7 @@ pub async fn accept_share(
                 route,
                 enrollment_status,
                 joined,
+                session_id: if can_enter_live { Some(session_id) } else { None },
             }))
         }
         "instance" => Ok(Json(AcceptShareResponse {
@@ -1327,6 +1477,7 @@ pub async fn accept_share(
             route: "/".to_string(),
             enrollment_status: None,
             joined: false,
+            session_id: None,
         })),
         _ => Err(invalid()),
     }

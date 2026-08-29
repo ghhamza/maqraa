@@ -23,6 +23,7 @@ pub struct PublicHalaqah {
     pub created_at: DateTime<Utc>,
     pub first_session_at: Option<DateTime<Utc>>,
     pub schedule_days: Vec<i16>,
+    pub timezone: String,
 }
 
 pub enum ShareCardError {
@@ -42,6 +43,7 @@ struct RoomRow {
     created_at: DateTime<Utc>,
     enrolled_count: i64,
     is_active: bool,
+    timezone: String,
 }
 
 const LINK_COLS: &str = "id, token, target_type, target_id, created_by, auto_approve, \
@@ -78,7 +80,7 @@ pub async fn resolve_public_halaqah(
 
     let room: Option<RoomRow> = sqlx::query_as(
         "SELECT r.id, r.name, u.name AS teacher_name, r.riwaya, r.halaqah_type::text AS halaqah_type, \
-         r.max_students, r.description, r.created_at, r.is_active, \
+         r.max_students, r.description, r.created_at, r.is_active, r.timezone, \
          (SELECT COUNT(*)::bigint FROM enrollments e \
           WHERE e.room_id = r.id AND e.status = 'approved') AS enrolled_count \
          FROM rooms r \
@@ -143,6 +145,7 @@ pub async fn resolve_public_halaqah(
         created_at: room.created_at,
         first_session_at,
         schedule_days: schedule_days.into_iter().map(|(d,)| d).collect(),
+        timezone: room.timezone,
     })
 }
 
@@ -217,7 +220,7 @@ const MONTHS_AR: [&str; 12] = [
     "ديسمبر",
 ];
 
-/// Format like: `الثلاثاء ٢٥ أغسطس · ٨:٠٠ م` in Asia/Riyadh.
+/// Format like: `الثلاثاء ٢٥ أغسطس · ٨:٠٠ م` in the given IANA timezone.
 pub fn format_session_ar(at: DateTime<Utc>, tz_name: &str) -> String {
     let tz: Tz = tz_name.parse().unwrap_or(chrono_tz::Asia::Riyadh);
     let local = at.with_timezone(&tz);
@@ -244,16 +247,17 @@ pub fn format_session_ar(at: DateTime<Utc>, tz_name: &str) -> String {
     format!("{weekday} {day} {month} · {hour}:{minute} {period}")
 }
 
+/// Weekly rhythm days only (no timezone label). Empty when no schedule days.
 pub fn format_rhythm_ar(days: &[i16]) -> String {
     if days.is_empty() {
-        return "بتوقيت مكة".to_string();
+        return String::new();
     }
     let names: Vec<&str> = days
         .iter()
         .filter_map(|d| WEEKDAYS_AR.get(*d as usize).copied())
         .collect();
     if names.is_empty() {
-        return "بتوقيت مكة".to_string();
+        return String::new();
     }
     format!("{} أسبوعيًا", names.join(" و"))
 }

@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 use chrono::{DateTime, Datelike, Timelike, Utc};
-use chrono_tz::Tz;
+
+use crate::timezone::{parse_tz, tz_city_label, validate_iana_timezone};
 
 use super::surah_names::surah_name;
 
@@ -16,16 +17,11 @@ fn to_arabic_numerals(value: &str) -> String {
         .collect()
 }
 
-fn parse_display_tz(tz: &str) -> Tz {
-    tz.parse().unwrap_or(chrono_tz::Asia::Riyadh)
-}
-
-fn tz_label(locale: &str, tz: &str) -> String {
-    match (locale, tz) {
-        ("ar", "Asia/Riyadh") => "توقيت الرياض".to_string(),
-        (_, "Asia/Riyadh") => "Riyadh".to_string(),
-        ("ar", _) => "التوقيت المحلي".to_string(),
-        _ => tz.rsplit('/').next().unwrap_or(tz).replace('_', " "),
+fn your_time_label(locale: &str) -> &'static str {
+    match locale {
+        "ar" => "بتوقيتك",
+        "fr" => "votre heure",
+        _ => "your time",
     }
 }
 
@@ -75,14 +71,9 @@ const FR_MONTHS: [&str; 12] = [
     "déc.",
 ];
 
-pub fn format_session_time(
-    scheduled_at: DateTime<Utc>,
-    locale: &str,
-    display_tz: &str,
-) -> String {
-    let tz = parse_display_tz(display_tz);
+fn format_local_body(scheduled_at: DateTime<Utc>, locale: &str, display_tz: &str) -> String {
+    let tz = parse_tz(display_tz);
     let local = scheduled_at.with_timezone(&tz);
-    let zone = tz_label(locale, display_tz);
 
     match locale {
         "ar" => {
@@ -101,16 +92,13 @@ pub fn format_session_time(
             };
             let time = format!("{h12}:{minute:02} {period}");
             let body = format!("{weekday} {} {month}، {time}", local.day());
-            format!(
-                "{} ({zone})",
-                to_arabic_numerals(&body)
-            )
+            to_arabic_numerals(&body)
         }
         "fr" => {
             let weekday = FR_WEEKDAYS[local.weekday().num_days_from_sunday() as usize];
             let month = FR_MONTHS[(local.month() as usize).saturating_sub(1)];
             format!(
-                "{weekday} {} {month}, {:02}:{:02} ({zone})",
+                "{weekday} {} {month}, {:02}:{:02}",
                 local.day(),
                 local.hour(),
                 local.minute()
@@ -130,12 +118,37 @@ pub fn format_session_time(
             } else {
                 (hour - 12, "PM")
             };
-            format!(
-                "{weekday} {} {month}, {h12}:{minute:02} {period} ({zone})",
-                local.day()
-            )
+            format!("{weekday} {} {month}, {h12}:{minute:02} {period}", local.day())
         }
     }
+}
+
+pub fn format_session_time(
+    scheduled_at: DateTime<Utc>,
+    locale: &str,
+    display_tz: &str,
+) -> String {
+    let body = format_local_body(scheduled_at, locale, display_tz);
+    let zone = tz_city_label(locale, display_tz);
+    format!("{body} ({zone})")
+}
+
+/// Room time labeled with city; when `user_tz` differs, appends the recipient's local time.
+pub fn format_session_time_dual(
+    scheduled_at: DateTime<Utc>,
+    locale: &str,
+    room_tz: &str,
+    user_tz: Option<&str>,
+) -> String {
+    let room = format_session_time(scheduled_at, locale, room_tz);
+    let Some(utz) = user_tz.and_then(validate_iana_timezone) else {
+        return room;
+    };
+    if utz == room_tz.trim() {
+        return room;
+    }
+    let user_body = format_local_body(scheduled_at, locale, utz);
+    format!("{room} · {user_body} ({})", your_time_label(locale))
 }
 
 pub fn format_count(n: usize, locale: &str) -> String {
@@ -178,6 +191,71 @@ pub fn grade_label(grade: &str, locale: &str) -> String {
         (_, "weak") => "Weak".to_string(),
         _ => grade.to_string(),
     }
+}
+
+/// Localized label for `error_category` enum values (matches frontend `error.*` keys).
+pub fn error_category_label(category: &str, locale: &str) -> String {
+    match (locale, category) {
+        ("ar", "harf") => "حرف".to_string(),
+        ("ar", "haraka") => "حركة".to_string(),
+        ("ar", "kalima") => "كلمة".to_string(),
+        ("ar", "waqf_qabih") => "وقف قبيح".to_string(),
+        ("ar", "makharij") => "مخارج".to_string(),
+        ("ar", "sifat") => "صفات".to_string(),
+        ("ar", "tafkhim") => "تفخيم/ترقيق".to_string(),
+        ("ar", "madd") => "مدّ".to_string(),
+        ("ar", "ghunnah") => "غنّة".to_string(),
+        ("ar", "noon_sakin") => "نون ساكنة".to_string(),
+        ("ar", "meem_sakin") => "ميم ساكنة".to_string(),
+        ("ar", "waqf_ibtida") => "وقف/ابتداء".to_string(),
+        ("ar", "shadda") => "شدّة".to_string(),
+        ("ar", "other") => "أخرى".to_string(),
+        ("fr", "harf") => "Lettre".to_string(),
+        ("fr", "haraka") => "Voyelle".to_string(),
+        ("fr", "kalima") => "Mot".to_string(),
+        ("fr", "waqf_qabih") => "Arrêt interdit".to_string(),
+        ("fr", "makharij") => "Articulation".to_string(),
+        ("fr", "sifat") => "Caractéristiques".to_string(),
+        ("fr", "tafkhim") => "Lourd/léger".to_string(),
+        ("fr", "madd") => "Allongement".to_string(),
+        ("fr", "ghunnah") => "Nasalisation".to_string(),
+        ("fr", "noon_sakin") => "Règles noun".to_string(),
+        ("fr", "meem_sakin") => "Règles mim".to_string(),
+        ("fr", "waqf_ibtida") => "Arrêt/reprise".to_string(),
+        ("fr", "shadda") => "Accentuation".to_string(),
+        ("fr", "other") => "Autre".to_string(),
+        (_, "harf") => "Letter".to_string(),
+        (_, "haraka") => "Vowel".to_string(),
+        (_, "kalima") => "Word".to_string(),
+        (_, "waqf_qabih") => "Bad stop".to_string(),
+        (_, "makharij") => "Articulation".to_string(),
+        (_, "sifat") => "Characteristics".to_string(),
+        (_, "tafkhim") => "Heavy/light".to_string(),
+        (_, "madd") => "Elongation".to_string(),
+        (_, "ghunnah") => "Nasalization".to_string(),
+        (_, "noon_sakin") => "Noon rules".to_string(),
+        (_, "meem_sakin") => "Meem rules".to_string(),
+        (_, "waqf_ibtida") => "Stop/start".to_string(),
+        (_, "shadda") => "Emphasis".to_string(),
+        (_, "other") => "Other".to_string(),
+        _ => category.to_string(),
+    }
+}
+
+/// Format top error categories like `"مدّ (2)، غنّة (1)"`.
+pub fn corrections_summary_line(categories: &[(String, i64)], locale: &str) -> String {
+    let sep = if locale == "ar" { "، " } else { ", " };
+    categories
+        .iter()
+        .map(|(cat, n)| {
+            format!(
+                "{} ({})",
+                error_category_label(cat, locale),
+                format_count(*n as usize, locale)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(sep)
 }
 
 pub fn recitation_ref(surah: i32, ayah_start: i32, ayah_end: i32, locale: &str) -> String {

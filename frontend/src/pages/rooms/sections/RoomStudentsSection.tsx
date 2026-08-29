@@ -24,10 +24,10 @@ export interface RoomStudentsSectionProps {
   showActions: boolean;
   isArchived: boolean;
   onRefresh: () => void;
-  onEnrollOpen: () => void;
+  onInviteOpen: () => void;
+  /** Admin-only direct enrollment of an existing account. */
+  onEnrollOpen?: () => void;
   onRemoveEnrollment: (e: Enrollment) => void;
-  /** Scroll/focus activation share card when empty. */
-  onShareFocus?: () => void;
 }
 
 export function RoomStudentsSection({
@@ -38,12 +38,13 @@ export function RoomStudentsSection({
   showActions,
   isArchived,
   onRefresh,
+  onInviteOpen,
   onEnrollOpen,
   onRemoveEnrollment,
-  onShareFocus,
 }: RoomStudentsSectionProps) {
   const { t } = useTranslation();
   const manage = canManage(user, room);
+  const isAdmin = user?.role === "admin";
 
   return (
     <>
@@ -59,40 +60,42 @@ export function RoomStudentsSection({
               </span>
             ) : null}
           </div>
-          {showActions && enrolledCount > 0 ? (
-            <>
-              {/* TODO: bulk enrollment & broadcast (deferred to post-hackathon) */}
-              <Button
-                type="button"
-                variant="primary"
-                disabled={isArchived || enrolledCount >= room.max_students}
-                onClick={() => onEnrollOpen()}
-              >
+          {showActions && enrolledCount > 0 && !isArchived ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="primary" onClick={() => onInviteOpen()}>
                 <span className="inline-flex items-center gap-2">
                   <UserPlus className="h-4 w-4" />
-                  {t("enrollment.enrollStudent")}
+                  {t("invite.inviteStudents")}
                 </span>
               </Button>
-            </>
+              {isAdmin && onEnrollOpen ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={enrolledCount >= room.max_students}
+                  onClick={() => onEnrollOpen()}
+                >
+                  {t("invite.adminDirectAdd")}
+                </Button>
+              ) : null}
+            </div>
           ) : null}
         </div>
         {showActions ? (
           enrolledCount === 0 ? (
             <EmptyState
               icon={<Users className="h-12 w-12" />}
-              title={t("roomDetail.studentsEmptyTitle")}
-              description={t("roomDetail.studentsEmptyDescription")}
+              title={t("enrollment.emptyStudentsTitle")}
+              description={t("enrollment.emptyStudentsHint")}
               primaryAction={
-                !isArchived && onShareFocus
-                  ? { label: t("enrollment.emptyShare"), onClick: () => onShareFocus() }
-                  : !isArchived
-                    ? { label: t("enrollment.enrollStudent"), onClick: () => onEnrollOpen() }
-                    : undefined
+                !isArchived
+                  ? { label: t("invite.inviteStudents"), onClick: () => onInviteOpen() }
+                  : undefined
               }
               secondaryAction={
-                !isArchived && onShareFocus
+                !isArchived && isAdmin && onEnrollOpen
                   ? {
-                      label: t("enrollment.addManually"),
+                      label: t("invite.adminDirectAdd"),
                       onClick: () => onEnrollOpen(),
                     }
                   : undefined

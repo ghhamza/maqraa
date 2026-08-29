@@ -5,10 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { HalaqahType, QuranRiwaya, Room } from "../../types";
 import { getAvailableRiwayat } from "../../lib/quranService";
+import { detectBrowserTimezone, resolveUserTimezone } from "../../lib/sessionTime";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { FormSelect } from "../ui/select";
+import { TimezoneSelect } from "../time/TimezoneSelect";
 import { useCreateRoom, useRoomTeachers, useUpdateRoom } from "../../data/rooms";
+import { useAuthStore } from "../../stores/authStore";
 
 export interface RoomFormProps {
   mode: "create" | "edit";
@@ -34,6 +37,7 @@ export function RoomForm({
   onPendingChange,
 }: RoomFormProps) {
   const { t } = useTranslation();
+  const user = useAuthStore((s) => s.user);
   const [name, setName] = useState("");
   const [maxStudents, setMaxStudents] = useState(20);
   const [isActive, setIsActive] = useState(true);
@@ -47,6 +51,7 @@ export function RoomForm({
   const [description, setDescription] = useState("");
   const [hasDeadline, setHasDeadline] = useState(false);
   const [deadlineLocal, setDeadlineLocal] = useState("");
+  const [timezone, setTimezone] = useState(() => resolveUserTimezone(user?.timezone));
 
   const todayLocalISO = useMemo(() => {
     const d = new Date();
@@ -68,6 +73,7 @@ export function RoomForm({
       setEnrollmentOpen(room.enrollment_open);
       setRequiresApproval(room.requires_approval);
       setDescription(room.description ?? "");
+      setTimezone(room.timezone || resolveUserTimezone(user?.timezone));
       const hasD = room.enrollment_deadline_at != null;
       setHasDeadline(hasD);
       if (room.enrollment_deadline_at) {
@@ -92,8 +98,9 @@ export function RoomForm({
       setDescription("");
       setHasDeadline(false);
       setDeadlineLocal("");
+      setTimezone(resolveUserTimezone(user?.timezone) || detectBrowserTimezone());
     }
-  }, [active, mode, room]);
+  }, [active, mode, room, user?.timezone]);
 
   const teachersQuery = useRoomTeachers(active && isAdmin && mode === "create");
 
@@ -156,6 +163,7 @@ export function RoomForm({
         requires_approval: requiresApproval,
         description: description.trim() || null,
         enrollment_deadline_at,
+        timezone,
         ...(isAdmin ? { teacher_id: teacherId } : {}),
       });
     } else if (room) {
@@ -171,6 +179,7 @@ export function RoomForm({
         requires_approval: requiresApproval,
         description: description.trim() || null,
         enrollment_deadline_at,
+        timezone,
       });
     }
   }
@@ -238,6 +247,8 @@ export function RoomForm({
         onChange={(e) => setMaxStudents(Number(e.target.value) || 1)}
         required
       />
+
+      <TimezoneSelect value={timezone} onChange={setTimezone} required />
 
       <div>
         <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">

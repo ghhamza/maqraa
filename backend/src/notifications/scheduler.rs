@@ -10,9 +10,10 @@ use uuid::Uuid;
 
 use crate::config::AppConfig;
 
-use super::format::{format_count, format_session_time, role_label};
+use super::format::{format_count, format_session_time, format_session_time_dual, role_label};
 use super::queue::enqueue_in_tx;
 use super::templates::TemplateVars;
+use crate::timezone::default_timezone;
 
 fn parse_display_tz(tz: &str) -> Tz {
     tz.parse().unwrap_or(chrono_tz::Asia::Riyadh)
@@ -24,9 +25,11 @@ struct ReminderRow {
     title: Option<String>,
     scheduled_at: DateTime<Utc>,
     room_name: String,
+    room_timezone: String,
     user_id: Uuid,
     email: String,
     preferred_language: String,
+    user_timezone: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -56,7 +59,8 @@ const SIGNUP_LIST_CAP: usize = 50;
 
 const REMINDER_STUDENTS_24H: &str = "\
 SELECT s.id AS session_id, s.title, s.scheduled_at, \
-       r.name AS room_name, u.id AS user_id, u.email, u.preferred_language \
+       r.name AS room_name, r.timezone AS room_timezone, \
+       u.id AS user_id, u.email, u.preferred_language, u.timezone AS user_timezone \
 FROM sessions s \
 JOIN rooms r ON r.id = s.room_id \
 JOIN enrollments e ON e.room_id = s.room_id AND e.status = 'approved' \
@@ -71,7 +75,8 @@ WHERE s.status = 'scheduled' \
 
 const REMINDER_TEACHER_24H: &str = "\
 SELECT s.id AS session_id, s.title, s.scheduled_at, \
-       r.name AS room_name, u.id AS user_id, u.email, u.preferred_language \
+       r.name AS room_name, r.timezone AS room_timezone, \
+       u.id AS user_id, u.email, u.preferred_language, u.timezone AS user_timezone \
 FROM sessions s \
 JOIN rooms r ON r.id = s.room_id \
 JOIN users u ON u.id = r.teacher_id \
@@ -85,7 +90,8 @@ WHERE s.status = 'scheduled' \
 
 const REMINDER_STUDENTS_1H: &str = "\
 SELECT s.id AS session_id, s.title, s.scheduled_at, \
-       r.name AS room_name, u.id AS user_id, u.email, u.preferred_language \
+       r.name AS room_name, r.timezone AS room_timezone, \
+       u.id AS user_id, u.email, u.preferred_language, u.timezone AS user_timezone \
 FROM sessions s \
 JOIN rooms r ON r.id = s.room_id \
 JOIN enrollments e ON e.room_id = s.room_id AND e.status = 'approved' \
@@ -100,7 +106,8 @@ WHERE s.status = 'scheduled' \
 
 const REMINDER_TEACHER_1H: &str = "\
 SELECT s.id AS session_id, s.title, s.scheduled_at, \
-       r.name AS room_name, u.id AS user_id, u.email, u.preferred_language \
+       r.name AS room_name, r.timezone AS room_timezone, \
+       u.id AS user_id, u.email, u.preferred_language, u.timezone AS user_timezone \
 FROM sessions s \
 JOIN rooms r ON r.id = s.room_id \
 JOIN users u ON u.id = r.teacher_id \
@@ -111,6 +118,39 @@ WHERE s.status = 'scheduled' \
       SELECT 1 FROM session_reminder_log l \
       WHERE l.session_id = s.id AND l.recipient_user_id = u.id AND l.kind = '1h' \
   )";
+
+/// Teacher nudge ~2h before a scheduled session that has at least one enrolled student.
+const REMINDER_TEACHER_NUDGE_2H: &str = "\
+SELECT s.id AS session_id, s.room_id, s.scheduled_at, \
+       r.name AS room_name, r.timezone AS room_timezone, \
+       u.id AS user_id, u.email, u.preferred_language, u.timezone AS user_timezone \
+FROM sessions s \
+JOIN rooms r ON r.id = s.room_id \
+JOIN users u ON u.id = r.teacher_id \
+WHERE s.status = 'scheduled' \
+  AND s.scheduled_at > now() \
+  AND s.scheduled_at <= now() + interval '2 hours' \
+  AND EXISTS ( \
+      SELECT 1 FROM enrollments e \
+      WHERE e.room_id = s.room_id AND e.status = 'approved' \
+  ) \
+  AND NOT EXISTS ( \
+      SELECT 1 FROM session_reminder_log l \
+      WHERE l.session_id = s.id AND l.recipient_user_id = u.id AND l.kind = 'teacher_nudge_2h' \
+  )";
+
+#[derive(sqlx::FromRow)]
+struct TeacherNudgeRow {
+    session_id: Uuid,
+    room_id: Uuid,
+    scheduled_at: DateTime<Utc>,
+    room_name: String,
+    room_timezone: String,
+    user_id: Uuid,
+    email: String,
+    preferred_language: String,
+    user_timezone: Option<String>,
+}
 
 pub fn spawn_scheduler(pool: PgPool, config: AppConfig) {
     tokio::spawn(async move {
@@ -155,6 +195,13 @@ async fn run_tick(pool: &PgPool, config: &AppConfig) -> Result<(), sqlx::Error> 
         send_reminder(pool, config, row, "1h").await?;
     }
 
+    for row in sqlx::query_as::<_, TeacherNudgeRow>(REMINDER_TEACHER_NUDGE_2H)
+        .fetch_all(pool)
+        .await?
+    {
+        send_teacher_nudge(pool, config, row).await?;
+    }
+
     for row in sqlx::query_as::<_, ProfileNudgeRow>(
         "SELECT id, name, email, preferred_language \
          FROM users \
@@ -183,8 +230,17 @@ async fn send_reminder(
 
     let base = config.app_base_url.trim_end_matches('/');
     let session_title = row.title.unwrap_or_else(|| "Session".to_string());
-    let session_time =
-        format_session_time(row.scheduled_at, &row.preferred_language, &config.app_display_tz);
+    let room_tz = if row.room_timezone.trim().is_empty() {
+        default_timezone()
+    } else {
+        row.room_timezone.as_str()
+    };
+    let session_time = format_session_time_dual(
+        row.scheduled_at,
+        &row.preferred_language,
+        room_tz,
+        row.user_timezone.as_deref(),
+    );
     let session_url = format!("{base}/sessions/{}", row.session_id);
 
     let vars = TemplateVars::new()
@@ -211,6 +267,56 @@ async fn send_reminder(
     .bind(row.session_id)
     .bind(row.user_id)
     .bind(kind)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn send_teacher_nudge(
+    pool: &PgPool,
+    config: &AppConfig,
+    row: TeacherNudgeRow,
+) -> Result<(), sqlx::Error> {
+    let mut tx: Transaction<'_, Postgres> = pool.begin().await?;
+
+    let base = config.app_base_url.trim_end_matches('/');
+    let room_tz = if row.room_timezone.trim().is_empty() {
+        default_timezone()
+    } else {
+        row.room_timezone.as_str()
+    };
+    let session_time = format_session_time_dual(
+        row.scheduled_at,
+        &row.preferred_language,
+        room_tz,
+        row.user_timezone.as_deref(),
+    );
+    let room_url = format!("{base}/rooms/{}", row.room_id);
+
+    let vars = TemplateVars::new()
+        .with("room_name", row.room_name)
+        .with("session_time", session_time)
+        .with("room_url", room_url);
+
+    enqueue_in_tx(
+        &mut *tx,
+        config,
+        "teacher_session_nudge",
+        &row.preferred_language,
+        &row.email,
+        Some(row.user_id),
+        vars,
+    )
+    .await?;
+
+    sqlx::query(
+        "INSERT INTO session_reminder_log (session_id, recipient_user_id, kind) \
+         VALUES ($1, $2, 'teacher_nudge_2h')",
+    )
+    .bind(row.session_id)
+    .bind(row.user_id)
     .execute(&mut *tx)
     .await?;
 

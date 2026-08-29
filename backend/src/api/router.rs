@@ -51,6 +51,11 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/api/users/stats", get(handlers::users::stats))
         .route("/api/admin/dashboard", get(handlers::admin::dashboard))
+        .route("/api/admin/funnel", get(handlers::admin::funnel))
+        .route(
+            "/api/product-events",
+            post(handlers::product_events::track_client_event),
+        )
         .route(
             "/api/users",
             get(handlers::users::list_users).post(handlers::users::create_user),
@@ -206,6 +211,10 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::sessions::list_live_public_sessions),
         )
         .route(
+            "/api/sessions/instant",
+            post(handlers::sessions::create_instant_session),
+        )
+        .route(
             "/api/sessions/group/{group_id}",
             delete(handlers::sessions::delete_recurrence_group),
         )
@@ -246,8 +255,16 @@ pub fn build_router(state: AppState) -> Router {
                 .delete(handlers::rooms::delete_room),
         )
         .route(
+            "/api/rooms/{id}/permanent",
+            delete(handlers::rooms::purge_room),
+        )
+        .route(
             "/api/rooms/{id}/setup-complete",
             put(handlers::rooms::complete_room_setup),
+        )
+        .route(
+            "/api/rooms/{id}/student-memory",
+            get(handlers::rooms::student_memory),
         )
         .route(
             "/api/ws/session/{session_id}",

@@ -46,6 +46,9 @@ export interface LiveSessionDesktopActionBarProps {
   onOpenParticipants: () => void;
   onOpenNavigator: () => void;
   onLeave: () => void;
+  className?: string;
+  /** Optional tour / analytics hook attribute. */
+  "data-tour"?: string;
 }
 
 /** Desktop bottom chrome: pager pill + control dock (mockup Mushaf 2). */
@@ -88,8 +91,13 @@ export function LiveSessionDesktopActionBar(props: LiveSessionDesktopActionBarPr
   const canNextSurah = canNavigate && nextSurahPage !== page;
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 hidden justify-center gap-4 p-3.5 md:flex">
-      {showPager ? (
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-x-0 bottom-0 z-30 hidden justify-center gap-4 p-3.5 md:flex",
+        props.className,
+      )}
+      data-tour={props["data-tour"]}
+    >      {showPager ? (
         <div className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-[rgba(15,23,42,0.10)] bg-white p-2 shadow-[0_8px_30px_rgba(0,0,0,0.10)]">
           <DockTip label={t("mushaf.prevSurah")}>
             <button

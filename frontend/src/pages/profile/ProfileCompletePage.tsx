@@ -2,10 +2,16 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
-import { navigateAfterAuth } from "../../lib/safeNext";
+import {
+  markProfileDeferOpted,
+  navigateAfterAuth,
+  peekProfileDeferLive,
+  peekShareNext,
+  stashProfileDeferLive,
+} from "../../lib/safeNext";
 import { useAuthStore } from "../../stores/authStore";
 import type { User } from "../../types";
 import { Button } from "../../components/ui/Button";
@@ -20,6 +26,7 @@ import { normalizeUserFromApi, profileDetailsPayload } from "../../lib/profileDe
 export function ProfileCompletePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -28,6 +35,17 @@ export function ProfileCompletePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const deferFromState =
+    location.state &&
+    typeof location.state === "object" &&
+    "deferLive" in location.state &&
+    typeof (location.state as { deferLive?: unknown }).deferLive === "string"
+      ? (location.state as { deferLive: string }).deferLive
+      : null;
+  const deferLive = deferFromState ?? peekProfileDeferLive();
+  const hasShareNext = !!peekShareNext();
+  const canDefer = !!deferLive || hasShareNext;
 
   if (!user) {
     return null;
@@ -53,6 +71,10 @@ export function ProfileCompletePage() {
         data: profileDetailsPayload(values, isTeacher),
       });
       setUser(normalizeUserFromApi(data));
+      if (deferLive) {
+        navigate(deferLive, { replace: true });
+        return;
+      }
       if (!navigateAfterAuth(navigate)) {
         navigate("/", { replace: true });
       }
@@ -60,6 +82,20 @@ export function ProfileCompletePage() {
       setError(userFacingApiError(err, "profile.errRequired"));
     } finally {
       setLoading(false);
+    }
+  }
+
+  function handleCompleteLater() {
+    markProfileDeferOpted();
+    if (deferLive) {
+      stashProfileDeferLive(deferLive);
+      navigate(deferLive, { replace: true });
+      return;
+    }
+    if (hasShareNext) {
+      if (!navigateAfterAuth(navigate)) {
+        navigate("/", { replace: true });
+      }
     }
   }
 
@@ -100,6 +136,12 @@ export function ProfileCompletePage() {
           <Button type="submit" variant="primary" fullWidth loading={loading}>
             {t("profile.submit")}
           </Button>
+
+          {canDefer ? (
+            <Button type="button" variant="ghost" fullWidth onClick={handleCompleteLater}>
+              {t("instant.completeLater")}
+            </Button>
+          ) : null}
         </form>
       </div>
     </div>

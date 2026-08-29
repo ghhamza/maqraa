@@ -14,6 +14,8 @@ interface SessionFormModalProps {
   defaultDatetime?: Date | null;
   /** When true (e.g. picked a day on the calendar), default time is 09:00 local */
   presetMorningStart?: boolean;
+  /** When true, open create form with repeat enabled. */
+  defaultRepeat?: boolean;
   /** When editing a recurring session, controls bulk PUT targets */
   editScope?: "this" | "this_and_future" | "all";
   onClose: () => void;
@@ -27,6 +29,7 @@ export function SessionFormModal({
   defaultRoomId,
   defaultDatetime,
   presetMorningStart,
+  defaultRepeat,
   editScope,
   onClose,
   onSaved,
@@ -46,6 +49,7 @@ export function SessionFormModal({
         defaultRoomId={defaultRoomId}
         defaultDatetime={defaultDatetime}
         presetMorningStart={presetMorningStart}
+        defaultRepeat={defaultRepeat}
         editScope={editScope}
         onCancel={onClose}
         onSuccess={() => {

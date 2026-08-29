@@ -38,6 +38,17 @@ import { LiveSessionDesktopActionBar } from "./components/LiveSessionDesktopActi
 import { LiveSessionTopBar } from "./components/LiveSessionTopBar";
 import { LiveSessionConfirmModals } from "./components/LiveSessionConfirmModals";
 import { LiveSessionToastsAndOverlays } from "./components/LiveSessionToastsAndOverlays";
+import { InviteStudentsModal } from "../../components/enrollment/InviteStudentsModal";
+import {
+  AloneTeacherInviteBar,
+  AloneTeacherInviteNudge,
+} from "../../components/session/AloneTeacherInvite";
+import {
+  SessionGuidedTour,
+  hasOptedOutOfLiveSessionTour,
+  hasSeenLiveTourForSession,
+  markLiveTourSeenForSession,
+} from "../../components/session/SessionGuidedTour";
 import { ReciterChip } from "../../components/session/ReciterChip";
 import { SessionToolRail, type SessionToolId } from "../../components/session/SessionToolRail";
 import { ContentModeToggle } from "../../components/session/ContentModeToggle";
@@ -62,6 +73,7 @@ import {
 } from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
 import { GradingPanel } from "../../components/session/GradingPanel";
+import { StudentResumeCard, hasMemoryContent } from "../../components/session/StudentResumeCard";
 import { ReconnectingOverlay } from "../../components/session/ReconnectingOverlay";
 import { SessionStatusCorner } from "../../components/session/SessionStatusCorner";
 import {
@@ -78,7 +90,7 @@ import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudi
 import { cn } from "@/lib/utils";
 import { useLivekitConnection } from "@/hooks/useLivekitConnection";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
-import { useMyEnrollment, useRoom } from "../../data/rooms";
+import { useMyEnrollment, useRoom, useRoomStudentMemory } from "../../data/rooms";
 import {
   useCreateRecitation,
   usePatchSessionRecitationsCache,
@@ -154,6 +166,9 @@ function LiveSessionPageInner() {
   const [navigatorOpen, setNavigatorOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [endSessionOpen, setEndSessionOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteNudgeDismissed, setInviteNudgeDismissed] = useState(false);
+  const [liveTourOpen, setLiveTourOpen] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
   const [gradeToast, setGradeToast] = useState<{ grade: string; notes?: string } | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -198,6 +213,7 @@ function LiveSessionPageInner() {
   const [planEndGradeDialogOpen, setPlanEndGradeDialogOpen] = useState(false);
   const [planEndGradePlanId, setPlanEndGradePlanId] = useState<string | null>(null);
   const [micPermissionOpen, setMicPermissionOpen] = useState(false);
+  const [resumeDismissedStudentId, setResumeDismissedStudentId] = useState<string | null>(null);
 
   const studentPopoverPinnedRef = useRef(false);
   const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -505,6 +521,10 @@ function LiveSessionPageInner() {
   const isTeacher = sessionState.isTeacher;
   const isActiveReciter = sessionState.state.activeReciterId === (user?.id ?? "");
   const canPublishAudio = isTeacher || isActiveReciter;
+  const studentMemoryQuery = useRoomStudentMemory(
+    sessionDetail?.room_id,
+    !!sessionDetail?.room_id && isTeacher,
+  );
   const livekit = useLivekitConnection({
     sessionId: id ?? "",
     canPublish: canPublishAudio,
@@ -681,6 +701,20 @@ function LiveSessionPageInner() {
   const contentSurfaceReady = sessionState.hasRoomState;
   const mushafNavigate = canNavigate && !isBoardMode;
   const navigatorSide = i18n.language?.startsWith("ar") ? "right" : "left";
+
+  /** Spotlight tour once per new live session for the teacher (unless opted out). */
+  useEffect(() => {
+    if (!isTeacher || !user?.id || !id || !contentSurfaceReady) return;
+    if (hasOptedOutOfLiveSessionTour(user.id)) return;
+    if (hasSeenLiveTourForSession(id)) return;
+    const timer = window.setTimeout(() => setLiveTourOpen(true), 700);
+    return () => window.clearTimeout(timer);
+  }, [isTeacher, user?.id, id, contentSurfaceReady]);
+
+  const finishLiveTour = useCallback(() => {
+    if (id) markLiveTourSeenForSession(id);
+    setLiveTourOpen(false);
+  }, [id]);
 
   /** One-shot: legacy hifz sessions were seeded as board — force mushaf as the default on first join. */
   const mushafDefaultAppliedForSessionRef = useRef<string | null>(null);
@@ -1039,6 +1073,22 @@ function LiveSessionPageInner() {
     if (!rid) return null;
     return sessionState.state.participants.find((p) => p.userId === rid) ?? null;
   }, [sessionState.state.activeReciterId, sessionState.state.participants]);
+
+  const activeStudentMemory = useMemo(() => {
+    const sid = activeReciterParticipant?.userId;
+    if (!sid) return null;
+    return studentMemoryQuery.data?.find((r) => r.student_id === sid) ?? null;
+  }, [activeReciterParticipant?.userId, studentMemoryQuery.data]);
+
+  const showResumeCard =
+    sessionState.isTeacher &&
+    !!activeStudentMemory &&
+    hasMemoryContent(activeStudentMemory) &&
+    resumeDismissedStudentId !== activeStudentMemory.student_id;
+
+  useEffect(() => {
+    setResumeDismissedStudentId(null);
+  }, [activeReciterParticipant?.userId]);
 
   const planEndGradePlan = useMemo(
     () => (planEndGradePlanId ? sessionPlans.find((x) => x.id === planEndGradePlanId) ?? null : null),
@@ -1498,6 +1548,7 @@ function LiveSessionPageInner() {
       >
         {room ? (
           <LiveSessionTopBar
+            roomId={room.id}
             roomName={room.name}
             roomCode={room.share_token?.slice(0, 9).toUpperCase() ?? null}
             riwaya={room.riwaya}
@@ -1510,6 +1561,14 @@ function LiveSessionPageInner() {
             onEndSession={() => setEndSessionOpen(true)}
             userName={user?.name ?? user?.email ?? null}
           />
+        ) : null}
+
+        {isTeacher && room && sessionState.state.participants.length <= 1 ? (
+          <AloneTeacherInviteBar onInvite={() => setInviteOpen(true)} />
+        ) : null}
+
+        {room ? (
+          <InviteStudentsModal open={inviteOpen} room={room} onClose={() => setInviteOpen(false)} />
         ) : null}
 
         {/* Mode row — content toggle (teacher) + auto-follow. */}
@@ -1558,16 +1617,33 @@ function LiveSessionPageInner() {
           >
             <ReconnectingOverlay visible={sessionDegraded} />
 
-            <SessionToolRail
-              activeTool={activeTool}
-              onToolChange={handleToolChange}
-              canAnnotate={isTeacher}
-              annotateDisabled={isBoardMode}
-              annotateDisabledTitle={t("liveSession.board.annotateUnavailable")}
-              canDraw={isTeacher}
-              onUndo={() => sessionState.sendStrokeUndo(strokeSurfacePage)}
-              onClearAll={() => setClearStrokesOpen(true)}
-            />
+            {isTeacher &&
+            room &&
+            sessionState.state.participants.length <= 1 &&
+            !inviteNudgeDismissed &&
+            !liveTourOpen ? (
+              <AloneTeacherInviteNudge
+                onInvite={() => setInviteOpen(true)}
+                onDismiss={() => setInviteNudgeDismissed(true)}
+              />
+            ) : null}
+
+            <div
+              data-tour="tools"
+              className="pointer-events-auto absolute top-7 z-20 hidden md:block inset-inline-start-[22px]"
+            >
+              <SessionToolRail
+                className="!static !inset-auto !top-auto"
+                activeTool={activeTool}
+                onToolChange={handleToolChange}
+                canAnnotate={isTeacher}
+                annotateDisabled={isBoardMode}
+                annotateDisabledTitle={t("liveSession.board.annotateUnavailable")}
+                canDraw={isTeacher}
+                onUndo={() => sessionState.sendStrokeUndo(strokeSurfacePage)}
+                onClearAll={() => setClearStrokesOpen(true)}
+              />
+            </div>
 
             <div className="hidden md:block">
               <ReciterChip
@@ -1597,41 +1673,45 @@ function LiveSessionPageInner() {
                 className="mx-auto h-full min-h-[min(56vh,560px)] w-full max-w-[min(100%,42rem)] animate-pulse rounded-lg bg-[var(--mushaf-page-paper)] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_8px_24px_rgba(0,0,0,0.05)]"
                 aria-hidden
               />
-            ) : isBoardMode ? (
-              <SessionBoardSurface
-                riwaya={riwaya}
-                className="h-full min-h-0"
-                overlay={whiteboardOverlay}
-              />
             ) : (
-              <MushafReader
-                page={page}
-                onPageChange={isTeacher ? goPage : autoFollow ? noopPage : goPage}
-                riwaya={riwaya}
-                canChangePage={mushafNavigate}
-                hideNavigation
-                omitMenuStrip
-                fitStage
-                className="h-full min-h-0"
-                pageOverlay={whiteboardOverlay}
-              >
-                <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                  <MushafCanvas
-                    page={page}
+              <div data-tour="mushaf" className="h-full min-h-0">
+                {isBoardMode ? (
+                  <SessionBoardSurface
                     riwaya={riwaya}
-                    highlightRange={studentAudioHighlight ?? interaction.highlightRange}
-                    activeWord={interaction.activeWord}
-                    onWordClick={isTeacher ? handleLiveWordClick : handleStudentWordClick}
-                    onWordMouseEnter={!isTeacher ? handleStudentWordEnter : undefined}
-                    onWordMouseLeave={!isTeacher ? handleStudentWordLeave : undefined}
-                    onAyahMarkerMouseEnter={!isTeacher ? handleStudentAyahMarkerEnter : undefined}
-                    onAyahMarkerMouseLeave={!isTeacher ? handleStudentAyahMarkerLeave : undefined}
-                    // Do not pass onAyahClick: QCF fires it together with onWordClick, and
-                    // handleWordClick already calls handleAyahClick → would double-send current-ayah.
-                    getWordAnnotationClass={getWordAnnotationClass}
+                    className="h-full min-h-0"
+                    overlay={whiteboardOverlay}
                   />
-                </div>
-              </MushafReader>
+                ) : (
+                  <MushafReader
+                    page={page}
+                    onPageChange={isTeacher ? goPage : autoFollow ? noopPage : goPage}
+                    riwaya={riwaya}
+                    canChangePage={mushafNavigate}
+                    hideNavigation
+                    omitMenuStrip
+                    fitStage
+                    className="h-full min-h-0"
+                    pageOverlay={whiteboardOverlay}
+                  >
+                    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                      <MushafCanvas
+                        page={page}
+                        riwaya={riwaya}
+                        highlightRange={studentAudioHighlight ?? interaction.highlightRange}
+                        activeWord={interaction.activeWord}
+                        onWordClick={isTeacher ? handleLiveWordClick : handleStudentWordClick}
+                        onWordMouseEnter={!isTeacher ? handleStudentWordEnter : undefined}
+                        onWordMouseLeave={!isTeacher ? handleStudentWordLeave : undefined}
+                        onAyahMarkerMouseEnter={!isTeacher ? handleStudentAyahMarkerEnter : undefined}
+                        onAyahMarkerMouseLeave={!isTeacher ? handleStudentAyahMarkerLeave : undefined}
+                        // Do not pass onAyahClick: QCF fires it together with onWordClick, and
+                        // handleWordClick already calls handleAyahClick → would double-send current-ayah.
+                        getWordAnnotationClass={getWordAnnotationClass}
+                      />
+                    </div>
+                  </MushafReader>
+                )}
+              </div>
             )}
 
             {/* Mobile: keep compact peek until mobile chrome redesign. */}
@@ -1647,6 +1727,7 @@ function LiveSessionPageInner() {
             ) : null}
 
             <LiveSessionDesktopActionBar
+              data-tour="dock"
               canPublishAudio={canPublishAudio}
               livekitConnected={livekit.status === "connected"}
               isMicEnabled={livekit.isMicEnabled}
@@ -1679,6 +1760,7 @@ function LiveSessionPageInner() {
           </div>
 
           <LiveSessionMobileBottomBar
+            data-tour="dock"
             isTeacher={isTeacher}
             isActiveReciter={isActiveReciter}
             canPublishAudio={canPublishAudio}
@@ -1783,6 +1865,28 @@ function LiveSessionPageInner() {
           }}
           onErrorMessage={(msg) => setAnnounce(msg)}
         />
+      ) : null}
+
+      {sessionState.isTeacher &&
+      id &&
+      sessionDetail &&
+      showResumeCard &&
+      activeStudentMemory ? (
+        <div
+          className={cn(
+            "pointer-events-none fixed inset-x-0 z-40 flex justify-center px-3",
+            planEndGradeDialogOpen ? "bottom-[22rem] md:bottom-[24rem]" : "bottom-[5.5rem] md:bottom-[6.5rem]",
+          )}
+          aria-live="polite"
+        >
+          <div className="pointer-events-auto w-full max-w-[460px] animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <StudentResumeCard
+              memory={activeStudentMemory}
+              locale={loc}
+              onDismiss={() => setResumeDismissedStudentId(activeStudentMemory.student_id)}
+            />
+          </div>
+        </div>
       ) : null}
 
       {sessionState.isTeacher &&
@@ -1928,6 +2032,15 @@ function LiveSessionPageInner() {
             }}
           />
         </div>
+      ) : null}
+
+      {isTeacher ? (
+        <SessionGuidedTour
+          open={liveTourOpen}
+          i18nPrefix="liveSession.tour"
+          onComplete={finishLiveTour}
+          onSkip={finishLiveTour}
+        />
       ) : null}
     </div>
   );

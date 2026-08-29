@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { BookMarked, BookOpen, Calendar, CalendarPlus, Clock, Pencil, Repeat, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { RecitationPublic, SessionPublic } from "../../types";
@@ -15,7 +15,6 @@ import { SessionFormModal } from "../../components/sessions/SessionFormModal";
 import { DeleteSessionModal } from "../../components/sessions/DeleteSessionModal";
 import { RecurrenceScopeModal } from "../../components/sessions/RecurrenceScopeModal";
 import { AttendanceSheet, type GradeColor } from "../../components/sessions/AttendanceSheet";
-import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -31,8 +30,10 @@ import { RecitationFormModal } from "../../components/recitations/RecitationForm
 import { RecentRecitationsList } from "../../components/recitations/RecentRecitationsList";
 import { SessionRecitationsSortableList } from "../../components/sessions/SessionRecitationsSortableList";
 import { SessionCountdown } from "../../components/sessions/SessionCountdown";
+import { SessionTimeDisplay } from "../../components/time/SessionTimeDisplay";
 import { Modal } from "../../components/ui/Modal";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
+import { formatSessionTime } from "../../lib/sessionTime";
 import { cn } from "@/lib/utils";
 import {
   downloadSessionIcs,
@@ -48,6 +49,7 @@ import {
   useSessionRecitations,
   useStudentsLastGrades,
 } from "../../data/recitations";
+import { useRoom } from "../../data/rooms";
 
 /** Localized “in 3 days” / “in 25 minutes” for the early-start confirmation. */
 function formatScheduledRelativeToNow(iso: string, intlLocale: string): string {
@@ -130,7 +132,6 @@ export function SessionDetailPage() {
   const navigate = useNavigate();
   const routerLocation = useLocation();
   const { t, i18n } = useTranslation();
-  const { mediumTime, shortWeekdayDate, timeShort, full } = useLocaleDate();
   const user = useAuthStore((s) => s.user);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -159,7 +160,10 @@ export function SessionDetailPage() {
   const forbidden =
     (detailQuery.error as { response?: { status?: number } } | null)?.response?.status === 403;
 
-  const sessionRecitationsQuery = useSessionRecitations(id, undefined, !!id);
+  const roomQuery = useRoom(detail?.room_id);
+  const roomArchived = roomQuery.data ? !roomQuery.data.is_active : false;
+
+  const sessionRecitationsQuery = useSessionRecitations(id, undefined, !!id && !roomArchived);
 
   const sessionRecitations = sessionRecitationsQuery.data ?? [];
 
@@ -225,20 +229,36 @@ export function SessionDetailPage() {
     return detail.attendance.filter((a) => localAttendance[a.student_id] ?? a.attended).length;
   }, [detail, localAttendance]);
 
-  const infoDatePod = useMemo(
-    () => (detail ? shortWeekdayDate(detail.scheduled_at) : ""),
-    [detail, shortWeekdayDate],
-  );
-
-  const infoTimePod = useMemo(() => {
+  const sessionTimeLabel = useMemo(() => {
     if (!detail) return "";
-    const startMs = new Date(detail.scheduled_at).getTime();
-    const endDate = new Date(startMs + detail.duration_minutes * 60_000);
+    const f = formatSessionTime(
+      detail.scheduled_at,
+      detail.room_timezone,
+      user?.timezone,
+      i18n.language,
+    );
+    return f.secondaryTime
+      ? `${f.primary} · ${t("tz.yourTime", { time: f.secondaryTime })}`
+      : f.primary;
+  }, [detail, user?.timezone, i18n.language, t]);
+
+  const infoDurationPod = useMemo(() => {
+    if (!detail) return "";
     if (detail.status === "completed") {
-      return `${timeShort(detail.scheduled_at)}\u2013${timeShort(endDate.toISOString())}`;
+      const tz = detail.room_timezone?.trim() || "Asia/Riyadh";
+      const loc = i18n.language.startsWith("ar")
+        ? "ar"
+        : i18n.language.startsWith("fr")
+          ? "fr"
+          : "en";
+      const fmt = (iso: string) =>
+        new Intl.DateTimeFormat(loc, { timeZone: tz, timeStyle: "short" }).format(new Date(iso));
+      const startMs = new Date(detail.scheduled_at).getTime();
+      const endDate = new Date(startMs + detail.duration_minutes * 60_000);
+      return `${fmt(detail.scheduled_at)}\u2013${fmt(endDate.toISOString())}`;
     }
-    return `${timeShort(detail.scheduled_at)} \u00b7 ${t("sessions.durationValue", { minutes: detail.duration_minutes })}`;
-  }, [detail, t, timeShort]);
+    return t("sessions.durationValue", { minutes: detail.duration_minutes });
+  }, [detail, t, i18n.language]);
 
   type AttendancePayload = Array<{
     student_id: string;
@@ -394,6 +414,11 @@ export function SessionDetailPage() {
         </Link>
       </div>
     );
+  }
+
+  // Archived halaqah sessions stay off calendar/home; deep links go to the archived room page.
+  if (roomArchived) {
+    return <Navigate to={`/rooms/${detail.room_id}`} replace />;
   }
 
   const title = detail.title?.trim() || detail.room_name || t("sessions.untitledTitle");
@@ -588,9 +613,9 @@ export function SessionDetailPage() {
             <BookOpen className="h-4 w-4 shrink-0 text-[var(--color-primary)]/80" aria-hidden />
             <Link
               to={`/rooms/${detail.room_id}`}
-              className="text-base font-semibold text-[var(--color-primary)] hover:underline"
+              className="inline-flex max-w-full truncate rounded-md bg-[var(--color-primary)]/8 px-2.5 py-1 text-sm font-semibold text-[var(--color-primary)] hover:underline"
             >
-              {detail.room_name}
+              {t("session.halaqahChip", { name: detail.room_name })}
             </Link>
             <SessionStatusBadge status={detail.status} />
             {detail.recurrence_group_id ? (
@@ -601,13 +626,17 @@ export function SessionDetailPage() {
           </div>
           <div className="min-h-0 min-w-0 flex-1 max-sm:hidden" aria-hidden />
           <div className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-4 max-sm:basis-full sm:ms-auto">
-            <span className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text)]">
+            <span className="inline-flex min-w-0 items-center gap-1.5 text-sm text-[var(--color-text)]">
               <Calendar className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" aria-hidden />
-              {infoDatePod}
+              <SessionTimeDisplay
+                scheduledAt={detail.scheduled_at}
+                roomTz={detail.room_timezone}
+                userTz={user?.timezone}
+              />
             </span>
             <span className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text)]">
               <Clock className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" aria-hidden />
-              {infoTimePod}
+              {infoDurationPod}
             </span>
             <SessionCountdown
               scheduledAt={detail.scheduled_at}
@@ -844,7 +873,7 @@ export function SessionDetailPage() {
         defaultRoomId={detail.room_id}
         defaultRoomName={detail.room_name}
         defaultSessionId={detail.id}
-        defaultSessionSummary={`${detail.title?.trim() || detail.room_name} · ${mediumTime(detail.scheduled_at)}`}
+        defaultSessionSummary={`${detail.title?.trim() || detail.room_name} · ${sessionTimeLabel}`}
         onClose={() => {
           setRecitationFormOpen(false);
           setRecitationEditing(null);
@@ -906,7 +935,7 @@ export function SessionDetailPage() {
         <div className="space-y-4">
           <p className="text-sm text-[var(--color-text)]">
             {t("sessions.earlyStartBody", {
-              date: full(detail.scheduled_at),
+              date: sessionTimeLabel,
               relative: formatScheduledRelativeToNow(
                 detail.scheduled_at,
                 intlLocaleForAppLanguage(i18n.language),

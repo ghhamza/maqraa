@@ -19,6 +19,8 @@ export interface User {
   preferred_language: string;
   /** False for Google-only accounts until they set a password. */
   has_password: boolean;
+  /** IANA timezone; null until detected or set in settings. */
+  timezone: string | null;
 }
 
 /** Resolved entitlements from /api/auth/me. Community: empty + unlimited. */
@@ -121,6 +123,8 @@ export interface Room {
   setup_completed_at: string | null;
   first_session?: RoomFirstSession | null;
   share_token?: string | null;
+  /** IANA timezone for wall-clock schedules and display. */
+  timezone: string;
 }
 
 export interface RoomFirstSession {
@@ -222,6 +226,8 @@ export interface SessionPublic {
   recurrence_rule: string | null;
   schedule_id: string | null;
   created_at: string;
+  /** IANA timezone of the halaqah. */
+  room_timezone: string;
 }
 
 /** GET /api/sessions/live-public — in-progress sessions in active public rooms. */

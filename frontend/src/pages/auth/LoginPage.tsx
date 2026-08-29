@@ -15,6 +15,7 @@ import { LanguageSwitcher } from "../../components/ui/LanguageSwitcher";
 import { GoogleSignInButton } from "../../components/auth/GoogleSignInButton";
 import { AuthOrDivider, GoogleAuthSection } from "../../components/auth/GoogleAuthSection";
 import { AuthBrandHeader } from "../../components/auth/AuthBrandHeader";
+import { detectBrowserTimezone } from "../../lib/sessionTime";
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -42,6 +43,7 @@ export function LoginPage() {
         data: {
           email: email.trim(),
           password,
+          timezone: detectBrowserTimezone(),
         },
       });
       const body = res.data;

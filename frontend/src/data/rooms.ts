@@ -3,7 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { roomKeys, scheduleKeys } from "../lib/queryKeys";
+import { roomKeys, scheduleKeys, sessionKeys } from "../lib/queryKeys";
 import { useApiMutation } from "../lib/useApiMutation";
 import type {
   Enrollment,
@@ -318,7 +318,14 @@ export function useUpdateRoom(onSuccess?: () => void, onError?: (message: string
 export function useArchiveRoom(onSuccess?: () => void, onError?: (message: string) => void) {
   return useApiMutation({
     mutationFn: (id: string) => api.request({ method: "delete", url: `rooms/${id}` }),
-    invalidates: [roomKeys.lists(), roomKeys.archived(), roomKeys.stats()],
+    // Sessions (live banner / cockpit) and schedules must refresh after archive cancels open activity.
+    invalidates: [
+      roomKeys.lists(),
+      roomKeys.archived(),
+      roomKeys.stats(),
+      sessionKeys.all,
+      scheduleKeys.all,
+    ],
     onSuccess: () => onSuccess?.(),
     onError: (message) => onError?.(message),
   });
@@ -327,8 +334,28 @@ export function useArchiveRoom(onSuccess?: () => void, onError?: (message: strin
 export function useUnarchiveRoom(onSuccess?: () => void, onError?: (message: string) => void) {
   return useApiMutation({
     mutationFn: (id: string) => api.request({ method: "put", url: `rooms/${id}`, data: { is_active: true } }),
-    invalidates: [roomKeys.archived(), roomKeys.lists(), roomKeys.stats()],
+    invalidates: [roomKeys.archived(), roomKeys.lists(), roomKeys.stats(), sessionKeys.all, scheduleKeys.all],
     onSuccess: () => onSuccess?.(),
+    onError: (message) => onError?.(message),
+  });
+}
+
+/** Hard-delete an archived halaqah. Active rooms must be archived first (API returns 409). */
+export function usePurgeRoom(onSuccess?: () => void, onError?: (message: string) => void) {
+  const queryClient = useQueryClient();
+  return useApiMutation({
+    mutationFn: (id: string) => api.request({ method: "delete", url: `rooms/${id}/permanent` }),
+    invalidates: [
+      roomKeys.lists(),
+      roomKeys.archived(),
+      roomKeys.stats(),
+      sessionKeys.all,
+      scheduleKeys.all,
+    ],
+    onSuccess: async (_data, id) => {
+      await queryClient.removeQueries({ queryKey: roomKeys.detail(id) });
+      onSuccess?.();
+    },
     onError: (message) => onError?.(message),
   });
 }
@@ -437,4 +464,40 @@ export function useInvalidateRoomSessions(roomId: string) {
 export function useInvalidateRoomRecitations(roomId: string) {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: roomKeys.recitations(roomId) });
+}
+
+export interface StudentMemoryLastStop {
+  surah: number;
+  ayah_end: number;
+  at: string;
+}
+
+export interface StudentMemoryNextTarget {
+  surah: number;
+  ayah_start: number;
+  ayah_end: number;
+  recitation_id: string;
+}
+
+export interface StudentMemoryRow {
+  student_id: string;
+  student_name: string;
+  last_stop: StudentMemoryLastStop | null;
+  recurring_error: string | null;
+  next_target: StudentMemoryNextTarget | null;
+}
+
+/** Teacher/admin: per-enrollee last stop, recurring error, next planned target. */
+export function useRoomStudentMemory(roomId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: roomKeys.studentMemory(roomId ?? ""),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<StudentMemoryRow[]>(`rooms/${roomId}/student-memory`, {
+        signal,
+      });
+      return data;
+    },
+    enabled: enabled && !!roomId,
+    staleTime: 60_000,
+  });
 }

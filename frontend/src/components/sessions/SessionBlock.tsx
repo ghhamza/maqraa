@@ -4,7 +4,8 @@
 import { Repeat } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SessionPublic } from "../../types";
-import { useLocaleDate } from "../../hooks/useLocaleDate";
+import { useAuthStore } from "../../stores/authStore";
+import { formatSessionTime } from "../../lib/sessionTime";
 import { cn } from "@/lib/utils";
 
 interface SessionBlockProps {
@@ -29,12 +30,15 @@ function statusClasses(status: SessionPublic["status"]): string {
 }
 
 export function SessionBlock({ session, compact, onClick }: SessionBlockProps) {
-  const { t } = useTranslation();
-  const { mediumTime } = useLocaleDate();
-  const timeStr = mediumTime(session.scheduled_at);
+  const { t, i18n } = useTranslation();
+  const user = useAuthStore((s) => s.user);
+  const f = formatSessionTime(session.scheduled_at, session.room_timezone, user?.timezone, i18n.language);
   const title = session.title?.trim() || t("sessions.untitledTitle");
   const isLive = session.status === "in_progress";
-  const tooltip = `${title} — ${session.room_name} — ${timeStr}${isLive ? ` — ${t("sessions.inProgress")}` : ""}`;
+  const timeTooltip = f.secondaryTime
+    ? `${f.primary} · ${t("tz.yourTime", { time: f.secondaryTime })}`
+    : f.primary;
+  const tooltip = `${title} — ${session.room_name} — ${timeTooltip}${isLive ? ` — ${t("sessions.inProgress")}` : ""}`;
   const repeatIconClass = "text-white/80";
 
   return (
@@ -64,11 +68,18 @@ export function SessionBlock({ session, compact, onClick }: SessionBlockProps) {
             ) : null}
             <span className="truncate">{title}</span>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5 truncate">
-            <span className="opacity-95">{timeStr}</span>
-            {isLive ? (
-              <span className="shrink-0 rounded-full bg-red-600 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase leading-none text-white">
-                {t("liveSession.badge")}
+          <div className="flex flex-col gap-0.5 truncate">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="opacity-95">{f.primary}</span>
+              {isLive ? (
+                <span className="shrink-0 rounded-full bg-red-600 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase leading-none text-white">
+                  {t("liveSession.badge")}
+                </span>
+              ) : null}
+            </div>
+            {f.secondaryTime ? (
+              <span className="text-[0.65rem] opacity-80">
+                {t("tz.yourTime", { time: f.secondaryTime })}
               </span>
             ) : null}
           </div>
@@ -77,7 +88,7 @@ export function SessionBlock({ session, compact, onClick }: SessionBlockProps) {
       ) : (
         <div className="flex flex-col gap-0.5">
           <span className="flex flex-wrap items-center gap-1.5 truncate">
-            <span className="truncate opacity-95">{timeStr}</span>
+            <span className="truncate opacity-95">{f.primary}</span>
             {isLive ? (
               <span className="shrink-0 rounded-full bg-red-600 px-1.5 py-0.5 text-[0.55rem] font-bold uppercase leading-none text-white">
                 {t("liveSession.badge")}

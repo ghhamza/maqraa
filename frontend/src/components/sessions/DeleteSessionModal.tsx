@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next";
 import type { SessionPublic } from "../../types";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
-import { useLocaleDate } from "../../hooks/useLocaleDate";
+import { SessionTimeDisplay } from "../time/SessionTimeDisplay";
+import { useAuthStore } from "../../stores/authStore";
 
 interface DeleteSessionModalProps {
   open: boolean;
@@ -23,7 +24,7 @@ export function DeleteSessionModal({
   loading,
 }: DeleteSessionModalProps) {
   const { t } = useTranslation();
-  const { mediumTime } = useLocaleDate();
+  const user = useAuthStore((s) => s.user);
   if (!session) return null;
 
   const blocked = session.status === "in_progress";
@@ -36,7 +37,13 @@ export function DeleteSessionModal({
         <div className="rounded-xl border border-gray-100 bg-[var(--color-bg)] p-3 text-sm">
           <p className="font-semibold text-[var(--color-text)]">{title}</p>
           <p className="text-[var(--color-text-muted)]">{session.room_name}</p>
-          <p className="text-[var(--color-text-muted)]">{mediumTime(session.scheduled_at)}</p>
+          <p className="text-[var(--color-text-muted)]">
+            <SessionTimeDisplay
+              scheduledAt={session.scheduled_at}
+              roomTz={session.room_timezone}
+              userTz={user?.timezone}
+            />
+          </p>
         </div>
         {blocked ? (
           <p className="text-sm text-amber-700">{t("sessions.cannotDeleteState")}</p>

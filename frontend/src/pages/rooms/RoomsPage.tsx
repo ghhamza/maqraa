@@ -14,6 +14,7 @@ import { Input } from "../../components/ui/Input";
 import { RoomCard } from "../../components/rooms/RoomCard";
 import { RoomFormModal } from "../../components/rooms/RoomFormModal";
 import { ArchiveRoomModal } from "../../components/rooms/ArchiveRoomModal";
+import { DeleteRoomModal } from "../../components/rooms/DeleteRoomModal";
 import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -52,6 +53,8 @@ export function RoomsPage() {
 
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<Room | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Room | null>(null);
   const [joinLoading, setJoinLoading] = useState<string | null>(null);
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
   const scrolledPendingRef = useRef(false);
@@ -126,6 +129,11 @@ export function RoomsPage() {
   function openArchive(r: Room) {
     setArchiveTarget(r);
     setArchiveOpen(true);
+  }
+
+  function openDelete(r: Room) {
+    setDeleteTarget(r);
+    setDeleteOpen(true);
   }
 
   async function restoreRoom(r: Room) {
@@ -219,6 +227,40 @@ export function RoomsPage() {
     }
 
     if (rooms.length === 0) {
+      const inactiveCount = stats?.inactive ?? stats?.archived_count ?? 0;
+      const trulyNoRooms = (stats?.total ?? 0) === 0;
+      // Default status filter is "active" — don't claim "no rooms yet" when only archived remain.
+      const onlyInactiveRemain =
+        !trulyNoRooms &&
+        inactiveCount > 0 &&
+        (stats?.active ?? 0) === 0 &&
+        activeFilter === "active" &&
+        debouncedSearch.trim() === "" &&
+        halaqahFilter === "" &&
+        riwayaFilter === "";
+
+      if (onlyInactiveRemain) {
+        return (
+          <EmptyState
+            size="large"
+            icon={<DoorOpen className="h-16 w-16" />}
+            title={t("rooms.emptyActiveTitle")}
+            description={t("rooms.emptyActiveDescription")}
+            primaryAction={{
+              label: t("rooms.showInactive"),
+              onClick: () => setActiveFilter("inactive"),
+            }}
+            secondaryAction={
+              isAdmin
+                ? { label: t("nav.archivedRooms"), to: "/rooms/archived" }
+                : canAddRoom(user)
+                  ? { label: t("rooms.addRoom"), onClick: openCreate }
+                  : undefined
+            }
+          />
+        );
+      }
+
       if (anyFilterApplied) {
         return (
           <EmptyState
@@ -230,7 +272,7 @@ export function RoomsPage() {
               onClick: clearAllFilters,
             }}
             secondaryAction={
-              isAdmin && (stats?.archived_count ?? 0) > 0
+              isAdmin && inactiveCount > 0
                 ? { label: t("nav.archivedRooms"), to: "/rooms/archived" }
                 : undefined
             }
@@ -337,6 +379,7 @@ export function RoomsPage() {
             onEdit={() => openEdit(r)}
             onArchive={() => openArchive(r)}
             onRestore={() => void restoreRoom(r)}
+            onDelete={() => openDelete(r)}
           />
         ))}
       </div>
@@ -466,6 +509,17 @@ export function RoomsPage() {
           setArchiveTarget(null);
         }}
         onArchived={() => void refreshAll()}
+      />
+
+      <DeleteRoomModal
+        open={deleteOpen}
+        roomId={deleteTarget?.id ?? null}
+        roomName={deleteTarget?.name ?? ""}
+        onClose={() => {
+          setDeleteOpen(false);
+          setDeleteTarget(null);
+        }}
+        onDeleted={() => void refreshAll()}
       />
     </PageShell>
   );

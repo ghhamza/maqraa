@@ -21,8 +21,9 @@ use crate::api::types::{
     SessionLivePublicItem, SessionPublic, SessionStatsResponse,
 };
 use crate::api::AppState;
-use crate::notifications::{enqueue, format_session_time, TemplateVars};
+use crate::notifications::{enqueue, enqueue_session_summaries, format_session_time_dual, TemplateVars};
 use crate::services::ics::{build_session_ics, ics_calendar_response, SessionIcsInput};
+use crate::timezone::{default_timezone, parse_tz};
 
 #[derive(FromRow)]
 struct SessionLivePublicRow {
@@ -48,6 +49,8 @@ fn push_session_list_filters<'a>(
     qb: &mut QueryBuilder<'a, sqlx::Postgres>,
     params: &'a ListSessionsQuery,
 ) {
+    // Archived halaqat must not appear in calendar, home, or room session lists.
+    qb.push(" AND r.is_active = true");
     if let Some(rid) = params.room_id {
         qb.push(" AND s.room_id = ");
         qb.push_bind(rid);
@@ -71,7 +74,8 @@ fn push_session_list_filters<'a>(
 
 #[derive(Deserialize)]
 pub struct CreateSessionRequest {
-    pub room_id: Uuid,
+    /// When null, a private halaqah is auto-created for the teacher (session-first flow).
+    pub room_id: Option<Uuid>,
     pub title: Option<String>,
     pub scheduled_at: DateTime<Utc>,
     pub duration_minutes: Option<i32>,
@@ -80,6 +84,8 @@ pub struct CreateSessionRequest {
     pub repeat_days: Option<Vec<i16>>,
     pub repeat_weeks: Option<i32>,
     pub repeat_end_date: Option<DateTime<Utc>>,
+    /// Optional name for an auto-created halaqah when `room_id` is null.
+    pub group_name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -227,7 +233,8 @@ pub(crate) async fn fetch_session_public(
 ) -> Result<Option<SessionPublic>, StatusCode> {
     let row: Option<SessionPublic> = sqlx::query_as::<Postgres, SessionPublic>(
         "SELECT s.id, s.room_id, r.name AS room_name, r.teacher_id, s.title, s.scheduled_at, s.duration_minutes, \
-         s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at \
+         s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at, \
+         r.timezone AS room_timezone \
          FROM sessions s \
          INNER JOIN rooms r ON r.id = s.room_id \
          WHERE s.id = $1",
@@ -280,7 +287,8 @@ pub async fn list_sessions(
 
     let mut qb = QueryBuilder::new(
         "SELECT s.id, s.room_id, r.name AS room_name, r.teacher_id, s.title, s.scheduled_at, s.duration_minutes, \
-         s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at \
+         s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at, \
+         r.timezone AS room_timezone \
          FROM sessions s \
          INNER JOIN rooms r ON r.id = s.room_id \
          WHERE 1=1",
@@ -312,10 +320,12 @@ pub async fn session_stats(
     let (total, completed, scheduled, cancelled): (i64, i64, i64, i64) = match auth.role.as_str() {
         "admin" => sqlx::query_as(
             "SELECT COUNT(*)::bigint, \
-             COUNT(*) FILTER (WHERE status::text = 'completed')::bigint, \
-             COUNT(*) FILTER (WHERE status::text = 'scheduled')::bigint, \
-             COUNT(*) FILTER (WHERE status::text = 'cancelled')::bigint \
-             FROM sessions",
+             COUNT(*) FILTER (WHERE s.status::text = 'completed')::bigint, \
+             COUNT(*) FILTER (WHERE s.status::text = 'scheduled')::bigint, \
+             COUNT(*) FILTER (WHERE s.status::text = 'cancelled')::bigint \
+             FROM sessions s \
+             INNER JOIN rooms r ON r.id = s.room_id \
+             WHERE r.is_active = true",
         )
         .fetch_one(&state.db)
         .await
@@ -327,7 +337,7 @@ pub async fn session_stats(
              COUNT(*) FILTER (WHERE s.status::text = 'cancelled')::bigint \
              FROM sessions s \
              INNER JOIN rooms r ON r.id = s.room_id \
-             WHERE r.teacher_id = $1",
+             WHERE r.teacher_id = $1 AND r.is_active = true",
         )
         .bind(auth.id)
         .fetch_one(&state.db)
@@ -339,7 +349,9 @@ pub async fn session_stats(
              COUNT(*) FILTER (WHERE s.status::text = 'scheduled')::bigint, \
              COUNT(*) FILTER (WHERE s.status::text = 'cancelled')::bigint \
              FROM sessions s \
-             WHERE EXISTS (SELECT 1 FROM enrollments e WHERE e.room_id = s.room_id AND e.student_id = $1 AND e.status = 'approved')",
+             INNER JOIN rooms r ON r.id = s.room_id \
+             WHERE r.is_active = true \
+             AND EXISTS (SELECT 1 FROM enrollments e WHERE e.room_id = s.room_id AND e.student_id = $1 AND e.status = 'approved')",
         )
         .bind(auth.id)
         .fetch_one(&state.db)
@@ -358,7 +370,8 @@ pub async fn session_stats(
                     (COUNT(*) FILTER (WHERE sa.attended))::float8 / COUNT(*)::float8 * 100 END AS pct \
                     FROM session_attendance sa \
                     INNER JOIN sessions s ON s.id = sa.session_id \
-                    WHERE s.status::text = 'completed' \
+                    INNER JOIN rooms r ON r.id = s.room_id \
+                    WHERE s.status::text = 'completed' AND r.is_active = true \
                     GROUP BY sa.session_id \
                 ) sub",
             )
@@ -372,7 +385,7 @@ pub async fn session_stats(
                     FROM session_attendance sa \
                     INNER JOIN sessions s ON s.id = sa.session_id \
                     INNER JOIN rooms r ON r.id = s.room_id \
-                    WHERE s.status::text = 'completed' AND r.teacher_id = $1 \
+                    WHERE s.status::text = 'completed' AND r.teacher_id = $1 AND r.is_active = true \
                     GROUP BY sa.session_id \
                 ) sub",
             )
@@ -404,12 +417,14 @@ pub async fn list_for_room(
     }
     let mut qb = QueryBuilder::new(
         "SELECT s.id, s.room_id, r.name AS room_name, r.teacher_id, s.title, s.scheduled_at, s.duration_minutes, \
-         s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at \
+         s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at, \
+         r.timezone AS room_timezone \
          FROM sessions s \
          INNER JOIN rooms r ON r.id = s.room_id \
          WHERE s.room_id = ",
     );
     qb.push_bind(room_id);
+    qb.push(" AND r.is_active = true");
     apply_role_scope(&mut qb, &auth)?;
     qb.push(" ORDER BY s.scheduled_at ASC");
     let rows = qb
@@ -426,11 +441,13 @@ pub async fn upcoming(
 ) -> Result<Json<Vec<SessionPublic>>, StatusCode> {
     let mut qb = QueryBuilder::new(
         "SELECT s.id, s.room_id, r.name AS room_name, r.teacher_id, s.title, s.scheduled_at, s.duration_minutes, \
-         s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at \
+         s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at, \
+         r.timezone AS room_timezone \
          FROM sessions s \
          INNER JOIN rooms r ON r.id = s.room_id \
          WHERE s.status::text = 'scheduled' \
-         AND s.scheduled_at > NOW()",
+         AND s.scheduled_at > NOW() \
+         AND r.is_active = true",
     );
     apply_role_scope(&mut qb, &auth)?;
     qb.push(" ORDER BY s.scheduled_at ASC LIMIT 5");
@@ -451,6 +468,7 @@ pub async fn list_live_public_sessions(
     let rows = sqlx::query_as::<_, SessionLivePublicRow>(
         r#"SELECT s.id, s.room_id, r.name AS room_name, r.teacher_id, s.title, s.scheduled_at, s.duration_minutes,
                   s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at,
+                  r.timezone AS room_timezone,
                   (r.teacher_id = $1) AS is_room_teacher,
                   (SELECT e.status::text FROM enrollments e WHERE e.room_id = s.room_id AND e.student_id = $1 LIMIT 1) AS my_enrollment_status,
                   r.requires_approval,
@@ -543,6 +561,66 @@ async fn insert_session_tx(
     Ok(id)
 }
 
+/// Private invite-only halaqah used when a teacher creates a session without picking a room.
+async fn auto_create_private_halaqah(
+    tx: &mut PgConnection,
+    teacher_id: Uuid,
+    name: &str,
+) -> Result<Uuid, sqlx::Error> {
+    let new_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO rooms \
+         (id, name, teacher_id, max_students, is_active, riwaya, halaqah_type, \
+          is_public, enrollment_open, requires_approval, setup_completed_at, timezone) \
+         VALUES ($1, $2, $3, 20, true, 'hafs', 'hifz'::halaqah_type, \
+                 false, true, false, NOW(), \
+                 COALESCE((SELECT timezone FROM users WHERE id = $3), $4))",
+    )
+    .bind(new_id)
+    .bind(name)
+    .bind(teacher_id)
+    .bind(default_timezone())
+    .execute(&mut *tx)
+    .await?;
+    Ok(new_id)
+}
+
+async fn emit_halaqah_created_and_share(
+    state: &AppState,
+    auth: &AuthenticatedUser,
+    room_id: Uuid,
+    teacher_id: Uuid,
+    instant: bool,
+) {
+    crate::services::product_events::track(
+        &state.db,
+        "halaqah_created",
+        Some(auth.id),
+        Some(auth.role.as_str()),
+        serde_json::json!({
+            "room_id": room_id,
+            "halaqah_type": "hifz",
+            "instant": instant,
+        }),
+    )
+    .await;
+
+    if let Ok((_, newly_created)) =
+        crate::api::handlers::share::ensure_halaqah_share_link(&state.db, room_id, teacher_id).await
+    {
+        if newly_created {
+            crate::services::product_events::track(
+                &state.db,
+                "invite_link_created",
+                Some(auth.id),
+                Some(auth.role.as_str()),
+                serde_json::json!({ "room_id": room_id, "target_type": "halaqah" }),
+            )
+            .await;
+        }
+    }
+}
+
 pub async fn create_session(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -569,21 +647,58 @@ pub async fn create_session(
         return Err(json_err(StatusCode::BAD_REQUEST, "session_past"));
     }
 
-    let room_row: Option<(Uuid, Uuid)> = sqlx::query_as::<Postgres, (Uuid, Uuid)>(
-        "SELECT id, teacher_id FROM rooms WHERE id = $1",
-    )
-    .bind(req.room_id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
-    let (_, teacher_id) = room_row.ok_or_else(|| json_err(StatusCode::NOT_FOUND, "not_found"))?;
-    let allowed = auth.role == "admin" || (auth.role == "teacher" && auth.id == teacher_id);
-    if !allowed {
-        return Err(json_err(StatusCode::FORBIDDEN, "forbidden"));
-    }
+    let mut halaqah_created = false;
+    let (room_id, teacher_id, room_timezone) = if let Some(rid) = req.room_id {
+        let room_row: Option<(Uuid, Uuid, String)> =
+            sqlx::query_as::<Postgres, (Uuid, Uuid, String)>(
+                "SELECT id, teacher_id, timezone FROM rooms WHERE id = $1",
+            )
+            .bind(rid)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+        let (id, teacher_id, room_timezone) =
+            room_row.ok_or_else(|| json_err(StatusCode::NOT_FOUND, "not_found"))?;
+        let allowed = auth.role == "admin" || (auth.role == "teacher" && auth.id == teacher_id);
+        if !allowed {
+            return Err(json_err(StatusCode::FORBIDDEN, "forbidden"));
+        }
+        (id, teacher_id, room_timezone)
+    } else {
+        if auth.role != "teacher" {
+            return Err(json_err(StatusCode::BAD_REQUEST, "room_required"));
+        }
+        let teacher_id = auth.id;
+        let room_name = req
+            .group_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| format!("حلقة {}", auth.name.trim()));
+        let mut tx = state
+            .db
+            .begin()
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+        let conn: &mut PgConnection = &mut tx;
+        let room_id = auto_create_private_halaqah(conn, teacher_id, &room_name)
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+        let room_timezone: String = sqlx::query_scalar("SELECT timezone FROM rooms WHERE id = $1")
+            .bind(room_id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+        tx.commit()
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+        halaqah_created = true;
+        (room_id, teacher_id, room_timezone)
+    };
 
     if !is_repeat {
-        if has_overlap(&state.db, req.room_id, req.scheduled_at, duration, None)
+        if has_overlap(&state.db, room_id, req.scheduled_at, duration, None)
             .await
             .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?
         {
@@ -597,7 +712,7 @@ pub async fn create_session(
         let conn: &mut PgConnection = &mut tx;
         let session_id = insert_session_tx(
             conn,
-            req.room_id,
+            room_id,
             req.title.as_deref(),
             req.scheduled_at,
             duration,
@@ -614,6 +729,24 @@ pub async fn create_session(
             .await
             .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?
             .ok_or_else(|| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+        if halaqah_created {
+            emit_halaqah_created_and_share(&state, &auth, room_id, teacher_id, false).await;
+        }
+
+        crate::services::product_events::track(
+            &state.db,
+            "session_scheduled",
+            Some(auth.id),
+            Some(auth.role.as_str()),
+            serde_json::json!({
+                "session_id": session_id,
+                "room_id": room_id,
+                "recurring": false,
+            }),
+        )
+        .await;
+
         return Ok((
             StatusCode::CREATED,
             Json(CreateSessionsResponse {
@@ -624,18 +757,21 @@ pub async fn create_session(
     }
 
     let start = req.scheduled_at;
-    let start_time = start.naive_utc().time();
-    let start_d = start.date_naive();
+    let room_tz = parse_tz(&room_timezone);
+    // Weekly repeats use wall-clock time of the first occurrence in the halaqah timezone.
+    let first_local = start.with_timezone(&room_tz);
+    let start_time = first_local.time();
+    let start_d = first_local.date_naive();
     let start_monday = start_d - Duration::days(start_d.weekday().num_days_from_monday() as i64);
 
     let (num_weeks, end_d_opt): (i64, Option<NaiveDate>) = if let Some(end_dt) = req.repeat_end_date {
-        let end_d = end_dt.date_naive();
-        let end_monday = end_d - Duration::days(end_d.weekday().num_days_from_monday() as i64);
+        let end_local = end_dt.with_timezone(&room_tz).date_naive();
+        let end_monday = end_local - Duration::days(end_local.weekday().num_days_from_monday() as i64);
         if end_monday < start_monday {
             return Err(json_err(StatusCode::BAD_REQUEST, "bad_request"));
         }
         let nw = ((end_monday - start_monday).num_days() / 7) + 1;
-        (nw, Some(end_d))
+        (nw, Some(end_local))
     } else {
         let nw = req.repeat_weeks.unwrap_or(4).clamp(1, 12) as i64;
         (nw, None)
@@ -658,8 +794,11 @@ pub async fn create_session(
                 }
             }
             let naive = NaiveDateTime::new(session_date, start_time);
-            let scheduled_at = Utc.from_utc_datetime(&naive);
-            candidates.push(scheduled_at);
+            let mapped = room_tz.from_local_datetime(&naive);
+            let Some(local_dt) = mapped.single().or_else(|| mapped.earliest()) else {
+                continue;
+            };
+            candidates.push(local_dt.with_timezone(&Utc));
         }
     }
     candidates.sort();
@@ -677,7 +816,7 @@ pub async fn create_session(
         if scheduled_at <= Utc::now() {
             continue;
         }
-        if has_overlap_tx(conn, req.room_id, scheduled_at, duration, None)
+        if has_overlap_tx(conn, room_id, scheduled_at, duration, None)
             .await
             .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?
         {
@@ -685,7 +824,7 @@ pub async fn create_session(
         }
         let id = insert_session_tx(
             conn,
-            req.room_id,
+            room_id,
             req.title.as_deref(),
             scheduled_at,
             duration,
@@ -707,14 +846,33 @@ pub async fn create_session(
     }
 
     let mut sessions: Vec<SessionPublic> = Vec::with_capacity(created_ids.len());
-    for id in created_ids {
-        if let Some(s) = fetch_session_public(&state.db, id)
+    for id in &created_ids {
+        if let Some(s) = fetch_session_public(&state.db, *id)
             .await
             .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?
         {
             sessions.push(s);
         }
     }
+
+    if halaqah_created {
+        emit_halaqah_created_and_share(&state, &auth, room_id, teacher_id, false).await;
+    }
+
+    let first_session_id = created_ids.first().copied();
+    crate::services::product_events::track(
+        &state.db,
+        "session_scheduled",
+        Some(auth.id),
+        Some(auth.role.as_str()),
+        serde_json::json!({
+            "session_id": first_session_id,
+            "room_id": room_id,
+            "recurring": true,
+            "occurrences": sessions.len(),
+        }),
+    )
+    .await;
 
     Ok((
         StatusCode::CREATED,
@@ -883,6 +1041,20 @@ pub async fn update_session(
             crate::api::ws::signaling::on_session_ended(&state, id).await;
         }
 
+        if updated.status == "in_progress" && session.status != "in_progress" {
+            crate::services::product_events::track(
+                &state.db,
+                "session_started",
+                Some(auth.id),
+                Some(auth.role.as_str()),
+                serde_json::json!({
+                    "session_id": id,
+                    "room_id": session.room_id,
+                }),
+            )
+            .await;
+        }
+
         return Ok(Json(updated));
     }
     sqlx::query(
@@ -915,6 +1087,36 @@ pub async fn update_session(
         "completed" | "cancelled"
     ) {
         crate::api::ws::signaling::on_session_ended(&state, id).await;
+    }
+
+    if status_bind == Some("completed") && session.status != "completed" {
+        crate::services::product_events::track(
+            &state.db,
+            "session_completed",
+            Some(auth.id),
+            Some(auth.role.as_str()),
+            serde_json::json!({
+                "session_id": id,
+                "room_id": session.room_id,
+            }),
+        )
+        .await;
+
+        if let Err(e) = enqueue_session_summaries(
+            &state.db,
+            &state.config,
+            id,
+            session.room_id,
+            &session.room_name,
+        )
+        .await
+        {
+            tracing::error!(
+                error = %e,
+                session_id = %id,
+                "failed to enqueue session summary emails"
+            );
+        }
     }
 
     Ok(Json(updated))
@@ -998,6 +1200,7 @@ struct SessionNotifyEnrollee {
     id: Uuid,
     email: String,
     preferred_language: String,
+    timezone: Option<String>,
 }
 
 async fn notify_session_update(
@@ -1014,8 +1217,16 @@ async fn notify_session_update(
         return;
     }
 
+    let room_tz: String = sqlx::query_scalar("SELECT timezone FROM rooms WHERE id = $1")
+        .bind(after.room_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| default_timezone().to_string());
+
     let enrollees: Vec<SessionNotifyEnrollee> = match sqlx::query_as(
-        "SELECT u.id, u.email, u.preferred_language \
+        "SELECT u.id, u.email, u.preferred_language, u.timezone \
          FROM enrollments e \
          JOIN users u ON u.id = e.student_id \
          WHERE e.room_id = $1 AND e.status = 'approved'",
@@ -1044,10 +1255,11 @@ async fn notify_session_update(
     };
 
     for enrollee in enrollees {
-        let session_time = format_session_time(
+        let session_time = format_session_time_dual(
             after.scheduled_at,
             &enrollee.preferred_language,
-            &state.config.app_display_tz,
+            &room_tz,
+            enrollee.timezone.as_deref(),
         );
         let vars = if cancelled {
             TemplateVars::new()
@@ -1117,4 +1329,224 @@ pub async fn session_ics(
     });
 
     Ok(ics_calendar_response(body))
+}
+
+#[derive(Deserialize)]
+pub struct InstantSessionRequest {
+    pub room_id: Option<Uuid>,
+    /// When true, always auto-create a new halaqah (picker “حلقة جديدة”).
+    #[serde(default)]
+    pub create_new: bool,
+}
+
+#[derive(serde::Serialize)]
+pub struct InstantSessionResponse {
+    pub session_id: Uuid,
+    pub room_id: Uuid,
+    pub share_token: String,
+}
+
+/// Start an in-progress session immediately (teacher/admin). Silently creates a
+/// private halaqah when the teacher has none.
+pub async fn create_instant_session(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(req): Json<InstantSessionRequest>,
+) -> Result<(StatusCode, Json<InstantSessionResponse>), (StatusCode, Json<serde_json::Value>)> {
+    if auth.role != "teacher" && auth.role != "admin" {
+        return Err(json_err(StatusCode::FORBIDDEN, "forbidden"));
+    }
+
+    let teacher_id = auth.id;
+    let duration = 60i32;
+    let now = Utc::now();
+
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+    // Serialize per-teacher so concurrent instant starts cannot create two live sessions.
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtext($1))")
+        .bind(teacher_id.to_string())
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+    // If the teacher already has a live session, reuse it.
+    let existing_live: Option<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT s.id, s.room_id \
+         FROM sessions s \
+         INNER JOIN rooms r ON r.id = s.room_id \
+         WHERE r.teacher_id = $1 AND r.is_active = true AND s.status::text = 'in_progress' \
+         ORDER BY s.scheduled_at DESC \
+         LIMIT 1",
+    )
+    .bind(teacher_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+    if let Some((session_id, room_id)) = existing_live {
+        tx.commit()
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+        let (share_token, newly_created) =
+            crate::api::handlers::share::ensure_halaqah_share_link(&state.db, room_id, teacher_id)
+                .await
+                .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+        if newly_created {
+            crate::services::product_events::track(
+                &state.db,
+                "invite_link_created",
+                Some(auth.id),
+                Some(auth.role.as_str()),
+                serde_json::json!({ "room_id": room_id, "target_type": "halaqah" }),
+            )
+            .await;
+        }
+
+        return Ok((
+            StatusCode::OK,
+            Json(InstantSessionResponse {
+                session_id,
+                room_id,
+                share_token,
+            }),
+        ));
+    }
+
+    let mut halaqah_created = false;
+    let room_id = if let Some(rid) = req.room_id {
+        let row: Option<(Uuid, Uuid)> = sqlx::query_as(
+            "SELECT id, teacher_id FROM rooms WHERE id = $1 AND is_active = true",
+        )
+        .bind(rid)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+        let (id, owner_id) =
+            row.ok_or_else(|| json_err(StatusCode::NOT_FOUND, "not_found"))?;
+        if auth.role != "admin" && owner_id != teacher_id {
+            return Err(json_err(StatusCode::FORBIDDEN, "forbidden"));
+        }
+        id
+    } else if req.create_new {
+        let room_name = format!("حلقة {}", auth.name.trim());
+        let conn: &mut PgConnection = &mut *tx;
+        let new_id = auto_create_private_halaqah(conn, teacher_id, &room_name)
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+        halaqah_created = true;
+        new_id
+    } else {
+        let rooms: Vec<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM rooms WHERE teacher_id = $1 AND is_active = true ORDER BY created_at ASC",
+        )
+        .bind(teacher_id)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+        match rooms.as_slice() {
+            [] => {
+                let room_name = format!("حلقة {}", auth.name.trim());
+                let conn: &mut PgConnection = &mut *tx;
+                let new_id = auto_create_private_halaqah(conn, teacher_id, &room_name)
+                    .await
+                    .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+                halaqah_created = true;
+                new_id
+            }
+            [only] => *only,
+            _ => {
+                let _ = tx.rollback().await;
+                return Err(json_err(StatusCode::BAD_REQUEST, "room_required"));
+            }
+        }
+    };
+
+    let session_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO sessions (room_id, title, scheduled_at, duration_minutes, status) \
+         VALUES ($1, NULL, $2, $3, 'in_progress'::session_status) \
+         RETURNING id",
+    )
+    .bind(room_id)
+    .bind(now)
+    .bind(duration)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+    sqlx::query(
+        "INSERT INTO session_attendance (session_id, student_id, attended) \
+         SELECT $1, e.student_id, false FROM enrollments e \
+         WHERE e.room_id = $2 AND e.status = 'approved'",
+    )
+    .bind(session_id)
+    .bind(room_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+    tx.commit()
+        .await
+        .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+    if halaqah_created {
+        crate::services::product_events::track(
+            &state.db,
+            "halaqah_created",
+            Some(auth.id),
+            Some(auth.role.as_str()),
+            serde_json::json!({
+                "room_id": room_id,
+                "halaqah_type": "hifz",
+                "instant": true,
+            }),
+        )
+        .await;
+    }
+
+    crate::services::product_events::track(
+        &state.db,
+        "session_started",
+        Some(auth.id),
+        Some(auth.role.as_str()),
+        serde_json::json!({
+            "session_id": session_id,
+            "room_id": room_id,
+            "instant": true,
+            "halaqah_created": halaqah_created,
+        }),
+    )
+    .await;
+
+    let (share_token, newly_created) =
+        crate::api::handlers::share::ensure_halaqah_share_link(&state.db, room_id, teacher_id)
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+    if newly_created {
+        crate::services::product_events::track(
+            &state.db,
+            "invite_link_created",
+            Some(auth.id),
+            Some(auth.role.as_str()),
+            serde_json::json!({ "room_id": room_id, "target_type": "halaqah" }),
+        )
+        .await;
+    }
+
+    Ok((
+        StatusCode::CREATED,
+        Json(InstantSessionResponse {
+            session_id,
+            room_id,
+            share_token,
+        }),
+    ))
 }

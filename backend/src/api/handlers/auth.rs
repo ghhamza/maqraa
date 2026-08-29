@@ -19,6 +19,7 @@ use crate::auth::{
     jwt, password,
 };
 use crate::notifications::{enqueue, TemplateVars};
+use crate::timezone::validate_iana_timezone;
 
 #[derive(Serialize)]
 pub struct ApiMessage {
@@ -42,6 +43,8 @@ pub struct RegisterRequest {
     pub birth_year: Option<i16>,
     #[serde(default)]
     pub country_code: Option<String>,
+    #[serde(default)]
+    pub timezone: Option<String>,
 }
 
 fn default_locale() -> String {
@@ -55,10 +58,16 @@ fn normalize_locale(locale: &str) -> &str {
     }
 }
 
+fn optional_valid_timezone(tz: Option<&str>) -> Option<String> {
+    tz.and_then(|s| validate_iana_timezone(s.trim()).map(|v| v.to_string()))
+}
+
 #[derive(Deserialize)]
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
+    #[serde(default)]
+    pub timezone: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -113,11 +122,12 @@ pub async fn register(
     let hash = password::hash_password(&req.password).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let user_id = Uuid::new_v4();
     let locale = normalize_locale(&req.locale);
+    let timezone = optional_valid_timezone(req.timezone.as_deref());
 
     sqlx::query(
         "INSERT INTO users (id, name, email, password_hash, role, preferred_language, \
-         gender, birth_year, country_code, country) \
-         VALUES ($1, $2, $3, $4, $5::user_role, $6, $7, $8, $9, $9)",
+         gender, birth_year, country_code, country, timezone) \
+         VALUES ($1, $2, $3, $4, $5::user_role, $6, $7, $8, $9, $9, $10)",
     )
     .bind(user_id)
     .bind(&req.name)
@@ -128,6 +138,7 @@ pub async fn register(
     .bind(&demo.gender)
     .bind(demo.birth_year)
     .bind(&demo.country_code)
+    .bind(&timezone)
     .execute(&state.db)
     .await
     .map_err(|_| StatusCode::CONFLICT)?;
@@ -166,6 +177,15 @@ pub async fn register(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    crate::services::product_events::track(
+        &state.db,
+        "user_registered",
+        Some(user_id),
+        Some(role),
+        serde_json::json!({ "method": "password" }),
+    )
+    .await;
+
     Ok(Json(AuthResponse {
         token,
         user,
@@ -187,8 +207,8 @@ pub async fn login(
         ));
     }
 
-    let row: (Uuid, String, String, Option<String>, String) = sqlx::query_as(
-        "SELECT id, name, email, password_hash, role::text \
+    let row: (Uuid, String, String, Option<String>, String, Option<String>) = sqlx::query_as(
+        "SELECT id, name, email, password_hash, role::text, timezone \
          FROM users WHERE lower(trim(email)) = $1",
     )
     .bind(&email)
@@ -237,6 +257,18 @@ pub async fn login(
     .execute(&state.db)
     .await;
 
+    if row.5.is_none() {
+        if let Some(tz) = optional_valid_timezone(req.timezone.as_deref()) {
+            let _ = sqlx::query(
+                "UPDATE users SET timezone = $1 WHERE id = $2 AND timezone IS NULL",
+            )
+            .bind(&tz)
+            .bind(row.0)
+            .execute(&state.db)
+            .await;
+        }
+    }
+
     let user = load_user_response(&state.db, row.0).await.map_err(|_| {
         (
             StatusCode::UNAUTHORIZED,
@@ -264,6 +296,8 @@ pub struct GoogleAuthRequest {
     pub birth_year: Option<i16>,
     #[serde(default)]
     pub country_code: Option<String>,
+    #[serde(default)]
+    pub timezone: Option<String>,
 }
 
 pub async fn google_auth(
@@ -309,8 +343,8 @@ pub async fn google_auth(
     })?;
 
     // 1) Existing Google-linked user
-    let by_sub: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT id, role::text FROM users WHERE google_sub = $1",
+    let by_sub: Option<(Uuid, String, Option<String>)> = sqlx::query_as(
+        "SELECT id, role::text, timezone FROM users WHERE google_sub = $1",
     )
     .bind(&identity.sub)
     .fetch_optional(&mut *tx)
@@ -324,12 +358,25 @@ pub async fn google_auth(
         )
     })?;
 
-    let (user_id, role, is_new) = if let Some((id, role)) = by_sub {
+    let client_tz = optional_valid_timezone(req.timezone.as_deref());
+
+    let (user_id, role, is_new) = if let Some((id, role, existing_tz)) = by_sub {
+        if existing_tz.is_none() {
+            if let Some(ref tz) = client_tz {
+                let _ = sqlx::query(
+                    "UPDATE users SET timezone = $1 WHERE id = $2 AND timezone IS NULL",
+                )
+                .bind(tz)
+                .bind(id)
+                .execute(&mut *tx)
+                .await;
+            }
+        }
         (id, role, false)
     } else {
         // 2) Link by email
-        let by_email: Option<(Uuid, String)> = sqlx::query_as(
-            "SELECT id, role::text FROM users WHERE lower(trim(email)) = $1",
+        let by_email: Option<(Uuid, String, Option<String>)> = sqlx::query_as(
+            "SELECT id, role::text, timezone FROM users WHERE lower(trim(email)) = $1",
         )
         .bind(&identity.email)
         .fetch_optional(&mut *tx)
@@ -343,14 +390,16 @@ pub async fn google_auth(
             )
         })?;
 
-        if let Some((id, role)) = by_email {
+        if let Some((id, role, existing_tz)) = by_email {
             sqlx::query(
                 "UPDATE users SET google_sub = $1, \
-                 email_verified_at = COALESCE(email_verified_at, NOW()) \
+                 email_verified_at = COALESCE(email_verified_at, NOW()), \
+                 timezone = CASE WHEN timezone IS NULL THEN $3 ELSE timezone END \
                  WHERE id = $2",
             )
             .bind(&identity.sub)
             .bind(id)
+            .bind(&client_tz)
             .execute(&mut *tx)
             .await
             .map_err(|_| {
@@ -361,6 +410,7 @@ pub async fn google_auth(
                     }),
                 )
             })?;
+            let _ = existing_tz; // timezone set via CASE above when null
             (id, role, false)
         } else {
             // 3) Create new user — role required
@@ -409,8 +459,8 @@ pub async fn google_auth(
             let user_id = Uuid::new_v4();
             sqlx::query(
                 "INSERT INTO users (id, name, email, password_hash, role, google_sub, email_verified_at, \
-                 gender, birth_year, country_code, country) \
-                 VALUES ($1, $2, $3, NULL, $4::user_role, $5, NOW(), $6, $7, $8, $8)",
+                 gender, birth_year, country_code, country, timezone) \
+                 VALUES ($1, $2, $3, NULL, $4::user_role, $5, NOW(), $6, $7, $8, $8, $9)",
             )
             .bind(user_id)
             .bind(&identity.name)
@@ -420,6 +470,7 @@ pub async fn google_auth(
             .bind(&demo.gender)
             .bind(demo.birth_year)
             .bind(&demo.country_code)
+            .bind(&client_tz)
             .execute(&mut *tx)
             .await
             .map_err(|e| {
@@ -468,6 +519,17 @@ pub async fn google_auth(
             }),
         )
     })?;
+
+    if is_new {
+        crate::services::product_events::track(
+            &state.db,
+            "user_registered",
+            Some(user_id),
+            Some(role.as_str()),
+            serde_json::json!({ "method": "google" }),
+        )
+        .await;
+    }
 
     Ok(Json(AuthResponse {
         token,
@@ -600,6 +662,8 @@ pub async fn me(
 pub struct UpdateProfileRequest {
     pub name: String,
     pub email: String,
+    #[serde(default)]
+    pub timezone: Option<String>,
 }
 
 pub async fn update_profile(
@@ -612,6 +676,12 @@ pub async fn update_profile(
     if name.is_empty() || email.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
+
+    let timezone = match req.timezone.as_deref() {
+        None => None,
+        Some(s) if s.trim().is_empty() => None,
+        Some(s) => Some(validate_iana_timezone(s.trim()).ok_or(StatusCode::BAD_REQUEST)?.to_string()),
+    };
 
     let existing_lower = auth.email.trim().to_lowercase();
     if email != existing_lower {
@@ -628,13 +698,18 @@ pub async fn update_profile(
         }
     }
 
-    sqlx::query("UPDATE users SET name = $1, email = $2 WHERE id = $3")
-        .bind(name)
-        .bind(&email)
-        .bind(auth.id)
-        .execute(&state.db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    sqlx::query(
+        "UPDATE users SET name = $1, email = $2, \
+         timezone = CASE WHEN $4::text IS NOT NULL THEN $4 ELSE timezone END \
+         WHERE id = $3",
+    )
+    .bind(name)
+    .bind(&email)
+    .bind(auth.id)
+    .bind(&timezone)
+    .execute(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     load_user_response(&state.db, auth.id)
         .await
@@ -651,6 +726,8 @@ pub struct UpdateAuthProfileRequest {
     pub birth_year: Option<i16>,
     #[serde(default)]
     pub country_code: Option<String>,
+    #[serde(default)]
+    pub timezone: Option<String>,
 }
 
 /// `PUT /api/auth/profile` — update display name + optional soft demographics.
@@ -670,9 +747,16 @@ pub async fn update_auth_profile(
         country_code: req.country_code,
     })?;
 
+    let timezone = match req.timezone.as_deref() {
+        None => None,
+        Some(s) if s.trim().is_empty() => None,
+        Some(s) => Some(validate_iana_timezone(s.trim()).ok_or(StatusCode::BAD_REQUEST)?.to_string()),
+    };
+
     sqlx::query(
         "UPDATE users SET name = $1, gender = $2, birth_year = $3, country_code = $4, \
-         country = CASE WHEN $4::char(2) IS NOT NULL THEN $4 ELSE country END \
+         country = CASE WHEN $4::char(2) IS NOT NULL THEN $4 ELSE country END, \
+         timezone = CASE WHEN $6::text IS NOT NULL THEN $6 ELSE timezone END \
          WHERE id = $5",
     )
     .bind(name)
@@ -680,6 +764,7 @@ pub async fn update_auth_profile(
     .bind(demo.birth_year)
     .bind(&demo.country_code)
     .bind(auth.id)
+    .bind(&timezone)
     .execute(&state.db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

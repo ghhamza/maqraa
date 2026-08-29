@@ -11,6 +11,7 @@ use crate::api::profile_constants::{is_valid_qiraat_slug, is_valid_spoken_langua
 use crate::api::types::UserResponse;
 use crate::api::user_response::load_user_response;
 use crate::api::AppState;
+use crate::timezone::validate_iana_timezone;
 
 #[derive(Deserialize)]
 pub struct CompleteProfileRequest {
@@ -21,6 +22,8 @@ pub struct CompleteProfileRequest {
     pub spoken_languages: Vec<String>,
     #[serde(default)]
     pub qiraat_taught: Vec<String>,
+    #[serde(default)]
+    pub timezone: Option<String>,
 }
 
 fn profile_err(code: &'static str, message: &'static str) -> (StatusCode, Json<ApiMessage>) {
@@ -97,11 +100,22 @@ pub async fn complete_profile(
         Vec::new()
     };
 
+    let timezone = match req.timezone.as_deref() {
+        None => None,
+        Some(s) if s.trim().is_empty() => None,
+        Some(s) => Some(
+            validate_iana_timezone(s.trim())
+                .ok_or_else(|| profile_err("invalid_timezone", "Invalid timezone"))?
+                .to_string(),
+        ),
+    };
+
     sqlx::query(
         "UPDATE users SET gender = $1, date_of_birth = $2, country = $3, phone = $4, \
          spoken_languages = $5, qiraat_taught = $6, profile_completion_pending = false, \
          birth_year = EXTRACT(YEAR FROM $2::date)::SMALLINT, \
-         country_code = $3 \
+         country_code = $3, \
+         timezone = CASE WHEN $8::text IS NOT NULL THEN $8 ELSE timezone END \
          WHERE id = $7",
     )
     .bind(gender)
@@ -111,6 +125,7 @@ pub async fn complete_profile(
     .bind(&req.spoken_languages)
     .bind(&qiraat_taught)
     .bind(auth.id)
+    .bind(&timezone)
     .execute(&state.db)
     .await
     .map_err(|_| {
@@ -122,6 +137,15 @@ pub async fn complete_profile(
             }),
         )
     })?;
+
+    crate::services::product_events::track(
+        &state.db,
+        "profile_completed",
+        Some(auth.id),
+        Some(auth.role.as_str()),
+        serde_json::json!({}),
+    )
+    .await;
 
     load_user_response(&state.db, auth.id)
         .await

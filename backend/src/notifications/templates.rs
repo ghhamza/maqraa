@@ -439,25 +439,25 @@ pub fn render(template_key: &str, locale: &str, vars: &TemplateVars) -> Rendered
         "session_reminder" => {
             let (subject, heading, p1, p2, cta_label) = match locale {
                 "ar" => (
-                    "تذكير: جلسة {{session_title}} قريبًا",
-                    "تذكير بالجلسة",
-                    "لديك جلسة «{{session_title}}» في حلقة «{{room_name}}» بتاريخ {{session_time}}.",
-                    "نراك هناك إن شاء الله.",
-                    "الذهاب إلى الجلسة",
+                    "تذكير: حصة «{{room_name}}» قريبًا",
+                    "تذكير بالحصة",
+                    "لديك حصة في حلقة «{{room_name}}» — {{session_time}}.",
+                    "اضغط للدخول إلى الحصة في الموعد.",
+                    "الدخول إلى الحصة",
                 ),
                 "fr" => (
-                    "Rappel : {{session_title}} approche",
+                    "Rappel : حصة « {{room_name}} » approche",
                     "Rappel de séance",
-                    "Vous avez une séance « {{session_title}} » dans « {{room_name}} » le {{session_time}}.",
-                    "À bientôt.",
-                    "Aller à la séance",
+                    "Vous avez une حصة dans « {{room_name}} » — {{session_time}}.",
+                    "Ouvrez le lien pour rejoindre à l'heure.",
+                    "Rejoindre la séance",
                 ),
                 _ => (
-                    "Reminder: {{session_title}} is coming up",
+                    "Reminder: \"{{room_name}}\" session coming up",
                     "Session reminder",
-                    "You have a session \"{{session_title}}\" in \"{{room_name}}\" on {{session_time}}.",
-                    "See you there.",
-                    "Go to session",
+                    "You have a session in \"{{room_name}}\" — {{session_time}}.",
+                    "Open the link to join at the scheduled time.",
+                    "Join session",
                 ),
             };
             let session_url = vars.values.get("session_url").cloned().unwrap_or_default();
@@ -466,6 +466,43 @@ pub fn render(template_key: &str, locale: &str, vars: &TemplateVars) -> Rendered
                 &sub(heading),
                 &[sub(p1), sub(p2)],
                 Some((cta_label, &session_url)),
+            );
+            RenderedEmail {
+                subject: sub(subject),
+                html,
+                text,
+            }
+        }
+        "teacher_session_nudge" => {
+            let (subject, heading, p1, p2, cta_label) = match locale {
+                "ar" => (
+                    "حصتك تبدأ قريبًا — ذكّر طلابك",
+                    "ذكّر طلابك",
+                    "حصتك في حلقة «{{room_name}}» تبدأ {{session_time}}.",
+                    "ذكّر طلابك عبر واتساب أو أي قناة يستخدمونها حتى لا يتغيب أحد.",
+                    "الذهاب إلى الحلقة",
+                ),
+                "fr" => (
+                    "Votre حصة commence bientôt — rappelez vos étudiants",
+                    "Rappelez vos étudiants",
+                    "Votre حصة dans « {{room_name}} » commence {{session_time}}.",
+                    "Rappelez vos étudiants sur WhatsApp ou le canal qu'ils utilisent.",
+                    "Voir la halaqa",
+                ),
+                _ => (
+                    "Your session starts soon — remind your students",
+                    "Remind your students",
+                    "Your session in \"{{room_name}}\" starts {{session_time}}.",
+                    "Remind your students on WhatsApp or whatever channel they use.",
+                    "Go to halaqah",
+                ),
+            };
+            let room_url = vars.values.get("room_url").cloned().unwrap_or_default();
+            let (html, text) = email_layout(
+                locale,
+                &sub(heading),
+                &[sub(p1), sub(p2)],
+                Some((cta_label, &room_url)),
             );
             RenderedEmail {
                 subject: sub(subject),
@@ -574,6 +611,75 @@ pub fn render(template_key: &str, locale: &str, vars: &TemplateVars) -> Rendered
             );
             RenderedEmail {
                 subject: subject.to_string(),
+                html,
+                text,
+            }
+        }
+        "session_summary" => {
+            let (subject, heading, recited, corrections, grade_line, next_line, cta_label) =
+                match locale {
+                    "ar" => (
+                        "ملخص حصتك اليوم — {{halaqah_name}}",
+                        "ملخص حصتك اليوم",
+                        "اليوم تلوت: {{recited_line}}",
+                        "أبرز التصحيحات: {{corrections_summary}}",
+                        "التقدير: {{grade_label}}",
+                        "هدفك القادم: {{next_target_line}}",
+                        "عرض تقدّمك",
+                    ),
+                    "fr" => (
+                        "Résumé de votre حصة — {{halaqah_name}}",
+                        "Résumé de votre حصة",
+                        "Aujourd'hui vous avez récité : {{recited_line}}",
+                        "Principales corrections : {{corrections_summary}}",
+                        "Note : {{grade_label}}",
+                        "Objectif suivant : {{next_target_line}}",
+                        "Voir votre progrès",
+                    ),
+                    _ => (
+                        "Your session summary — {{halaqah_name}}",
+                        "Your session summary",
+                        "Today you recited: {{recited_line}}",
+                        "Top corrections: {{corrections_summary}}",
+                        "Grade: {{grade_label}}",
+                        "Next target: {{next_target_line}}",
+                        "View your progress",
+                    ),
+                };
+            let app_url = vars.values.get("app_url").cloned().unwrap_or_default();
+            let mut paragraphs = vec![sub(recited)];
+            let corrections_val = vars
+                .values
+                .get("corrections_summary")
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty());
+            if corrections_val.is_some() {
+                paragraphs.push(sub(corrections));
+            }
+            if vars
+                .values
+                .get("grade_label")
+                .map(|s| !s.trim().is_empty())
+                .unwrap_or(false)
+            {
+                paragraphs.push(sub(grade_line));
+            }
+            if vars
+                .values
+                .get("next_target_line")
+                .map(|s| !s.trim().is_empty())
+                .unwrap_or(false)
+            {
+                paragraphs.push(sub(next_line));
+            }
+            let (html, text) = email_layout(
+                locale,
+                &sub(heading),
+                &paragraphs,
+                Some((cta_label, &app_url)),
+            );
+            RenderedEmail {
+                subject: sub(subject),
                 html,
                 text,
             }

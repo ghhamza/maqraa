@@ -26,6 +26,8 @@ pub struct UserResponse {
     pub email_verified: bool,
     pub preferred_language: String,
     pub has_password: bool,
+    /// User's preferred IANA timezone; null until set.
+    pub timezone: Option<String>,
 }
 
 /// Response for `GET /api/auth/me`. Flattens the user projection and the
@@ -130,6 +132,8 @@ pub struct RoomPublic {
     pub setup_completed_at: Option<DateTime<Utc>>,
     /// Sessions with status = completed.
     pub completed_sessions_count: i64,
+    /// IANA timezone for the halaqah (wall-clock for schedules / display).
+    pub timezone: String,
     /// Next (or latest) scheduled session — populated on GET detail.
     #[sqlx(skip)]
     pub first_session: Option<RoomFirstSession>,
@@ -212,6 +216,8 @@ pub struct SessionPublic {
     pub recurrence_rule: Option<String>,
     pub schedule_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
+    /// IANA timezone of the halaqah (for dual local-time display).
+    pub room_timezone: String,
 }
 
 /// In-progress sessions in active public rooms, with host / enrollment hints for the Live hub.

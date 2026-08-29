@@ -32,5 +32,6 @@ pub mod quran_ayah_counts;
 pub mod riwaya;
 pub mod rooms;
 pub mod services;
+pub mod timezone;
 
 pub use bootstrap::{build_app_state, init_tracing, run_migrations, serve, spawn_background_tasks};

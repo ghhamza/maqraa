@@ -18,6 +18,7 @@ import { GradeBadge } from "../recitations/GradeBadge";
 import {
   useCompletePlanRecitation,
   useCreateAndGradeRecitation,
+  useCreatePlannedTarget,
   useRecitationsFeed,
 } from "../../data/recitations";
 
@@ -94,6 +95,12 @@ export function GradingPanel({
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [okFlash, setOkFlash] = useState(false);
+  const [targetOpen, setTargetOpen] = useState(false);
+  const [targetSurah, setTargetSurah] = useState(1);
+  const [targetAyahStart, setTargetAyahStart] = useState(1);
+  const [targetAyahEnd, setTargetAyahEnd] = useState(1);
+  const [targetOk, setTargetOk] = useState(false);
+  const [lastGradedStudentId, setLastGradedStudentId] = useState<string | null>(null);
 
   useEffect(() => {
     if (gradingMode === "completePlan" && planToComplete) {
@@ -157,7 +164,17 @@ export function GradingPanel({
       window.setTimeout(() => setOkFlash(false), 1800);
       onPlanCompleted?.(data);
       const sid = planToComplete?.student_id ?? activeReciter?.userId;
-      if (sid) onGradeSubmitted(sid, data.grade ?? "good", notes.trim() || undefined);
+      if (sid) {
+        setLastGradedStudentId(sid);
+        onGradeSubmitted(sid, data.grade ?? "good", notes.trim() || undefined);
+      }
+      // Prefill next target after the graded range.
+      const nextStart = Math.min(data.ayah_end + 1, getSurahAyahCount(data.surah, riwayaTyped));
+      setTargetSurah(data.surah);
+      setTargetAyahStart(nextStart);
+      setTargetAyahEnd(nextStart);
+      setTargetOpen(false);
+      setTargetOk(false);
     },
     (message) => setError(message),
   );
@@ -170,8 +187,25 @@ export function GradingPanel({
       window.setTimeout(() => setOkFlash(false), 1800);
       onRecitationCreated?.(data);
       if (data.student_id) {
+        setLastGradedStudentId(data.student_id);
         onGradeSubmitted(data.student_id, data.grade ?? "good", notes.trim() || undefined);
       }
+      const nextStart = Math.min(data.ayah_end + 1, getSurahAyahCount(data.surah, riwayaTyped));
+      setTargetSurah(data.surah);
+      setTargetAyahStart(nextStart);
+      setTargetAyahEnd(nextStart);
+      setTargetOpen(false);
+      setTargetOk(false);
+    },
+    (message) => setError(message),
+  );
+
+  const createTargetMutation = useCreatePlannedTarget(
+    sessionId,
+    () => {
+      setTargetOk(true);
+      setTargetOpen(false);
+      window.setTimeout(() => setTargetOk(false), 2000);
     },
     (message) => setError(message),
   );
@@ -327,6 +361,102 @@ export function GradingPanel({
             </p>
           ) : null}
           {error ? <p className="mb-2 text-sm text-red-600">{error}</p> : null}
+
+          {(okFlash || lastGradedStudentId) && (activeReciter || planToComplete) ? (
+            <div className="mb-3 rounded-lg border border-dashed border-[rgba(212,168,67,0.45)] bg-[rgba(212,168,67,0.06)] px-2.5 py-2">
+              {!targetOpen ? (
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-[#9a7616] hover:underline"
+                  onClick={() => setTargetOpen(true)}
+                >
+                  {t("memory.setTarget")}
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-[#9a7616]">{t("memory.setTarget")}</p>
+                  <div className="grid grid-cols-3 gap-2 text-xs items-end">
+                    <label className="col-span-1 flex min-w-0 flex-col gap-1">
+                      <span className="text-[var(--color-text-muted)]">{t("recitations.surah")}</span>
+                      <FormSelect
+                        value={String(targetSurah)}
+                        onValueChange={(v) => {
+                          const n = Number(v);
+                          if (n < 1 || n > 114) return;
+                          setTargetSurah(n);
+                          const max = getSurahAyahCount(n, riwayaTyped);
+                          const clamp = (x: number) => Math.max(1, Math.min(x, max));
+                          setTargetAyahStart((a) => clamp(a));
+                          setTargetAyahEnd((a) => clamp(a));
+                        }}
+                        dir={isRtl ? "rtl" : "ltr"}
+                        triggerClassName={surahSelectTriggerClass}
+                        triggerStyle={surahSelectStyle}
+                        contentClassName="max-h-[min(22rem,70vh)]"
+                        options={surahSelectOptions}
+                      />
+                    </label>
+                    <label className="flex min-w-0 flex-col gap-1">
+                      <span className="text-[var(--color-text-muted)]">{t("recitations.ayahStart")}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        className={cn(rangeFieldClass, "tabular-nums")}
+                        value={targetAyahStart}
+                        onChange={(e) => setTargetAyahStart(Number(e.target.value))}
+                      />
+                    </label>
+                    <label className="flex min-w-0 flex-col gap-1">
+                      <span className="text-[var(--color-text-muted)]">{t("recitations.ayahEnd")}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        className={cn(rangeFieldClass, "tabular-nums")}
+                        value={targetAyahEnd}
+                        onChange={(e) => setTargetAyahEnd(Number(e.target.value))}
+                      />
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={createTargetMutation.isPending}
+                      className="rounded-lg bg-[#D4A843] px-3 py-1.5 text-xs font-semibold text-[#3a2c00] disabled:opacity-50"
+                      onClick={() => {
+                        const sid =
+                          lastGradedStudentId ??
+                          activeReciter?.userId ??
+                          planToComplete?.student_id ??
+                          null;
+                        if (!sid) return;
+                        createTargetMutation.mutate({
+                          student_id: sid,
+                          room_id: roomId,
+                          session_id: sessionId,
+                          surah: targetSurah,
+                          ayah_start: targetAyahStart,
+                          ayah_end: Math.max(targetAyahStart, targetAyahEnd),
+                          riwaya: riwayaTyped,
+                        });
+                      }}
+                    >
+                      {t("common.save")}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs text-[var(--color-text-muted)] hover:underline"
+                      onClick={() => setTargetOpen(false)}
+                    >
+                      {t("common.cancel")}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {targetOk ? (
+                <p className="mt-1 text-xs text-[#1B5E20]">{t("liveSession.gradeSubmitted")}</p>
+              ) : null}
+            </div>
+          ) : null}
 
           <label className="mb-4 block">
             <span className="sr-only">{t("liveSession.gradeNotes")}</span>

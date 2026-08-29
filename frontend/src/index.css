@@ -309,6 +309,42 @@
   border-radius: 4px;
 }
 
+.mushaf-word--demo-hint {
+  background-color: rgba(212, 168, 67, 0.25);
+  border-radius: 2px;
+  outline: 1px solid rgba(212, 168, 67, 0.55);
+  animation: miqraa-demo-hint 1.6s ease-in-out infinite;
+}
+
+.mushaf-word--demo-flash {
+  animation: miqraa-demo-flash 0.7s ease-out;
+}
+
+@keyframes miqraa-demo-hint {
+  0%,
+  100% {
+    background-color: rgba(212, 168, 67, 0.18);
+  }
+  50% {
+    background-color: rgba(212, 168, 67, 0.42);
+  }
+}
+
+@keyframes miqraa-demo-flash {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  40% {
+    transform: scale(1.06);
+    filter: brightness(1.15);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
 @keyframes miqraa-pulse {
   0%,
   100% {

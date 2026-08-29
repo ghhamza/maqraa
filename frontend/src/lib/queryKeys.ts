@@ -44,6 +44,7 @@ export const roomKeys = {
   pending: (roomId: string) => ["rooms", roomId, "pending"] as const,
   recitations: (roomId: string) => ["rooms", roomId, "recitations"] as const,
   sessions: (roomId: string) => ["rooms", roomId, "sessions"] as const,
+  studentMemory: (roomId: string) => ["rooms", roomId, "student-memory"] as const,
   teachersList: () => ["rooms", "teachers"] as const,
   studentsList: (excludeRoomId?: string) =>
     ["rooms", "students", excludeRoomId ?? null] as const,
@@ -85,6 +86,12 @@ export const sessionKeys = {
   plans: (sessionId: string) => ["sessions", sessionId, "plans"] as const,
   annotations: (recitationId: string) =>
     ["sessions", "annotations", recitationId] as const,
+};
+
+/** Student/teacher open-annotation lists (not scoped to a single recitation). */
+export const annotationKeys = {
+  all: ["annotations"] as const,
+  open: (studentId: string | null) => ["annotations", "open", studentId] as const,
 };
 
 // ─── Schedules (recurring) ───────────────────────────────────────────────
@@ -139,5 +146,6 @@ export const homeKeys = {
 export const adminKeys = {
   all: ["admin"] as const,
   dashboard: (days: number) => ["admin", "dashboard", days] as const,
+  funnel: (days: number) => ["admin", "funnel", days] as const,
 };
 

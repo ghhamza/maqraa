@@ -10,13 +10,13 @@ import { parseEmailInput, useInviteStudents } from "../../data/share";
 import { userFacingApiError } from "../../lib/api";
 import { cn } from "@/lib/utils";
 
-interface InviteStudentsModalProps {
+interface EmailInviteStudentsModalProps {
   open: boolean;
   roomId: string;
   onClose: () => void;
 }
 
-export function InviteStudentsModal({ open, roomId, onClose }: InviteStudentsModalProps) {
+export function EmailInviteStudentsModal({ open, roomId, onClose }: EmailInviteStudentsModalProps) {
   const { t, i18n } = useTranslation();
   const inviteMutation = useInviteStudents(roomId);
 

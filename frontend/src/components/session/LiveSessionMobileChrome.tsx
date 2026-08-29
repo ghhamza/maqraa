@@ -88,6 +88,8 @@ export interface LiveSessionMobileBottomBarProps {
   onOpenMore: () => void;
   onLeave: () => void;
   onEndSession: () => void;
+  className?: string;
+  "data-tour"?: string;
 }
 
 export function LiveSessionMobileBottomBar({
@@ -108,6 +110,8 @@ export function LiveSessionMobileBottomBar({
   onOpenMore,
   onLeave,
   onEndSession,
+  className,
+  "data-tour": dataTour,
 }: LiveSessionMobileBottomBarProps) {
   const { t } = useTranslation();
 
@@ -124,7 +128,11 @@ export function LiveSessionMobileBottomBar({
 
   return (
     <nav
-      className="flex h-16 min-h-[64px] shrink-0 items-center justify-between gap-1 border-t border-gray-200 bg-white/95 px-1.5 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-sm md:hidden"
+      className={cn(
+        "flex h-16 min-h-[64px] shrink-0 items-center justify-between gap-1 border-t border-gray-200 bg-white/95 px-1.5 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-sm md:hidden",
+        className,
+      )}
+      data-tour={dataTour}
       aria-label={t("liveSession.mobileBottomBar")}
     >
       <button

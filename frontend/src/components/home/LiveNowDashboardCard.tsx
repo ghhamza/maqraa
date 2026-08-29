@@ -5,10 +5,11 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useLiveSessions } from "../../contexts/LiveSessionsContext";
 import { liveSessionPath } from "../../lib/sessionNav";
-import { useLocaleDate } from "../../hooks/useLocaleDate";
+import { useAuthStore } from "../../stores/authStore";
 import type { SessionPublic } from "../../types";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
+import { SessionTimeDisplay } from "../time/SessionTimeDisplay";
 
 function minutesSinceScheduled(iso: string): number {
   return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
@@ -18,7 +19,7 @@ export function LiveNowDashboardCard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { sessions, hasLiveSession } = useLiveSessions();
-  const { mediumTime } = useLocaleDate();
+  const user = useAuthStore((s) => s.user);
 
   if (!hasLiveSession) return null;
 
@@ -45,7 +46,14 @@ export function LiveNowDashboardCard() {
               </div>
               <p className="mt-0.5 text-sm text-muted-foreground">{s.room_name}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {mediumTime(s.scheduled_at)} · {t("liveSession.banner.startedAgo", { minutes: minutesSinceScheduled(s.scheduled_at) })}
+                <SessionTimeDisplay
+                  scheduledAt={s.scheduled_at}
+                  roomTz={s.room_timezone}
+                  userTz={user?.timezone}
+                  className="inline"
+                />
+                {" · "}
+                {t("liveSession.banner.startedAgo", { minutes: minutesSinceScheduled(s.scheduled_at) })}
               </p>
             </div>
             <Button

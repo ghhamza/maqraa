@@ -32,7 +32,7 @@
   <text id="first_session" x="1144" y="410" direction="rtl" text-anchor="end"
         font-family="IBM Plex Sans Arabic" font-weight="600" font-size="24" fill="#1B5E20">الثلاثاء ٢٥ أغسطس · ٨:٠٠ م</text>
   <text id="tz_and_rhythm" x="1144" y="444" direction="rtl" text-anchor="end"
-        font-family="IBM Plex Sans Arabic" font-size="18" fill="#6B7280">بتوقيت مكة</text>
+        font-family="IBM Plex Sans Arabic" font-size="18" fill="#6B7280">بتوقيت الرياض</text>
   <text id="short_url" x="1144" y="560" text-anchor="end" direction="ltr"
         font-family="IBM Plex Sans Arabic" font-size="16" fill="#6B7280">app.maqraa.org/s/abcd1234</text>
 </svg>

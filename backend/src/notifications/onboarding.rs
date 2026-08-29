@@ -19,6 +19,7 @@ use crate::config::AppConfig;
 use super::format::format_session_time;
 use super::queue::enqueue_with_attachment;
 use super::templates::TemplateVars;
+use crate::timezone::{default_timezone, tz_city_label};
 
 const WEEKDAYS_AR: [&str; 7] = [
     "الإثنين",
@@ -163,6 +164,7 @@ struct TeacherRoomRow {
     preferred_language: String,
     riwaya: String,
     halaqah_type: String,
+    timezone: String,
 }
 
 async fn process_setup_incomplete(pool: &PgPool, config: &AppConfig) -> Result<(), sqlx::Error> {
@@ -172,7 +174,7 @@ async fn process_setup_incomplete(pool: &PgPool, config: &AppConfig) -> Result<(
         let rows: Vec<TeacherRoomRow> = sqlx::query_as(&format!(
             "SELECT r.id AS room_id, r.name AS room_name, u.id AS teacher_id, u.name AS teacher_name, \
                     u.email, u.preferred_language, r.riwaya::text AS riwaya, \
-                    r.halaqah_type::text AS halaqah_type \
+                    r.halaqah_type::text AS halaqah_type, r.timezone \
              FROM rooms r \
              JOIN users u ON u.id = r.teacher_id \
              WHERE r.is_active = true \
@@ -229,7 +231,7 @@ async fn process_share_nudge(
         let rows: Vec<TeacherRoomRow> = sqlx::query_as(&format!(
             "SELECT r.id AS room_id, r.name AS room_name, u.id AS teacher_id, u.name AS teacher_name, \
                     u.email, u.preferred_language, r.riwaya::text AS riwaya, \
-                    r.halaqah_type::text AS halaqah_type \
+                    r.halaqah_type::text AS halaqah_type, r.timezone \
              FROM rooms r \
              JOIN users u ON u.id = r.teacher_id \
              WHERE r.is_active = true \
@@ -260,6 +262,12 @@ async fn process_share_nudge(
             };
 
             let locale = locale_of(&row.preferred_language);
+            let room_tz = if row.timezone.trim().is_empty() {
+                default_timezone()
+            } else {
+                row.timezone.as_str()
+            };
+            let city = tz_city_label(locale, room_tz);
             let share_url = format!("{base}/s/{token}");
             let room_url = format!("{base}/rooms/{}", row.room_id);
             let card_url = format!("{base}/s/{token}/card.png?format=square&v=5");
@@ -269,9 +277,9 @@ async fn process_share_nudge(
                 .as_ref()
                 .map(|s| {
                     if locale == "ar" {
-                        format_session_ar(s.scheduled_at, &config.app_display_tz)
+                        format_session_ar(s.scheduled_at, room_tz)
                     } else {
-                        format_session_time(s.scheduled_at, locale, &config.app_display_tz)
+                        format_session_time(s.scheduled_at, locale, room_tz)
                     }
                 })
                 .unwrap_or_else(|| match locale {
@@ -282,7 +290,7 @@ async fn process_share_nudge(
 
             let weekday = first
                 .as_ref()
-                .map(|s| weekday_name(locale, s.scheduled_at, &config.app_display_tz))
+                .map(|s| weekday_name(locale, s.scheduled_at, room_tz))
                 .unwrap_or_else(|| session_date.clone());
 
             let type_label = if locale == "ar" {
@@ -298,16 +306,16 @@ async fn process_share_nudge(
 
             let invite_message = match locale {
                 "en" => format!(
-                    "Join the {} halaqah ({} · {}) on Maqraa. First session {} Mecca time. {}",
-                    row.room_name, type_label, riwaya_label, session_date, share_url
+                    "Join the {} halaqah ({} · {}) on Maqraa. First session {} ({} time). {}",
+                    row.room_name, type_label, riwaya_label, session_date, city, share_url
                 ),
                 "fr" => format!(
-                    "Rejoins la halaqa {} ({} · {}) sur Maqraa. Première séance {}, heure de La Mecque. {}",
-                    row.room_name, type_label, riwaya_label, session_date, share_url
+                    "Rejoins la halaqa {} ({} · {}) sur Maqraa. Première séance {}, heure de {}. {}",
+                    row.room_name, type_label, riwaya_label, session_date, city, share_url
                 ),
                 _ => format!(
-                    "انضمّ إلى حلقة {} ({} · {}) على منصة المقرأة. الحصة الأولى {} بتوقيت مكة. {}",
-                    row.room_name, type_label, riwaya_label, session_date, share_url
+                    "انضمّ إلى حلقة {} ({} · {}) على منصة المقرأة. الحصة الأولى {} بتوقيت {}. {}",
+                    row.room_name, type_label, riwaya_label, session_date, city, share_url
                 ),
             };
             let wa_url = format!("https://wa.me/?text={}", urlencode(&invite_message));

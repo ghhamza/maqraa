@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Calendar, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import type { SessionPublic } from "../../types";
@@ -13,6 +13,7 @@ import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
 import { SessionBlock } from "../../components/sessions/SessionBlock";
 import { SessionFormModal } from "../../components/sessions/SessionFormModal";
+import { NewSessionMenu } from "../../components/sessions/NewSessionMenu";
 import { DaySessionsSheet } from "../../components/sessions/DaySessionsSheet";
 import { AgendaView } from "../../components/sessions/AgendaView";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -52,10 +53,11 @@ function canSchedule(user: { role: string } | null): boolean {
 export function CalendarPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const [view, setView] = useState<ViewMode>("month");
   const [cursor, setCursor] = useState(() => new Date());
-  const [roomFilter, setRoomFilter] = useState<string>("");
+  const [roomFilter, setRoomFilter] = useState<string>(() => searchParams.get("room") ?? "");
   const [formOpen, setFormOpen] = useState(false);
   const [prefillDate, setPrefillDate] = useState<Date | null>(null);
   const [defaultRoom, setDefaultRoom] = useState<string | undefined>();
@@ -65,6 +67,11 @@ export function CalendarPage() {
 
   const locale = intlLocaleForAppLanguage(i18n.language);
   const manage = canSchedule(user);
+
+  useEffect(() => {
+    const room = searchParams.get("room");
+    if (room) setRoomFilter(room);
+  }, [searchParams]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches) {
@@ -116,7 +123,7 @@ export function CalendarPage() {
   const sessions = sessionsQuery.data ?? [];
   const loading = sessionsQuery.isPending && !sessionsQuery.isPlaceholderData;
 
-  const roomsQuery = useRoomsList("calendar-room-filter", undefined, { staleTime: 5 * 60_000 });
+  const roomsQuery = useRoomsList("calendar-room-filter", { active: true }, { staleTime: 5 * 60_000 });
 
   const rooms = roomsQuery.data ?? [];
 
@@ -221,7 +228,7 @@ export function CalendarPage() {
       ]}
       title={t("sessions.calendar")}
       actions={
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             variant={view === "month" ? "primary" : "secondary"}
@@ -243,6 +250,7 @@ export function CalendarPage() {
           >
             {t("sessions.agendaView")}
           </Button>
+          {manage ? <NewSessionMenu defaultRoomId={roomFilter || undefined} /> : null}
         </div>
       }
     >
@@ -465,22 +473,6 @@ export function CalendarPage() {
             </>
           )}
 
-          {manage ? (
-            <div className="flex justify-end border-t border-gray-100 pt-4">
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() => {
-                  setPrefillDate(new Date());
-                  setPresetMorning(false);
-                  setDefaultRoom(roomFilter || undefined);
-                  setFormOpen(true);
-                }}
-              >
-                {t("sessions.addSession")}
-              </Button>
-            </div>
-          ) : null}
         </div>
       </PageCard>
 

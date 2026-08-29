@@ -3,15 +3,17 @@
 
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Archive, RotateCcw } from "lucide-react";
+import { Archive, RotateCcw, Trash2 } from "lucide-react";
 import { BackLink } from "../../components/navigation/BackLink";
 import { useTranslation } from "react-i18next";
 import { userFacingApiError } from "../../lib/api";
+import type { Room } from "../../types";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { DeleteRoomModal } from "../../components/rooms/DeleteRoomModal";
 import { useArchivedRooms, useUnarchiveRoom } from "../../data/rooms";
 
 export function ArchivedRoomsPage() {
@@ -19,6 +21,7 @@ export function ArchivedRoomsPage() {
   const { medium } = useLocaleDate();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Room | null>(null);
 
   const archivedQuery = useArchivedRooms();
 
@@ -88,22 +91,38 @@ export function ArchivedRoomsPage() {
                 </p>
                 <p className="text-xs text-[var(--color-text-muted)]">{medium(r.created_at)}</p>
               </div>
-              <Button
-                type="button"
-                variant="primary"
-                loading={restoringId === r.id}
-                disabled={restoringId !== null && restoringId !== r.id}
-                onClick={() => void restore(r.id)}
-              >
-                <span className="inline-flex items-center gap-2">
-                  <RotateCcw className="h-4 w-4" />
-                  {t("common.restore")}
-                </span>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="primary"
+                  loading={restoringId === r.id}
+                  disabled={restoringId !== null && restoringId !== r.id}
+                  onClick={() => void restore(r.id)}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <RotateCcw className="h-4 w-4" />
+                    {t("common.restore")}
+                  </span>
+                </Button>
+                <Button type="button" variant="danger" onClick={() => setDeleteTarget(r)}>
+                  <span className="inline-flex items-center gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    {t("rooms.deletePermanent")}
+                  </span>
+                </Button>
+              </div>
             </li>
           ))}
         </ul>
       )}
+
+      <DeleteRoomModal
+        open={deleteTarget !== null}
+        roomId={deleteTarget?.id ?? null}
+        roomName={deleteTarget?.name ?? ""}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

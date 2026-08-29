@@ -23,6 +23,8 @@ import {
   type DemographicsValue,
 } from "../../components/users/DemographicsFields";
 import { normalizeUserFromApi, profileDetailsPayload } from "../../lib/profileDetails";
+import { TimezoneSelect } from "../../components/time/TimezoneSelect";
+import { detectBrowserTimezone } from "../../lib/sessionTime";
 
 export function ProfilePage() {
   const { t } = useTranslation();
@@ -31,6 +33,8 @@ export function ProfilePage() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [timezone, setTimezone] = useState(() => user?.timezone ?? detectBrowserTimezone());
+  const [showDetectedHint] = useState(() => user?.timezone == null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -81,6 +85,7 @@ export function ProfilePage() {
     if (user) {
       setName(user.name);
       setEmail(user.email);
+      setTimezone(user.timezone ?? detectBrowserTimezone());
       setDemographics(demographicsFromUser(user));
     }
   }, [user]);
@@ -98,6 +103,7 @@ export function ProfilePage() {
         data: {
           name: name.trim(),
           email: email.trim(),
+          timezone,
         },
       });
       setUser(normalizeUserFromApi(data));
@@ -207,6 +213,11 @@ export function ProfilePage() {
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
             required
+          />
+          <TimezoneSelect
+            value={timezone}
+            onChange={setTimezone}
+            showDetectedHint={showDetectedHint}
           />
           {profileError ? (
             <p className="text-sm text-red-600" role="alert">

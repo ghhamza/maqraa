@@ -136,7 +136,7 @@
     "users": "Utilisateurs",
     "rooms": "Halaqat",
     "calendar": "Calendrier",
-    "sessions": "Séances",
+    "sessions": "حصص",
     "groupAdmin": "Administration",
     "recitations": "Récitations",
     "mushaf": "Mushaf",
@@ -256,16 +256,22 @@
     "quranMapDescription": "114 sourates. Chaque case se remplit lorsque vous achevez la sourate avec votre enseignant.",
     "studentStartingTitle": "Vous êtes prêt",
     "studentStartingDescription": "Vos récitations et progrès apparaîtront ici dès que votre enseignant aura enregistré la première.",
-    "teacherEmptyTitle": "Bienvenue sur Maqraa",
-    "teacherEmptyDescription": "Créez votre première halaqah pour commencer à enseigner.",
-    "teacherEmptyCta": "Créer ma première halaqah",
+    "teacherEmptyTitle": "Créez votre première حصة",
+    "teacherEmptyDescription": "Démarrez une حصة — une halaqa est créée automatiquement pour le roster, les invitations et le progrès.",
+    "teacherEmptyCta": "Créez votre première حصة",
     "studentEmptyTitle": "Trouvez votre première halaqah",
-    "studentEmptyDescription": "Parcourez les halaqat publiques et rejoignez-en une pour commencer votre parcours coranique.",
+    "studentEmptyDescription": "Demandez le lien d'invitation à votre enseignant, ou parcourez les halaqat publiques et rejoignez-en une pour commencer votre parcours coranique.",
     "studentEmptyCta": "Parcourir les halaqat",
-    "gettingStartedTitle": "Pour commencer",
-    "gettingStartedStep1": "Créer ma première halaqah",
+    "gettingStartedTitle": "Commençons par des étapes simples",
+    "gettingStartedStep1": "Créez votre première حصة",
+    "gettingStartedStep1Hint": "Une halaqa est créée automatiquement pour vous",
     "gettingStartedStep2": "Planifier ma première séance",
     "gettingStartedStep3": "Inscrire mon premier élève",
+    "gettingStartedStep2Title": "Invitez vos élèves",
+    "gettingStartedStep2v2": "Partagez le lien d'invitation",
+    "gettingStartedStep3v2": "Terminez votre première حصة",
+    "gettingStartedStep3Hint": "Enregistrez votre première récitation",
+    "gettingStartedProgress": "{{done}} sur {{total}} terminées",
     "moreStats": "Plus de statistiques",
     "createHalaqah": "Créer une halaqah",
     "streakTitle": "Série",
@@ -280,7 +286,8 @@
       "students": "élèves",
       "thisWeek": "Cette semaine",
       "recitationsLabel": "récitations",
-      "completedSessions": "{{count}} séances terminées",
+      "completedSessions_one": "{{count}} séance terminée",
+      "completedSessions_other": "{{count}} séances terminées",
       "attendanceRate": "{{rate}}% présence"
     },
     "totalRecitations": "Total des récitations",
@@ -298,15 +305,50 @@
     "noGradesYet": "Aucune récitation évaluée",
     "startStreak": "Commencez votre série aujourd'hui",
     "studentRooms": "Mes halaqat",
-    "whatsNewTitle": "Depuis {{since}}",
+    "whatsNewTitle": "{{since}}",
     "whatsNew": {
-      "recitationsTeacher": "{{count}} récitations notées",
-      "recitationsStudent": "{{count}} récitations notées",
-      "enrollments": "{{count}} nouvelles inscriptions",
-      "pending": "{{count}} demandes en attente",
-      "sessions": "{{count}} séances terminées",
-      "sessionsAttended": "{{count}} séances suivies"
+      "recitationsTeacher_one": "{{count}} récitation notée",
+      "recitationsTeacher_other": "{{count}} récitations notées",
+      "recitationsStudent_one": "{{count}} récitation notée",
+      "recitationsStudent_other": "{{count}} récitations notées",
+      "enrollments_one": "{{count}} nouvelle inscription",
+      "enrollments_other": "{{count}} nouvelles inscriptions",
+      "pending_one": "{{count}} demande en attente",
+      "pending_other": "{{count}} demandes en attente",
+      "sessions_one": "{{count}} séance terminée",
+      "sessions_other": "{{count}} séances terminées",
+      "sessionsAttended_one": "{{count}} séance suivie",
+      "sessionsAttended_other": "{{count}} séances suivies"
     }
+  },
+  "roomTabs": {
+    "overview": "Vue d'ensemble",
+    "students": "Étudiants",
+    "sessions": "حصص",
+    "progress": "Progression",
+    "next3": "Prochaines حصص",
+    "viewCalendar": "Voir le calendrier",
+    "moreMenu": "Plus"
+  },
+  "cockpit": {
+    "liveNow": "حصة en cours",
+    "resume": "Reprendre la حصة",
+    "startsIn": "Commence dans {{time}}",
+    "logRecitations": "Enregistrez les récitations de la dernière حصة",
+    "inviteTitle": "Invitez vos étudiants",
+    "scheduleNext": "Planifiez la prochaine حصة",
+    "nextSession": "Prochaine حصة : {{date}}",
+    "firstSession": "Créez votre première حصة"
+  },
+  "studentHome": {
+    "liveNow": "حصة en cours",
+    "joinNow": "Rejoindre maintenant",
+    "noUpcoming": "Pas de حصة à venir",
+    "reviewTitle": "À réviser",
+    "openCorrections_one": "{{count}} correction ouverte",
+    "openCorrections_other": "{{count}} corrections ouvertes",
+    "latestIn": "La plus récente dans {{surah}}",
+    "lastRecitation": "Dernière récitation"
   },
   "users": {
     "title": "Utilisateurs",
@@ -425,7 +467,7 @@
     "maxStudentsShort": "Max : {{count}} étudiants",
     "status": "Statut",
     "createdAt": "Créée le",
-    "deleteConfirm": "Supprimer la halaqah {{name}} ?",
+    "deleteConfirm": "Supprimer définitivement la halaqah {{name}} ? Les séances, inscriptions et l’historique seront effacés. Cette action est irréversible.",
     "noRooms": "Aucune halaqah pour le moment",
     "totalRooms": "Total halaqat",
     "activeRooms": "Actives",
@@ -450,6 +492,7 @@
     "noTeachersOption": "Aucun enseignant",
     "selectTeacher": "Choisissez un enseignant pour la halaqah.",
     "deleteTitle": "Confirmer la suppression",
+    "deletePermanent": "Supprimer définitivement",
     "archiveTitle": "Archiver la halaqah",
     "archiveConfirm": "Archiver la halaqah {{name}} ? Les étudiants ne la verront plus ; les inscriptions et l’historique sont conservés.",
     "archivedRoomsPageTitle": "Halaqat archivées",
@@ -457,6 +500,8 @@
     "archivedRoomsEmpty": "Aucune halaqah archivée.",
     "archivedEmptyDescription": "Les halaqat archivées apparaîtront ici.",
     "archivedRoomNotice": "Cette halaqah est archivée. Inscriptions, nouvelles séances et nouvelles récitations sont désactivées jusqu’à restauration.",
+    "archivedSessionsHiddenTitle": "Séances masquées tant que la halaqah est archivée",
+    "archivedSessionsHiddenDescription": "Restaurez la halaqah pour revoir ses séances, présences et récitations.",
     "statsTotalLabel": "Total halaqat",
     "statsActiveLabel": "Actives",
     "statsInactiveLabel": "Inactives",
@@ -509,6 +554,9 @@
     "hideRejected": "Masquer les demandes refusées",
     "emptyTeacherTitle": "Aucune halaqah",
     "emptyTeacherDescription": "Créez votre première halaqah pour commencer à enseigner.",
+    "emptyActiveTitle": "Aucune halaqah active",
+    "emptyActiveDescription": "Vos halaqat sont archivées (inactives). Passez le filtre d'état sur Inactif pour en restaurer une, ou créez-en une nouvelle.",
+    "showInactive": "Voir les inactives",
     "emptyStudentTitle": "Aucune halaqah publique disponible",
     "emptyStudentDescription": "Revenez plus tard — les enseignants créent régulièrement de nouvelles halaqat.",
     "emptyMyRoomsTitle": "Vous n'avez rejoint aucune halaqah",
@@ -601,6 +649,8 @@
     "removeConfirm": "Retirer {{name}} de cette halaqah ?",
     "enrolledOn": "Inscrit le",
     "noStudents": "Aucun étudiant inscrit dans cette halaqah",
+    "emptyStudentsTitle": "Pas encore d'étudiants",
+    "emptyStudentsHint": "Partagez le lien de la halaqa pour que vos étudiants la rejoignent eux-mêmes.",
     "roomFull": "La halaqah est pleine",
     "alreadyEnrolled": "Étudiant déjà inscrit",
     "studentCount": "{{count}} inscrits",
@@ -1074,6 +1124,30 @@
       "clearConfirmTitle": "Effacer tous les dessins ?",
       "clearConfirmBody": "Les dessins de cette surface seront effacés pour tous."
     },
+    "tour": {
+      "progress": "{{current}} / {{total}}",
+      "next": "Suivant",
+      "finish": "Compris",
+      "skip": "Passer la visite",
+      "steps": {
+        "welcome": {
+          "title": "Votre séance en direct",
+          "body": "Voici l'espace d'enseignement. Une courte visite des commandes principales — vous pouvez passer à tout moment."
+        },
+        "tools": {
+          "title": "Outils de l'enseignant",
+          "body": "Déplacez, dessinez au stylo ou surligneur, et annotez les mots sur le Mushaf. Annuler et effacer concernent tout le monde."
+        },
+        "dock": {
+          "title": "Micro et participants",
+          "body": "Coupez le micro, ouvrez le tiroir des élèves pour donner le tour, tournez les pages ou quittez."
+        },
+        "correct": {
+          "title": "Corriger sur le Mushaf",
+          "body": "Activez Annoter, puis touchez un mot pour marquer une erreur, une note ou une félicitation."
+        }
+      }
+    },
     "dragToMove": "Glisser pour déplacer",
     "hand": {
       "raise": "Lever la main",
@@ -1248,7 +1322,6 @@
     "liveNow": "En direct",
     "joinNow": "Rejoindre",
     "firstSession": "Première séance : {{date}}",
-    "meccaTime": "heure de La Mecque",
     "telegram": "Telegram",
     "shareImage": "Partager l'image…",
     "downloadPng": "Télécharger le PNG",
@@ -1258,7 +1331,7 @@
     "qrOnly": "QR seul",
     "inviteByEmail": "Inviter par e-mail",
     "stats": "{{joined}}/{{max}} inscrits · {{visits}} visites",
-    "inviteMessageDated": "Rejoins la halaqa {{name}} ({{type}} · {{riwaya}}) sur Maqraa. Première séance {{date}}, heure de La Mecque."
+    "inviteMessageDated": "Rejoins la halaqa {{name}} ({{type}} · {{riwaya}}) sur Maqraa. Première séance {{date}}."
   },
   "instanceInvite": {
     "title": "Inviter sur Al-Maqraa",
@@ -1276,6 +1349,18 @@
   },
   "invite": {
     "invite": "Inviter des élèves",
+    "inviteStudents": "Inviter des étudiants",
+    "copyLink": "Copier le lien",
+    "linkCopied": "Lien copié",
+    "shareWhatsapp": "Partager sur WhatsApp",
+    "howItWorks": "L'étudiant ouvre le lien, se connecte ou crée un compte, et rejoint la halaqa directement.",
+    "whatsappMessage": "Assalamou alaykoum,\nVous êtes invité(e) à rejoindre la halaqa « {{halaqahName}} » sur Maqraa.\n{{nextSessionLine}}Rejoignez via ce lien :\n{{link}}",
+    "whatsappNextSession": "Prochaine حصة : {{date}}\n",
+    "invitesCardTitle": "Invitations",
+    "joinsViaLink": "Rejoints via le lien : {{count}}",
+    "pendingRequests": "Demandes en attente : {{count}}",
+    "adminDirectAdd": "Ajouter un étudiant directement",
+    "teacherEnrollForbidden": "L'ajout direct est réservé à l'administrateur. Invitez vos étudiants via le lien de la halaqa.",
     "emailsPlaceholder": "Saisissez un ou plusieurs e-mails",
     "autoApprove": "Approbation automatique",
     "autoApproveHint": "Les invités sont approuvés directement, sans révision",
@@ -1418,6 +1503,32 @@
       }
     }
   },
+  "adminFunnel": {
+    "title": "Funnel d'activation",
+    "nav": "Funnel d'activation",
+    "wathTitle": "Halaqat actives cette semaine",
+    "wathHint": "Halaqat avec au moins une حصة contenant une récitation enregistrée sur les 7 derniers jours",
+    "teacherFunnel": "Parcours enseignant",
+    "studentFunnel": "Parcours étudiant",
+    "steps": {
+      "registered": "Inscription",
+      "demo_started": "Démo démarrée",
+      "demo_completed": "Démo terminée",
+      "halaqah_created": "Halaqa créée",
+      "invite_link_created": "Lien d'invitation créé",
+      "session_scheduled": "حصة planifiée",
+      "session_started": "حصة démarrée",
+      "recitation_logged": "Récitation enregistrée",
+      "session_completed": "حصة terminée",
+      "joined_via_link": "Rejoint via lien",
+      "attended_session": "A assisté à une حصة"
+    },
+    "days": {
+      "7": "7 jours",
+      "30": "30 jours",
+      "90": "90 jours"
+    }
+  },
   "activation": {
     "noStudentsTitle": "Aucun élève — partagez le lien avant {{weekday}}",
     "nextSession": "Prochaine séance",
@@ -1429,5 +1540,113 @@
     "schedule": "Planifier une séance",
     "upcoming": "Prochaine : {{date}}",
     "counters": "{{sessions}} terminées · {{students}} élèves"
+  },
+  "demo": {
+    "entryTitle": "Comment ça marche",
+    "entrySubtitle": "Une courte visite guidée de la séance — outils, micro et correction sur le Mushaf",
+    "entryCta": "Commencer la visite",
+    "stripTitle": "Comment fonctionne Maqraa",
+    "stripText": "Un court aperçu de la حصة en direct",
+    "stripCta": "Commencer la visite",
+    "stripDismiss": "Masquer",
+    "modeBadge": "Mode démo",
+    "modeBanner": "Sandbox démo — pas d'élèves réels, ni audio, ni données enregistrées",
+    "introTitle": "Ceci est une séance d'entraînement",
+    "introBody": "Elle ressemble à une vraie حصة pour explorer les outils en sécurité. Rien n'est enregistré ni partagé avec des élèves.",
+    "introPoint1": "Anas est un élève fictif — personne de réel dans la salle.",
+    "introPoint2": "Le micro et les invitations sont illustratifs ; personne ne se connecte.",
+    "introPoint3": "Les corrections de mots restent sur cette page uniquement.",
+    "introStart": "Lancer la visite guidée",
+    "introSkip": "Passer à la pratique",
+    "step1": "Vous êtes l'enseignant de cette حصة démo ; Anas est un étudiant qui récite Al-Fatiha. Touchez un mot pour le corriger.",
+    "step2": "Choisissez le type d'erreur et ajoutez un commentaire si vous voulez.",
+    "step3": "La correction est arrivée chez Anas instantanément — sans interrompre sa récitation. Essayez maintenant de marquer « bien joué » sur un autre mot.",
+    "studentViewTitle": "Ce qu'Anas voit maintenant",
+    "finaleTitle": "Voilà comment Maqraa conserve la progression de vos étudiants",
+    "finaleSummary": "1 récitation · Al-Fatiha 1–7 · 2 corrections",
+    "finaleCta": "Créez votre halaqa maintenant",
+    "backHome": "Retour à l'accueil",
+    "skip": "Passer",
+    "showStudentView": "Voir l'écran étudiant",
+    "studentName": "Anas",
+    "elapsedLabel": "Démo",
+    "tour": {
+      "progress": "{{current}} / {{total}}",
+      "next": "Suivant",
+      "finish": "Essayer",
+      "skip": "Passer la visite",
+      "steps": {
+        "welcome": {
+          "title": "Même disposition qu'une séance en direct",
+          "body": "Tout ce que vous voyez correspond à une vraie classe. Nous surlignons les commandes principales — ceci reste une démo."
+        },
+        "tools": {
+          "title": "Outils de l'enseignant",
+          "body": "Passez de la main au stylo, surligneur et annotation. Annuler et effacer réinitialisent vos tracés."
+        },
+        "dock": {
+          "title": "Micro et participants",
+          "body": "En classe réelle, ils contrôlent l'audio et les élèves. Ici ils n'ouvrent que le tiroir d'exemple."
+        },
+        "correct": {
+          "title": "Corriger sur le Mushaf",
+          "body": "Avec Annoter sélectionné, touchez un mot (essayez الصراط) pour marquer une erreur ou féliciter. À vous."
+        }
+      }
+    }
+  },
+  "newSession": {
+    "button": "Nouvelle حصة",
+    "now": "Démarrer maintenant",
+    "nowDesc": "Passez en direct avec vos élèves",
+    "later": "حصة pour plus tard",
+    "laterDesc": "Choisissez une date et une heure",
+    "recurring": "حصة récurrente",
+    "recurringDesc": "Répéter certains jours de la semaine"
+  },
+  "sessionForm": {
+    "autoHalaqah": "Nouvelle halaqa automatique",
+    "groupName": "Nom du groupe (optionnel)",
+    "groupNamePlaceholder": "Halaqa {{name}}"
+  },
+  "agenda": {
+    "emptyDay": "Pas de حصص ce jour-là",
+    "emptySubtitle": "Démarrez une حصة — la halaqa est créée automatiquement pour conserver vos étudiants, invitations et progression.",
+    "today": "Aujourd'hui"
+  },
+  "session": {
+    "halaqahChip": "Halaqa : {{name}}"
+  },
+  "instant": {
+    "start": "Démarrer une حصة maintenant",
+    "pickHalaqah": "Choisissez la halaqa",
+    "newHalaqah": "Nouvelle halaqa",
+    "defaultHalaqahName": "Halaqa de {{name}}",
+    "inviteStrip": "Vous êtes seul dans la حصة — invitez vos étudiants",
+    "inviteStripTitle": "Vous êtes seul dans cette حصة",
+    "inviteStripHint": "Invitez vos étudiants pour qu'ils rejoignent la salle en direct.",
+    "inviteNudgeBody": "Partagez le lien de la halaqa ou envoyez des invitations — ils apparaîtront ici à leur arrivée.",
+    "inviteLater": "Plus tard",
+    "completeLater": "Compléter plus tard"
+  },
+  "tz": {
+    "roomTime": "heure de la halaqa ({{city}})",
+    "yourTime": "votre heure : {{time}}",
+    "timezoneLabel": "Fuseau horaire",
+    "detected": "Détecté automatiquement — modifiable"
+  },
+  "reminder": {
+    "whatsapp": "Rappel WhatsApp",
+    "whatsappMessage": "Assalamou alaykoum,\nRappel : la حصة de « {{halaqahName}} » {{when}}.\nLien :\n{{link}}",
+    "teacherEmailSubject": "Votre حصة commence bientôt — rappelez vos étudiants"
+  },
+  "memory": {
+    "lastStop": "Arrêt précédent : {{surah}} {{ayah}}",
+    "recurringError": "Erreur récurrente : {{category}}",
+    "nextTarget": "Prochain objectif : {{range}}",
+    "setTarget": "Définir l'objectif de la prochaine حصة",
+    "emailSubject": "Résumé de votre حصة — {{halaqahName}}",
+    "emailRecited": "Aujourd'hui vous avez récité {{surah}} {{range}}",
+    "emailCorrections": "Corrections : {{summary}}"
   }
 }

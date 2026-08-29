@@ -9,6 +9,7 @@ import {
   BookOpen,
   Calendar,
   DoorOpen,
+  Filter,
   Home,
   Link2,
   Users,
@@ -97,6 +98,7 @@ export function AppSidebar({
       home: p === "/" || p === "",
       users: p.startsWith("/users"),
       analytics: p.startsWith("/admin/dashboard"),
+      funnel: p.startsWith("/admin/funnel"),
       invites: p.startsWith("/admin/invites"),
       rooms: p.startsWith("/rooms"),
       sessions: p === "/calendar",
@@ -106,13 +108,13 @@ export function AppSidebar({
 
   const teachingItems: NavItem[] = [
     { to: "/", end: true, label: t("nav.home"), icon: Home, active: navActive.home },
-    { to: "/rooms", label: t("nav.rooms"), icon: DoorOpen, active: navActive.rooms },
     {
       to: "/calendar",
       label: t("nav.sessions"),
       icon: Calendar,
       active: navActive.sessions,
     },
+    { to: "/rooms", label: t("nav.rooms"), icon: DoorOpen, active: navActive.rooms },
     {
       to: "/recitations",
       label: t("nav.recitations"),
@@ -128,6 +130,12 @@ export function AppSidebar({
       label: t("admin.dashboard.nav"),
       icon: BarChart3,
       active: navActive.analytics,
+    },
+    {
+      to: "/admin/funnel",
+      label: t("adminFunnel.nav"),
+      icon: Filter,
+      active: navActive.funnel,
     },
     {
       to: "/admin/invites",

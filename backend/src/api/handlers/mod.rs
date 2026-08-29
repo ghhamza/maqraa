@@ -7,6 +7,7 @@ pub mod enrollments;
 pub mod error_annotations;
 pub mod error_annotations_db;
 pub mod livekit;
+pub mod product_events;
 pub mod profile;
 pub mod recitations;
 pub mod rooms;

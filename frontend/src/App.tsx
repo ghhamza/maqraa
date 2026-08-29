@@ -18,6 +18,7 @@ import { HomePage } from "./pages/HomePage";
 import { UsersPage } from "./pages/users/UsersPage";
 import { InstanceInvitesPage } from "./pages/admin/InstanceInvitesPage";
 import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
+import { AdminFunnelPage } from "./pages/admin/AdminFunnelPage";
 import { UserDetailPage } from "./pages/users/UserDetailPage";
 import { RoomsPage } from "./pages/rooms/RoomsPage";
 import { ArchivedRoomsPage } from "./pages/rooms/ArchivedRoomsPage";
@@ -29,6 +30,7 @@ import { SessionDetailPage } from "./pages/sessions/SessionDetailPage";
 import { StudentRecitationPage } from "./pages/sessions/StudentRecitationPage";
 import { LiveSessionPage } from "./pages/sessions/LiveSessionPage";
 import { LiveSessionsPage } from "./pages/sessions/LiveSessionsPage";
+import { DemoSessionPage } from "./pages/demo/DemoSessionPage";
 import { RecitationsPage } from "./pages/recitations/RecitationsPage";
 import { StudentProgressPage } from "./pages/recitations/StudentProgressPage";
 import { ProfilePage } from "./pages/profile/ProfilePage";
@@ -36,6 +38,7 @@ import { ProfileCompletePage } from "./pages/profile/ProfileCompletePage";
 import { ShareAcceptPage } from "./pages/share/ShareAcceptPage";
 import { MushafPage } from "./pages/mushaf/MushafPage";
 import { useAuthStore } from "./stores/authStore";
+import { useSyncDetectedTimezone } from "./hooks/useSyncDetectedTimezone";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -100,6 +103,16 @@ const router = createBrowserRouter([
     ),
   },
   {
+    path: "/demo",
+    element: (
+      <ProtectedRoute>
+        <ProfileCompletionGuard>
+          <DemoSessionPage />
+        </ProfileCompletionGuard>
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: "/",
     element: (
       <ProtectedRoute>
@@ -123,6 +136,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute>
             <AdminDashboardPage />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/funnel",
+        element: (
+          <AdminRoute>
+            <AdminFunnelPage />
           </AdminRoute>
         ),
       },
@@ -180,6 +201,8 @@ function RouterWithAuth() {
   useEffect(() => {
     void loadUser();
   }, [loadUser]);
+
+  useSyncDetectedTimezone();
 
   useEffect(() => {
     setFontLoadFailureHandler(() => {

@@ -12,23 +12,11 @@ import { SessionForm } from "../../components/sessions/SessionForm";
 import { SetupWizardStepper } from "../../components/rooms/CreateHalaqaWizard";
 import { ShareCard } from "../../components/share/ShareCard";
 import { useCompleteRoomSetup, useRoom } from "../../data/rooms";
-import { formatSessionMecca } from "../../lib/meccaTime";
-
-/** Next calendar day at 20:00 Asia/Riyadh (UTC+3 year-round). */
-function nextDayMecca20(): Date {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Riyadh",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  const y = get("year");
-  const m = get("month");
-  const d = get("day");
-  // tomorrow 20:00 Riyadh = 17:00 UTC
-  return new Date(Date.UTC(y, m - 1, d + 1, 17, 0, 0));
-}
+import {
+  formatSessionTimeInviteLine,
+  nextDayAtHourInTz,
+  resolveUserTimezone,
+} from "../../lib/sessionTime";
 
 export function HalaqaSetupPage() {
   const { id } = useParams<{ id: string }>();
@@ -42,7 +30,8 @@ export function HalaqaSetupPage() {
   const completeSetup = useCompleteRoomSetup(id ?? "");
 
   const [formPending, setFormPending] = useState(false);
-  const defaultSessionAt = useMemo(() => nextDayMecca20(), []);
+  const roomTz = room?.timezone || resolveUserTimezone(user?.timezone);
+  const defaultSessionAt = useMemo(() => nextDayAtHourInTz(roomTz, 20), [roomTz]);
 
   const canManage =
     !!room &&
@@ -113,7 +102,13 @@ export function HalaqaSetupPage() {
   }
 
   const firstDate = room.first_session
-    ? formatSessionMecca(room.first_session.scheduled_at, i18n.language)
+    ? formatSessionTimeInviteLine(
+        room.first_session.scheduled_at,
+        room.timezone,
+        user?.timezone,
+        i18n.language,
+        t,
+      )
     : null;
 
   return (
@@ -179,7 +174,7 @@ export function HalaqaSetupPage() {
             />
             {firstDate ? (
               <p className="mt-2 text-center text-sm text-[var(--color-text-muted)]">
-                {t("share.firstSession", { date: firstDate })} · {t("share.meccaTime")}
+                {t("share.firstSession", { date: firstDate })}
               </p>
             ) : null}
             <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-6">

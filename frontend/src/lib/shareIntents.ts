@@ -9,6 +9,11 @@ export async function copyShareUrl(url: string): Promise<void> {
 
 export function openWhatsAppShare(message: string, url: string): void {
   const text = `${message} ${url}`.trim();
+  openWhatsAppText(text);
+}
+
+/** Open WhatsApp with a fully formed message (link already included). */
+export function openWhatsAppText(text: string): void {
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
 }
 

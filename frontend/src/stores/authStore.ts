@@ -6,6 +6,7 @@ import axios from "axios";
 import { api, getApiBaseUrl } from "../lib/api";
 import type { AuthResponse, Entitlements, User } from "../types";
 import { normalizeUserFromApi } from "../lib/profileDetails";
+import { detectBrowserTimezone } from "../lib/sessionTime";
 
 interface AuthState {
   user: User | null;
@@ -47,6 +48,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { data } = await api.post<AuthResponse>("auth/google", {
         credential,
+        timezone: detectBrowserTimezone(),
         ...(role ? { role } : {}),
         ...(demographics?.gender ? { gender: demographics.gender } : {}),
         ...(demographics?.birth_year != null

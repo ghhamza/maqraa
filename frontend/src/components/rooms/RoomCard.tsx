@@ -3,7 +3,7 @@
 
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Archive, MoreVertical, Pencil, RotateCcw, Users } from "lucide-react";
+import { Archive, MoreVertical, Pencil, RotateCcw, Trash2, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { HalaqahType, Room } from "../../types";
 import { halaqahBadgeClass } from "../../lib/halaqahUi";
@@ -33,6 +33,7 @@ interface RoomCardProps {
   onEdit: () => void;
   onArchive: () => void;
   onRestore: () => void;
+  onDelete?: () => void;
   user?: { id: string; role: string } | null;
   onJoin?: (room: Room) => void;
   joinLoadingId?: string | null;
@@ -44,6 +45,7 @@ export function RoomCard({
   onEdit,
   onArchive,
   onRestore,
+  onDelete,
   user,
   onJoin,
   joinLoadingId,
@@ -185,10 +187,22 @@ export function RoomCard({
                   {t("common.archive")}
                 </DropdownMenuItem>
               ) : (
-                <DropdownMenuItem onClick={onRestore} className="cursor-pointer gap-2">
-                  <RotateCcw className="h-4 w-4 shrink-0" aria-hidden />
-                  {t("common.restore")}
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem onClick={onRestore} className="cursor-pointer gap-2">
+                    <RotateCcw className="h-4 w-4 shrink-0" aria-hidden />
+                    {t("common.restore")}
+                  </DropdownMenuItem>
+                  {onDelete ? (
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={onDelete}
+                      className="cursor-pointer gap-2"
+                    >
+                      <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
+                      {t("rooms.deletePermanent")}
+                    </DropdownMenuItem>
+                  ) : null}
+                </>
               )}
             </DropdownMenuContent>
           </DropdownMenu>

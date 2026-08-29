@@ -186,15 +186,64 @@ export function useCreateSession(onSuccess?: (data: CreateSessionsResponse) => v
       });
       return data;
     },
-    invalidates: [sessionKeys.calendars(), sessionKeys.upcoming(), sessionKeys.details()],
+    invalidates: [
+      sessionKeys.calendars(),
+      sessionKeys.upcoming(),
+      sessionKeys.details(),
+      sessionKeys.stats(),
+      roomKeys.lists(),
+      roomKeys.stats(),
+    ],
     onSuccess: async (data, variables) => {
-      const roomId = variables?.room_id;
+      const roomId = variables?.room_id ?? data.sessions[0]?.room_id;
       if (typeof roomId === "string" && roomId.length > 0) {
         await qc.invalidateQueries({ queryKey: roomKeys.detail(roomId) });
       }
       onSuccess?.(data);
     },
     onError: (m) => onError?.(m),
+  });
+}
+
+export type InstantSessionResponse = {
+  session_id: string;
+  room_id: string;
+  share_token: string;
+};
+
+export function useCreateInstantSession(
+  onSuccess?: (data: InstantSessionResponse) => void,
+  onError?: (m: string, code?: string) => void,
+) {
+  const qc = useQueryClient();
+  return useApiMutation<InstantSessionResponse, { room_id: string | null; create_new?: boolean }>({
+    mutationFn: async (payload) => {
+      const { data } = await api.request<InstantSessionResponse>({
+        method: "post",
+        url: "sessions/instant",
+        data: payload,
+      });
+      return data;
+    },
+    invalidates: [
+      sessionKeys.calendars(),
+      sessionKeys.upcoming(),
+      sessionKeys.details(),
+      sessionKeys.stats(),
+      roomKeys.lists(),
+      roomKeys.stats(),
+    ],
+    onSuccess: async (data) => {
+      await qc.invalidateQueries({ queryKey: roomKeys.detail(data.room_id) });
+      onSuccess?.(data);
+    },
+    onError: (m, error) => {
+      const code =
+        error && typeof error === "object" && "response" in error
+          ? ((error as { response?: { data?: { code?: string } } }).response?.data?.code)
+          : undefined;
+      onError?.(m, code);
+    },
   });
 }
 

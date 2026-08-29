@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
+mod funnel;
 mod queries;
 mod types;
 
@@ -15,6 +16,7 @@ use serde::Deserialize;
 use crate::api::extractors::AuthenticatedUser;
 use crate::api::AppState;
 
+pub use funnel::funnel;
 pub use types::AdminDashboard;
 
 use queries::{

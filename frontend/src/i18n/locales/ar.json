@@ -242,7 +242,7 @@
     "studentRecitationWidgetTitle": "تقدّمك في التلاوة",
     "teacherRecentRecitationsTitle": "آخر التلاوات المقيّمة",
     "viewFullProgress": "عرض التقدّم الكامل",
-    "myProgress": "تقدّمي",
+    "myProgress": "مسيرتي",
     "progressOverview": "نظرة على التقدّم",
     "surahsCoveredCount": "{{count}} / ١١٤ سورة",
     "dayStreak": "{{days}} يومًا متتاليًا",
@@ -256,16 +256,22 @@
     "quranMapDescription": "١١٤ سورة. يمتلئ كل مربّع عند إتمام السورة مع معلّمك.",
     "studentStartingTitle": "كل شيء جاهز",
     "studentStartingDescription": "ستظهر هنا تلاواتك وتقدّمك فور تسجيل المعلّم لأول تلاوة.",
-    "teacherEmptyTitle": "مرحبًا بك في المَقْرَأَة",
-    "teacherEmptyDescription": "أنشئ حلقتك الأولى لتبدأ تدريس الطلاب.",
-    "teacherEmptyCta": "أنشئ حلقتك الأولى",
+    "teacherEmptyTitle": "أنشئ حصتك الأولى",
+    "teacherEmptyDescription": "ابدأ حصة — تُنشأ الحلقة تلقائيًا لتحتفظ بالطلاب والدعوات والتقدّم.",
+    "teacherEmptyCta": "أنشئ حصتك الأولى",
     "studentEmptyTitle": "ابحث عن حلقتك الأولى",
-    "studentEmptyDescription": "تصفّح الحلقات المتاحة وانضمّ إلى إحداها لتبدأ رحلتك القرآنية.",
+    "studentEmptyDescription": "اطلب من معلّمك رابط الدعوة، أو تصفّح الحلقات العامة وانضمّ إلى إحداها لتبدأ رحلتك القرآنية.",
     "studentEmptyCta": "تصفّح الحلقات",
-    "gettingStartedTitle": "للبدء",
-    "gettingStartedStep1": "أنشئ حلقتك الأولى",
+    "gettingStartedTitle": "لنبدأ بخطوات بسيطة",
+    "gettingStartedStep1": "أنشئ حصتك الأولى",
+    "gettingStartedStep1Hint": "تُنشأ الحلقة تلقائيًا من أجلك",
     "gettingStartedStep2": "جدوِل حصتك الأولى",
     "gettingStartedStep3": "سجّل طالبك الأول",
+    "gettingStartedStep2Title": "ادعُ طلابك",
+    "gettingStartedStep2v2": "شارك رابط الدعوة",
+    "gettingStartedStep3v2": "أكمل حصتك الأولى",
+    "gettingStartedStep3Hint": "سجّل أول تلاوة",
+    "gettingStartedProgress": "{{done}} من {{total}} مكتملة",
     "moreStats": "المزيد من الإحصاءات",
     "createHalaqah": "إنشاء حلقة",
     "streakTitle": "السلسلة",
@@ -280,7 +286,12 @@
       "students": "طلاب",
       "thisWeek": "هذا الأسبوع",
       "recitationsLabel": "تلاوات",
-      "completedSessions": "{{count}} حصص مكتملة",
+      "completedSessions_zero": "لا حصص مكتملة",
+      "completedSessions_one": "حصة واحدة مكتملة",
+      "completedSessions_two": "حصتان مكتملتان",
+      "completedSessions_few": "{{count}} حصص مكتملة",
+      "completedSessions_many": "{{count}} حصة مكتملة",
+      "completedSessions_other": "{{count}} حصة مكتملة",
       "attendanceRate": "{{rate}}% حضور"
     },
     "totalRecitations": "إجمالي التلاوات",
@@ -298,15 +309,78 @@
     "noGradesYet": "لم يتم تقييم أي تلاوة بعد",
     "startStreak": "ابدأ سلسلتك اليوم",
     "studentRooms": "حلقاتي",
-    "whatsNewTitle": "منذ {{since}}",
+    "whatsNewTitle": "{{since}}",
     "whatsNew": {
-      "recitationsTeacher": "{{count}} تلاوات جديدة مقيَّمة",
-      "recitationsStudent": "{{count}} تلاوات جديدة مقيَّمة",
-      "enrollments": "{{count}} تسجيلات جديدة",
-      "pending": "{{count}} طلبات معلّقة",
-      "sessions": "{{count}} حصص مكتملة",
-      "sessionsAttended": "{{count}} حصص حضرتها"
+      "recitationsTeacher_zero": "لا تلاوات جديدة مقيَّمة",
+      "recitationsTeacher_one": "تلاوة واحدة جديدة مقيَّمة",
+      "recitationsTeacher_two": "تلاوتان جديدتان مقيَّمتان",
+      "recitationsTeacher_few": "{{count}} تلاوات جديدة مقيَّمة",
+      "recitationsTeacher_many": "{{count}} تلاوة جديدة مقيَّمة",
+      "recitationsTeacher_other": "{{count}} تلاوة جديدة مقيَّمة",
+      "recitationsStudent_zero": "لا تلاوات جديدة مقيَّمة",
+      "recitationsStudent_one": "تلاوة واحدة جديدة مقيَّمة",
+      "recitationsStudent_two": "تلاوتان جديدتان مقيَّمتان",
+      "recitationsStudent_few": "{{count}} تلاوات جديدة مقيَّمة",
+      "recitationsStudent_many": "{{count}} تلاوة جديدة مقيَّمة",
+      "recitationsStudent_other": "{{count}} تلاوة جديدة مقيَّمة",
+      "enrollments_zero": "لا تسجيلات جديدة",
+      "enrollments_one": "تسجيل واحد جديد",
+      "enrollments_two": "تسجيلان جديدان",
+      "enrollments_few": "{{count}} تسجيلات جديدة",
+      "enrollments_many": "{{count}} تسجيلًا جديدًا",
+      "enrollments_other": "{{count}} تسجيل جديد",
+      "pending_zero": "لا طلبات معلّقة",
+      "pending_one": "طلب معلّق واحد",
+      "pending_two": "طلبان معلّقان",
+      "pending_few": "{{count}} طلبات معلّقة",
+      "pending_many": "{{count}} طلبًا معلّقًا",
+      "pending_other": "{{count}} طلب معلّق",
+      "sessions_zero": "لا حصص مكتملة",
+      "sessions_one": "حصة واحدة مكتملة",
+      "sessions_two": "حصتان مكتملتان",
+      "sessions_few": "{{count}} حصص مكتملة",
+      "sessions_many": "{{count}} حصة مكتملة",
+      "sessions_other": "{{count}} حصة مكتملة",
+      "sessionsAttended_zero": "لم تحضر أي حصة",
+      "sessionsAttended_one": "حضرت حصة واحدة",
+      "sessionsAttended_two": "حضرت حصتين",
+      "sessionsAttended_few": "حضرت {{count}} حصص",
+      "sessionsAttended_many": "حضرت {{count}} حصة",
+      "sessionsAttended_other": "حضرت {{count}} حصة"
     }
+  },
+  "roomTabs": {
+    "overview": "نظرة عامة",
+    "students": "الطلاب",
+    "sessions": "الحصص",
+    "progress": "التقدم",
+    "next3": "الحصص القادمة",
+    "viewCalendar": "عرض التقويم",
+    "moreMenu": "المزيد"
+  },
+  "cockpit": {
+    "liveNow": "الحصة جارية الآن",
+    "resume": "استئناف الحصة",
+    "startsIn": "تبدأ بعد {{time}}",
+    "logRecitations": "سجّل تلاوات الحصة الأخيرة",
+    "inviteTitle": "ادعُ طلابك",
+    "scheduleNext": "حدّد موعد الحصة القادمة",
+    "nextSession": "الحصة القادمة: {{date}}",
+    "firstSession": "أنشئ حصتك الأولى"
+  },
+  "studentHome": {
+    "liveNow": "الحصة جارية الآن",
+    "joinNow": "انضم الآن",
+    "noUpcoming": "لا توجد حصة قادمة",
+    "reviewTitle": "ما يجب مراجعته",
+    "openCorrections_zero": "لا تصحيحات مفتوحة",
+    "openCorrections_one": "تصحيح واحد مفتوح",
+    "openCorrections_two": "تصحيحان مفتوحان",
+    "openCorrections_few": "{{count}} تصحيحات مفتوحة",
+    "openCorrections_many": "{{count}} تصحيحًا مفتوحًا",
+    "openCorrections_other": "{{count}} تصحيح مفتوح",
+    "latestIn": "أحدثها في {{surah}}",
+    "lastRecitation": "آخر تلاوة"
   },
   "users": {
     "title": "المستخدمون",
@@ -425,7 +499,7 @@
     "maxStudentsShort": "الحد الأقصى: {{count}} طالب",
     "status": "الحالة",
     "createdAt": "تاريخ الإنشاء",
-    "deleteConfirm": "هل أنت متأكد من حذف الحلقة {{name}}؟",
+    "deleteConfirm": "هل أنت متأكد من حذف الحلقة {{name}} نهائيًا؟ ستُحذف الحصص والتسجيلات والسجل. لا يمكن التراجع عن هذا الإجراء.",
     "noRooms": "لا توجد حلقات بعد",
     "totalRooms": "إجمالي الحلقات",
     "activeRooms": "نشطة",
@@ -450,6 +524,7 @@
     "noTeachersOption": "لا يوجد معلّمون",
     "selectTeacher": "اختر معلّمًا للحلقة.",
     "deleteTitle": "تأكيد الحذف",
+    "deletePermanent": "حذف نهائي",
     "archiveTitle": "أرشفة الحلقة",
     "archiveConfirm": "أرشفة حلقة {{name}}؟ لن يراها الطلاب بعد الآن؛ تبقى الاشتراكات والسجل.",
     "archivedRoomsPageTitle": "الحلقات المؤرشفة",
@@ -457,6 +532,8 @@
     "archivedRoomsEmpty": "لا توجد حلقات مؤرشفة.",
     "archivedEmptyDescription": "ستظهر هنا الحلقات المؤرشفة.",
     "archivedRoomNotice": "هذه الحلقة مؤرشفة. تسجيل الطلاب والحصص والتلاوات الجديدة معطّل حتى الاستعادة.",
+    "archivedSessionsHiddenTitle": "الحصص مخفية أثناء الأرشفة",
+    "archivedSessionsHiddenDescription": "استعد الحلقة لترى حصصها والحضور والتسميعات مجددًا.",
     "statsTotalLabel": "إجمالي الحلقات",
     "statsActiveLabel": "نشطة",
     "statsInactiveLabel": "غير نشطة",
@@ -509,6 +586,9 @@
     "hideRejected": "إخفاء الطلبات المرفوضة",
     "emptyTeacherTitle": "لا توجد حلقات بعد",
     "emptyTeacherDescription": "أنشئ حلقتك الأولى لتبدأ التدريس.",
+    "emptyActiveTitle": "لا توجد حلقات نشطة",
+    "emptyActiveDescription": "حلقاتك مؤرشفة (غير نشطة). غيّر مرشّح الحالة إلى «غير نشطة» لاستعادة حلقة، أو أنشئ حلقة جديدة.",
+    "showInactive": "عرض غير النشطة",
     "emptyStudentTitle": "لا توجد حلقات متاحة",
     "emptyStudentDescription": "تحقّق لاحقًا — يُنشئ المعلّمون حلقات جديدة باستمرار.",
     "emptyMyRoomsTitle": "لم تنضمّ إلى أي حلقة بعد",
@@ -601,6 +681,8 @@
     "removeConfirm": "هل أنت متأكد من إزالة {{name}} من الحلقة؟",
     "enrolledOn": "تاريخ التسجيل",
     "noStudents": "لا يوجد طلاب مسجلون في هذه الحلقة",
+    "emptyStudentsTitle": "لا يوجد طلاب بعد",
+    "emptyStudentsHint": "شارك رابط الحلقة لينضم طلابك بأنفسهم.",
     "roomFull": "الحلقة ممتلئة",
     "alreadyEnrolled": "الطالب مسجل بالفعل",
     "studentCount": "{{count}} طالب مسجل",
@@ -1074,6 +1156,30 @@
       "clearConfirmTitle": "مسح جميع الرسومات؟",
       "clearConfirmBody": "سيتم مسح رسومات هذه الصفحة لجميع المشاركين."
     },
+    "tour": {
+      "progress": "{{current}} / {{total}}",
+      "next": "التالي",
+      "finish": "حسنًا",
+      "skip": "تخطّي الجولة",
+      "steps": {
+        "welcome": {
+          "title": "حصتك المباشرة",
+          "body": "هذه مساحة التدريس. جولة قصيرة على أهم الأدوات — يمكنك التخطي في أي وقت."
+        },
+        "tools": {
+          "title": "أدوات المعلّم",
+          "body": "حرّك الصفحة، ارسم بالقلم أو المظلّل، وصحّح الكلمات على المصحف. التراجع والمسح يظهران للجميع."
+        },
+        "dock": {
+          "title": "المايك والمشاركون",
+          "body": "اكتم صوتك، افتح قائمة الطلاب لإعطاء الدور، قلّب الصفحات، أو غادر الحصة."
+        },
+        "correct": {
+          "title": "صحّح على المصحف",
+          "body": "فعّل التصحيح ثم اضغط كلمة لتسجيل خطأ أو ملاحظة أو ثناء أثناء التلاوة."
+        }
+      }
+    },
     "dragToMove": "اسحب لتحريك",
     "hand": {
       "raise": "رفع اليد",
@@ -1248,7 +1354,6 @@
     "liveNow": "مباشر الآن",
     "joinNow": "انضمّ الآن",
     "firstSession": "الحصة الأولى: {{date}}",
-    "meccaTime": "بتوقيت مكة",
     "telegram": "تليغرام",
     "shareImage": "مشاركة الصورة…",
     "downloadPng": "تحميل PNG",
@@ -1258,7 +1363,7 @@
     "qrOnly": "QR فقط",
     "inviteByEmail": "دعوة بالبريد",
     "stats": "{{joined}}/{{max}} انضمّوا · {{visits}} زيارة للرابط",
-    "inviteMessageDated": "انضمّ إلى حلقة {{name}} ({{type}} · {{riwaya}}) على منصة المقرأة. الحصة الأولى {{date}} بتوقيت مكة."
+    "inviteMessageDated": "انضمّ إلى حلقة {{name}} ({{type}} · {{riwaya}}) على منصة المقرأة. الحصة الأولى {{date}}."
   },
   "instanceInvite": {
     "title": "دعوة إلى المقرأة",
@@ -1276,6 +1381,18 @@
   },
   "invite": {
     "invite": "دعوة طلاب",
+    "inviteStudents": "دعوة الطلاب",
+    "copyLink": "نسخ الرابط",
+    "linkCopied": "تم نسخ الرابط",
+    "shareWhatsapp": "مشاركة عبر واتساب",
+    "howItWorks": "يفتح الطالب الرابط، ينشئ حسابه أو يسجّل دخوله، وينضم إلى الحلقة مباشرة.",
+    "whatsappMessage": "السلام عليكم ورحمة الله وبركاته،\nندعوك للانضمام إلى حلقة «{{halaqahName}}» في منصة المقرأة.\n{{nextSessionLine}}للانضمام اضغط على الرابط:\n{{link}}",
+    "whatsappNextSession": "الحصة القادمة: {{date}}\n",
+    "invitesCardTitle": "الدعوات",
+    "joinsViaLink": "انضم عبر الرابط: {{count}}",
+    "pendingRequests": "طلبات انضمام معلّقة: {{count}}",
+    "adminDirectAdd": "إضافة طالب مباشرة",
+    "teacherEnrollForbidden": "إضافة الطلاب مباشرة متاحة للمشرف فقط. ادعُ طلابك عبر رابط الحلقة.",
     "emailsPlaceholder": "أدخل بريدًا إلكترونيًا أو أكثر",
     "autoApprove": "قبول تلقائي",
     "autoApproveHint": "يُقبل المدعوّون مباشرة دون مراجعة",
@@ -1418,6 +1535,32 @@
       }
     }
   },
+  "adminFunnel": {
+    "title": "قمع التفعيل",
+    "nav": "قمع التفعيل",
+    "wathTitle": "الحلقات النشطة تعليميًا هذا الأسبوع",
+    "wathHint": "حلقة فيها حصة واحدة على الأقل مع تلاوة مسجلة خلال آخر ٧ أيام",
+    "teacherFunnel": "مسار المعلّم",
+    "studentFunnel": "مسار الطالب",
+    "steps": {
+      "registered": "التسجيل",
+      "demo_started": "بدء التجربة",
+      "demo_completed": "إتمام التجربة",
+      "halaqah_created": "إنشاء حلقة",
+      "invite_link_created": "إنشاء رابط دعوة",
+      "session_scheduled": "جدولة حصة",
+      "session_started": "بدء حصة",
+      "recitation_logged": "تسجيل تلاوة",
+      "session_completed": "إتمام حصة",
+      "joined_via_link": "الانضمام عبر رابط",
+      "attended_session": "حضور حصة"
+    },
+    "days": {
+      "7": "٧ أيام",
+      "30": "٣٠ يومًا",
+      "90": "٩٠ يومًا"
+    }
+  },
   "activation": {
     "noStudentsTitle": "لا يوجد طلاب بعد — شارك الرابط قبل {{weekday}}",
     "nextSession": "الحصة القادمة",
@@ -1429,5 +1572,113 @@
     "schedule": "جدولة حصة",
     "upcoming": "القادمة: {{date}}",
     "counters": "{{sessions}} حصص مكتملة · {{students}} طلاب"
+  },
+  "demo": {
+    "entryTitle": "كيف تعمل المقرأة",
+    "entrySubtitle": "جولة قصيرة في الحصة المباشرة — الأدوات والمايك وتصحيح المصحف",
+    "entryCta": "ابدأ الجولة",
+    "stripTitle": "كيف تعمل المقرأة",
+    "stripText": "جولة قصيرة في الحصة المباشرة",
+    "stripCta": "ابدأ الجولة",
+    "stripDismiss": "إخفاء",
+    "modeBadge": "وضع تجريبي",
+    "modeBanner": "بيئة تجريبية — بلا طلاب حقيقيين أو صوت أو حفظ للبيانات",
+    "introTitle": "هذه حصة للتدريب فقط",
+    "introBody": "تشبه الحصة المباشرة لتستكشف الأدوات بأمان. لا يُحفظ شيء هنا ولا يُشارك مع طلاب.",
+    "introPoint1": "أنس طالب نموذجي — ليس شخصًا حقيقيًا في الغرفة.",
+    "introPoint2": "المايك والدعوات للعرض فقط؛ لا يتصل أحد فعليًا.",
+    "introPoint3": "تصحيحات الكلمات تبقى في هذه الصفحة فقط.",
+    "introStart": "ابدأ الجولة الإرشادية",
+    "introSkip": "تخطَّ إلى التجربة",
+    "step1": "أنت المعلّم في هذه الحصة التجريبية، وأنس طالب يقرأ سورة الفاتحة. اضغط على أي كلمة لتصحيحها.",
+    "step2": "اختر نوع الخطأ وأضف تعليقك إن شئت.",
+    "step3": "وصل التصحيح إلى أنس فورًا — دون مقاطعة تلاوته. جرّب الآن وضع «أحسنت» على كلمة أخرى.",
+    "studentViewTitle": "ما يراه أنس الآن",
+    "finaleTitle": "هكذا تحفظ المقرأة تقدم طلابك",
+    "finaleSummary": "تلاوة واحدة · الفاتحة ١–٧ · تصحيحان",
+    "finaleCta": "أنشئ حلقتك الآن",
+    "backHome": "العودة للرئيسية",
+    "skip": "تخطي",
+    "showStudentView": "عرض شاشة الطالب",
+    "studentName": "أنس",
+    "elapsedLabel": "تجريبي",
+    "tour": {
+      "progress": "{{current}} / {{total}}",
+      "next": "التالي",
+      "finish": "جرّب الآن",
+      "skip": "تخطّي الجولة",
+      "steps": {
+        "welcome": {
+          "title": "نفس تخطيط الحصة المباشرة",
+          "body": "ما تراه هنا يطابق الحصة الحقيقية. سنبرز أهم الأدوات في خطوات — وتبقى هذه تجربة."
+        },
+        "tools": {
+          "title": "أدوات المعلّم",
+          "body": "بدّل بين اليد والقلم والمظلّل ووضع التصحيح. التراجع والمسح يعيدان الرسم."
+        },
+        "dock": {
+          "title": "المايك والمشاركون",
+          "body": "في الحصة الحقيقية يتحكّمان بالصوت والطلاب. هنا يفتحان درجًا نموذجيًا فقط."
+        },
+        "correct": {
+          "title": "صحّح على المصحف",
+          "body": "مع تفعيل «تصحيح»، اضغط أي كلمة (جرّب الصراط) لتسجيل خطأ أو ثناء. أنت جاهز."
+        }
+      }
+    }
+  },
+  "newSession": {
+    "button": "حصة جديدة",
+    "now": "ابدأ حصة الآن",
+    "nowDesc": "ابدأ مباشرة مع طلابك",
+    "later": "حصة لوقت لاحق",
+    "laterDesc": "اختر موعدًا في الجدول",
+    "recurring": "حصة متكررة",
+    "recurringDesc": "تكرار في أيام محددة من الأسبوع"
+  },
+  "sessionForm": {
+    "autoHalaqah": "حلقة جديدة تلقائيًا",
+    "groupName": "اسم المجموعة (اختياري)",
+    "groupNamePlaceholder": "حلقة {{name}}"
+  },
+  "agenda": {
+    "emptyDay": "لا توجد حصص في هذا اليوم",
+    "emptySubtitle": "ابدأ حصة — تُنشأ الحلقة تلقائيًا لتحتفظ بالطلاب والدعوات والتقدّم.",
+    "today": "اليوم"
+  },
+  "session": {
+    "halaqahChip": "الحلقة: {{name}}"
+  },
+  "instant": {
+    "start": "ابدأ حصة الآن",
+    "pickHalaqah": "اختر الحلقة",
+    "newHalaqah": "حلقة جديدة",
+    "defaultHalaqahName": "حلقة {{name}}",
+    "inviteStrip": "أنت وحدك في الحصة — ادعُ طلابك",
+    "inviteStripTitle": "أنت وحدك في الحصة",
+    "inviteStripHint": "ادعُ طلابك لينضمّوا إلى الحصة المباشرة الآن.",
+    "inviteNudgeBody": "شارك رابط الحلقة أو أرسل دعوات — سيظهرون هنا فور انضمامهم.",
+    "inviteLater": "سأدعوهم لاحقًا",
+    "completeLater": "أكمل لاحقًا"
+  },
+  "tz": {
+    "roomTime": "بتوقيت الحلقة ({{city}})",
+    "yourTime": "بتوقيتك: {{time}}",
+    "timezoneLabel": "المنطقة الزمنية",
+    "detected": "تم اكتشافها تلقائيًا — يمكنك تغييرها"
+  },
+  "reminder": {
+    "whatsapp": "تذكير عبر واتساب",
+    "whatsappMessage": "السلام عليكم ورحمة الله وبركاته،\nتذكير بحصة «{{halaqahName}}» {{when}}.\nرابط الدخول:\n{{link}}",
+    "teacherEmailSubject": "حصتك تبدأ قريبًا — ذكّر طلابك"
+  },
+  "memory": {
+    "lastStop": "آخر مرة توقف عند {{surah}} {{ayah}}",
+    "recurringError": "الخطأ المتكرر: {{category}}",
+    "nextTarget": "الهدف القادم: {{range}}",
+    "setTarget": "تحديد هدف الحصة القادمة",
+    "emailSubject": "ملخص حصتك اليوم — {{halaqahName}}",
+    "emailRecited": "اليوم قرأت {{surah}} {{range}}",
+    "emailCorrections": "التصحيحات: {{summary}}"
   }
 }

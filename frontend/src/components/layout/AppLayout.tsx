@@ -14,6 +14,7 @@ import { LiveSessionsErrorToast } from "./LiveSessionsErrorToast";
 import { VerifyEmailBanner } from "../VerifyEmailBanner";
 import { DemographicsBanner } from "../DemographicsBanner";
 import { useRoomsStats } from "../../data/rooms";
+import { useLiveSessions } from "../../contexts/LiveSessionsContext";
 
 /** YouTube-style LIVE chip — colors from `.live-nav-chip` in `index.css`. */
 function liveNavLinkClassName(isActive: boolean) {
@@ -45,6 +46,7 @@ export function AppLayout() {
   const logout = useAuthStore((s) => s.logout);
   const location = useLocation();
   const isMushafRoute = location.pathname.startsWith("/mushaf");
+  const { hasLiveSession } = useLiveSessions();
 
   const roomStatsQuery = useRoomsStats(!!user);
   const pendingTotal = roomStatsQuery.data?.pending_count_total ?? null;
@@ -79,14 +81,16 @@ export function AppLayout() {
         <SidebarTrigger className="size-8 shrink-0" aria-label={t("common.openMenu")} />
 
         <div className="ms-auto flex shrink-0 items-center gap-2 sm:gap-3">
-          <NavLink
-            to="/live"
-            className={liveNavLinkClassName(liveActive)}
-            aria-label={t("nav.live")}
-            title={t("nav.live")}
-          >
-            <LiveNavChipLabel />
-          </NavLink>
+          {hasLiveSession ? (
+            <NavLink
+              to="/live"
+              className={liveNavLinkClassName(liveActive)}
+              aria-label={t("nav.live")}
+              title={t("nav.live")}
+            >
+              <LiveNavChipLabel />
+            </NavLink>
+          ) : null}
           <LanguageSwitcher className="shrink-0" />
         </div>
       </header>

@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
 use crate::api::AppState;
+use crate::timezone::{parse_tz, validate_iana_timezone};
 
 // ── Types ──
 
@@ -412,10 +413,34 @@ pub async fn generate_sessions(
     }
 
     let weeks = req.weeks.unwrap_or(4).clamp(1, 12);
-    let tz_offset_minutes = req.tz_offset_minutes.unwrap_or(180);
 
-    let offset = FixedOffset::east_opt(tz_offset_minutes * 60)
-        .ok_or_else(|| json_err(StatusCode::BAD_REQUEST, "bad_request"))?;
+    let room_timezone: String = sqlx::query_scalar("SELECT timezone FROM rooms WHERE id = $1")
+        .bind(req.room_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?
+        .ok_or_else(|| json_err(StatusCode::NOT_FOUND, "not_found"))?;
+
+    // Recurrence wall-clock rule: schedule day_of_week + start_time_minutes are local
+    // wall-clock in the halaqah's IANA timezone. Each occurrence converts local → UTC
+    // so DST boundaries keep the same local clock time.
+    let room_tz_valid = validate_iana_timezone(&room_timezone).is_some();
+    let room_tz = if room_tz_valid {
+        Some(parse_tz(&room_timezone))
+    } else {
+        None
+    };
+
+    // Deprecated FixedOffset fallback when room timezone is invalid.
+    let tz_offset_minutes = req.tz_offset_minutes.unwrap_or(180);
+    let offset = if room_tz.is_none() {
+        Some(
+            FixedOffset::east_opt(tz_offset_minutes * 60)
+                .ok_or_else(|| json_err(StatusCode::BAD_REQUEST, "bad_request"))?,
+        )
+    } else {
+        None
+    };
 
     let schedules = if let Some(ref ids) = req.schedule_ids {
         let mut result = Vec::new();
@@ -454,8 +479,11 @@ pub async fn generate_sessions(
     }
 
     let now = Utc::now();
-    let local_now = now + Duration::minutes(tz_offset_minutes as i64);
-    let today_local = local_now.date_naive();
+    let today_local = if let Some(tz) = room_tz {
+        now.with_timezone(&tz).date_naive()
+    } else {
+        (now + Duration::minutes(tz_offset_minutes as i64)).date_naive()
+    };
 
     let mut created = 0i32;
     let mut skipped = 0i32;
@@ -483,11 +511,23 @@ pub async fn generate_sessions(
         for w in 0..weeks {
             let target_date = today_local + Duration::days(days_until as i64 + w as i64 * 7);
             let naive_local = target_date.and_time(local_time);
-            let utc_datetime = match offset.from_local_datetime(&naive_local).earliest() {
-                Some(dt) => dt.with_timezone(&Utc),
-                None => {
-                    skipped += 1;
-                    continue;
+            let utc_datetime = if let Some(tz) = room_tz {
+                let mapped = tz.from_local_datetime(&naive_local);
+                match mapped.single().or_else(|| mapped.earliest()) {
+                    Some(dt) => dt.with_timezone(&Utc),
+                    None => {
+                        skipped += 1;
+                        continue;
+                    }
+                }
+            } else {
+                let offset = offset.expect("offset set when room_tz is None");
+                match offset.from_local_datetime(&naive_local).earliest() {
+                    Some(dt) => dt.with_timezone(&Utc),
+                    None => {
+                        skipped += 1;
+                        continue;
+                    }
                 }
             };
 
@@ -561,6 +601,23 @@ pub async fn generate_sessions(
     tx.commit()
         .await
         .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+    if created > 0 {
+        let first_session_id = created_sessions.first().map(|s| s.id);
+        crate::services::product_events::track(
+            &state.db,
+            "session_scheduled",
+            Some(auth.id),
+            Some(auth.role.as_str()),
+            serde_json::json!({
+                "session_id": first_session_id,
+                "room_id": req.room_id,
+                "recurring": true,
+                "occurrences": created,
+            }),
+        )
+        .await;
+    }
 
     Ok(Json(GenerateResult {
         created,

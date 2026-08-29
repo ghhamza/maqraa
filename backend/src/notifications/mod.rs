@@ -6,14 +6,16 @@ mod onboarding;
 mod provider;
 mod queue;
 mod scheduler;
+mod session_summary;
 mod surah_names;
 mod templates;
 mod worker;
 
-pub use format::{format_session_time, grade_label, recitation_ref};
+pub use format::{format_session_time, format_session_time_dual, grade_label, recitation_ref};
 pub use onboarding::spawn_onboarding_emails;
 pub use provider::build_provider;
 pub use queue::enqueue;
 pub use scheduler::spawn_scheduler;
+pub use session_summary::enqueue_session_summaries;
 pub use templates::{render, TemplateVars};
 pub use worker::spawn_worker;
