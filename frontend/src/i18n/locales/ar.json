@@ -191,11 +191,15 @@
     "gender": "الجنس",
     "male": "ذكر",
     "female": "أنثى",
-    "dateOfBirth": "تاريخ الميلاد",
+    "dateOfBirth": "سنة الميلاد",
     "country": "بلد الإقامة",
     "phone": "الجوال",
     "languages": "اللغات التي تجيدها",
-    "qiraat": "القراءات التي تدرّسها",
+    "qiraat": {
+      "title": "القراءات التي تدرّسها",
+      "showMore": "عرض {{count}} أخرى",
+      "showLess": "عرض أقل"
+    },
     "lang": {
       "ar": "العربية",
       "en": "الإنجليزية",
@@ -205,7 +209,7 @@
     },
     "submit": "حفظ ومتابعة",
     "errRequired": "هذا الحقل مطلوب",
-    "errDob": "تاريخ ميلاد غير صحيح",
+    "errDob": "سنة ميلاد غير صحيحة",
     "errLanguages": "اختر لغة واحدة على الأقل",
     "errQiraat": "اختر قراءة واحدة على الأقل",
     "detailsSection": "البيانات الشخصية",
@@ -764,7 +768,14 @@
     "wrong_password": "كلمة المرور الحالية غير صحيحة.",
     "invalid_chapter": "رقم السورة غير صالح",
     "invalid_recitation": "القارئ المختار غير متوفّر",
-    "invalid_demographics": "بيانات غير صالحة"
+    "invalid_demographics": "بيانات غير صالحة",
+    "invalid_birth_year": "سنة الميلاد غير صالحة",
+    "invalid_phone": "رقم الجوال غير صالح",
+    "invalid_gender": "الجنس غير صالح",
+    "invalid_country": "الدولة غير صالحة",
+    "qiraat_required": "اختر قراءة واحدة على الأقل",
+    "invalid_qiraat": "قراءة غير صالحة",
+    "languages_required": "اختر لغة واحدة على الأقل"
   },
   "placeholder": {
     "calendar": "الجدول"

@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
-import { useUpdatePassword, useUpdateProfile } from "../../data/users";
+import { useUpdatePassword } from "../../data/users";
 import { useAuthStore } from "../../stores/authStore";
 import type { User } from "../../types";
 import { Button } from "../../components/ui/Button";
@@ -16,12 +16,6 @@ import {
   useProfileDetailsState,
   useProfileDetailsValidation,
 } from "../../components/profile/ProfileDetailsForm";
-import {
-  DemographicsFields,
-  demographicsFromUser,
-  demographicsPayload,
-  type DemographicsValue,
-} from "../../components/users/DemographicsFields";
 import { normalizeUserFromApi, profileDetailsPayload } from "../../lib/profileDetails";
 import { TimezoneSelect } from "../../components/time/TimezoneSelect";
 import { detectBrowserTimezone } from "../../lib/sessionTime";
@@ -47,25 +41,10 @@ export function ProfilePage() {
   const [profileSuccess, setProfileSuccess] = useState(false);
   const [detailsSuccess, setDetailsSuccess] = useState(false);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
-  const [demoSuccess, setDemoSuccess] = useState(false);
-  const [demoError, setDemoError] = useState<string | null>(null);
   const [detailsFieldErrors, setDetailsFieldErrors] = useState<Record<string, string>>({});
-  const [demographics, setDemographics] = useState<DemographicsValue>(() =>
-    demographicsFromUser(user),
-  );
 
   const [detailsValues, setDetailsValues] = useProfileDetailsState(user);
   const { validate: validateDetails, isTeacher } = useProfileDetailsValidation(user, detailsValues);
-
-  const updateDemoMutation = useUpdateProfile(
-    (updated) => {
-      setUser(updated);
-      setDemographics(demographicsFromUser(updated));
-      setDemoSuccess(true);
-      window.setTimeout(() => setDemoSuccess(false), 4000);
-    },
-    (message) => setDemoError(message),
-  );
 
   const updatePasswordMutation = useUpdatePassword(
     () => {
@@ -86,7 +65,6 @@ export function ProfilePage() {
       setName(user.name);
       setEmail(user.email);
       setTimezone(user.timezone ?? detectBrowserTimezone());
-      setDemographics(demographicsFromUser(user));
     }
   }, [user]);
 
@@ -114,17 +92,6 @@ export function ProfilePage() {
     } finally {
       setProfileLoading(false);
     }
-  }
-
-  function handleDemographics(e: React.FormEvent) {
-    e.preventDefault();
-    if (!user || updateDemoMutation.isPending) return;
-    setDemoError(null);
-    setDemoSuccess(false);
-    updateDemoMutation.mutate({
-      name: name.trim() || user.name,
-      ...demographicsPayload(demographics),
-    });
   }
 
   async function handleDetails(e: React.FormEvent) {
@@ -231,28 +198,6 @@ export function ProfilePage() {
           ) : null}
           <Button type="submit" variant="primary" disabled={profileLoading}>
             {profileLoading ? t("common.loading") : t("profile.saveProfile")}
-          </Button>
-        </form>
-      </PageCard>
-
-      <PageCard>
-        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">
-          {t("profile.demographics.title")}
-        </h2>
-        <form onSubmit={handleDemographics} className="space-y-4">
-          <DemographicsFields value={demographics} onChange={setDemographics} />
-          {demoError ? (
-            <p className="text-sm text-red-600" role="alert">
-              {demoError}
-            </p>
-          ) : null}
-          {demoSuccess ? (
-            <p className="text-sm text-[var(--color-primary)]" role="status">
-              {t("profile.demographics.saved")}
-            </p>
-          ) : null}
-          <Button type="submit" variant="primary" loading={updateDemoMutation.isPending}>
-            {t("profile.saveDetails")}
           </Button>
         </form>
       </PageCard>

@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { getGroupedCountries } from "../../data/countries";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
+import { birthYearOptions } from "../../lib/profileDetails";
 import { cn } from "@/lib/utils";
 
 export type DemographicsGender = "male" | "female";
@@ -21,15 +22,6 @@ export interface DemographicsFieldsProps {
   /** When true, mark controls as required (UI only; parent still validates). */
   required?: boolean;
   className?: string;
-}
-
-function birthYearOptions(): number[] {
-  const current = new Date().getFullYear();
-  const max = current - 5;
-  const min = 1930;
-  const years: number[] = [];
-  for (let y = max; y >= min; y -= 1) years.push(y);
-  return years;
 }
 
 export function emptyDemographics(): DemographicsValue {

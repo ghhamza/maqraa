@@ -78,8 +78,8 @@ export function ProfileCompletePage() {
       if (!navigateAfterAuth(navigate)) {
         navigate("/", { replace: true });
       }
-    } catch (err) {
-      setError(userFacingApiError(err, "profile.errRequired"));
+    }     catch (err) {
+      setError(userFacingApiError(err, "errors.badRequest"));
     } finally {
       setLoading(false);
     }

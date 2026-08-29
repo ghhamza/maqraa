@@ -287,7 +287,8 @@ export function splitPhoneLocalPart(phone: string, countryCode: string): string 
 /** Build a full E.164-style number from country + local digits. */
 export function composePhoneNumber(countryCode: string, localPart: string): string {
   const dialCode = getDialCode(countryCode);
-  const localDigits = localPart.replace(/\D/g, "");
+  // Drop national trunk prefix (leading 0) when dialing in E.164.
+  const localDigits = localPart.replace(/\D/g, "").replace(/^0+/, "");
   if (!localDigits) return dialCode;
   return `${dialCode}${localDigits}`;
 }

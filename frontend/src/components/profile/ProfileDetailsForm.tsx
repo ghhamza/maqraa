@@ -11,13 +11,13 @@ import {
   splitPhoneLocalPart,
 } from "../../data/dialCodes";
 import { SPOKEN_LANGUAGE_CODES } from "../../data/languages";
-import { QIRAAT_OPTIONS } from "../../data/qiraat";
+import { QIRAAT_OPTIONS, QIRAAT_VISIBLE_COUNT } from "../../data/qiraat";
 import { cn } from "@/lib/utils";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 import type { User } from "../../types";
 import {
+  birthYearOptions,
   profileDetailsFromUser,
-  todayIsoDate,
   toggleProfileListItem,
   type ProfileDetailsValues,
   validateProfileDetails,
@@ -30,6 +30,13 @@ interface ProfileDetailsFormProps {
   onChange: (values: ProfileDetailsValues) => void;
 }
 
+function hasCollapsedQiraatSelection(selected: readonly string[]): boolean {
+  const collapsed = new Set<string>(
+    QIRAAT_OPTIONS.slice(QIRAAT_VISIBLE_COUNT).map((q) => q.slug),
+  );
+  return selected.some((slug) => collapsed.has(slug));
+}
+
 export function ProfileDetailsForm({
   user,
   fieldErrors,
@@ -39,9 +46,18 @@ export function ProfileDetailsForm({
   const { t, i18n } = useTranslation();
   const locale = intlLocaleForAppLanguage(i18n.language);
   const isTeacher = user.role === "teacher";
-  const maxDob = todayIsoDate();
+  const years = useMemo(() => birthYearOptions(), []);
+  const [qiraatExpanded, setQiraatExpanded] = useState(() =>
+    hasCollapsedQiraatSelection(values.qiraatTaught),
+  );
 
   const countries = useMemo(() => getSortedCountries(locale), [locale]);
+  const visibleQiraat = useMemo(
+    () =>
+      qiraatExpanded ? QIRAAT_OPTIONS : QIRAAT_OPTIONS.slice(0, QIRAAT_VISIBLE_COUNT),
+    [qiraatExpanded],
+  );
+  const hiddenQiraatCount = QIRAAT_OPTIONS.length - QIRAAT_VISIBLE_COUNT;
 
   const dialCode = getDialCode(values.country);
   const localPhone = splitPhoneLocalPart(values.phone, values.country);
@@ -86,20 +102,27 @@ export function ProfileDetailsForm({
       </fieldset>
 
       <div>
-        <label htmlFor="profile-dob" className="mb-1 block text-sm font-medium text-[var(--color-text)]">
+        <label htmlFor="profile-birth-year" className="mb-1 block text-sm font-medium text-[var(--color-text)]">
           {t("profile.dateOfBirth")}
         </label>
-        <input
-          id="profile-dob"
-          type="date"
-          max={maxDob}
-          min="1900-01-01"
-          value={values.dateOfBirth}
-          onChange={(e) => patch({ dateOfBirth: e.target.value })}
+        <select
+          id="profile-birth-year"
+          value={values.birthYear ?? ""}
+          onChange={(e) => {
+            const raw = e.target.value;
+            patch({ birthYear: raw ? Number(raw) : null });
+          }}
           className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-[var(--color-text)]"
-        />
-        {fieldErrors.dateOfBirth ? (
-          <p className="mt-1 text-sm text-red-600">{fieldErrors.dateOfBirth}</p>
+        >
+          <option value="">{t("profile.demographics.select_placeholder")}</option>
+          {years.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+        {fieldErrors.birthYear ? (
+          <p className="mt-1 text-sm text-red-600">{fieldErrors.birthYear}</p>
         ) : null}
       </div>
 
@@ -124,7 +147,7 @@ export function ProfileDetailsForm({
         <label htmlFor="profile-phone" className="mb-1 block text-sm font-medium text-[var(--color-text)]">
           {t("profile.phone")}
         </label>
-        <div className="flex gap-2">
+        <div className="flex gap-2" dir="ltr">
           <div
             className="flex shrink-0 items-center rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-[var(--color-text)]"
             aria-hidden
@@ -140,7 +163,7 @@ export function ProfileDetailsForm({
             value={localPhone}
             onChange={(e) => handleLocalPhoneChange(e.target.value)}
             placeholder="500000000"
-            className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-[var(--color-text)]"
+            className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-start text-sm text-[var(--color-text)]"
           />
         </div>
         {fieldErrors.phone ? <p className="mt-1 text-sm text-red-600">{fieldErrors.phone}</p> : null}
@@ -182,10 +205,10 @@ export function ProfileDetailsForm({
       {isTeacher ? (
         <fieldset>
           <legend className="mb-2 block text-sm font-medium text-[var(--color-text)]">
-            {t("profile.qiraat")}
+            {t("profile.qiraat.title")}
           </legend>
-          <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto rounded-xl border border-gray-100 p-3">
-            {QIRAAT_OPTIONS.map(({ slug, ar }) => {
+          <div className="flex flex-wrap gap-2 rounded-xl border border-gray-100 p-3">
+            {visibleQiraat.map(({ slug, ar }) => {
               const selected = values.qiraatTaught.includes(slug);
               return (
                 <button
@@ -199,8 +222,8 @@ export function ProfileDetailsForm({
                   className={cn(
                     "rounded-full border px-3 py-1.5 text-sm font-medium transition",
                     selected
-                      ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-white"
-                      : "border-gray-200 bg-white text-[var(--color-text)]",
+                      ? "border-[#1B5E20] bg-[#1B5E20] text-white"
+                      : "border-gray-200 bg-white text-[#6B7280]",
                   )}
                 >
                   {ar}
@@ -208,6 +231,17 @@ export function ProfileDetailsForm({
               );
             })}
           </div>
+          {hiddenQiraatCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setQiraatExpanded((open) => !open)}
+              className="mt-2 text-sm font-medium text-[#1B5E20] hover:underline"
+            >
+              {qiraatExpanded
+                ? t("profile.qiraat.showLess")
+                : t("profile.qiraat.showMore", { count: hiddenQiraatCount })}
+            </button>
+          ) : null}
           {fieldErrors.qiraat ? (
             <p className="mt-1 text-sm text-red-600">{fieldErrors.qiraat}</p>
           ) : null}
@@ -220,10 +254,13 @@ export function ProfileDetailsForm({
 /** Hook: profile details state synced from the auth user. */
 export function useProfileDetailsState(user: User | null) {
   const [values, setValues] = useState<ProfileDetailsValues>(() => profileDetailsFromUser(user));
+  const userId = user?.id ?? null;
 
   useEffect(() => {
     setValues(profileDetailsFromUser(user));
-  }, [user]);
+    // Re-hydrate when the signed-in user identity changes — not on every user object reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only reset on user id change
+  }, [userId]);
 
   return [values, setValues] as const;
 }

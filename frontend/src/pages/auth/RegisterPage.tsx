@@ -12,12 +12,6 @@ import { RoleChoiceCards } from "../../components/auth/RoleChoiceCards";
 import { GoogleSignInButton } from "../../components/auth/GoogleSignInButton";
 import { AuthOrDivider, GoogleAuthSection } from "../../components/auth/GoogleAuthSection";
 import { AuthBrandHeader } from "../../components/auth/AuthBrandHeader";
-import {
-  DemographicsFields,
-  demographicsPayload,
-  emptyDemographics,
-  type DemographicsValue,
-} from "../../components/users/DemographicsFields";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LanguageSwitcher } from "../../components/ui/LanguageSwitcher";
@@ -45,7 +39,6 @@ export function RegisterPage() {
   const [role, setRole] = useState<"student" | "teacher" | null>(
     fromGoogleRolePrompt ? null : "student",
   );
-  const [demographics, setDemographics] = useState<DemographicsValue>(emptyDemographics);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
@@ -67,11 +60,7 @@ export function RegisterPage() {
     setGoogleError(null);
     setLoading(true);
     try {
-      const data = await loginWithGoogle(
-        pendingGoogleCredential,
-        role,
-        demographicsPayload(demographics, { omitEmpty: true }),
-      );
+      const data = await loginWithGoogle(pendingGoogleCredential, role);
       navigate(location.pathname, { replace: true, state: {} });
       finishAuthNavigation(navigate, data.user);
     } catch {
@@ -119,7 +108,6 @@ export function RegisterPage() {
           locale: (i18n.language || "ar").split("-")[0],
           timezone: detectBrowserTimezone(),
           ...(shareToken ? { share_token: shareToken } : {}),
-          ...demographicsPayload(demographics, { omitEmpty: true }),
         },
       });
       login(data.token, data.user);
@@ -173,7 +161,6 @@ export function RegisterPage() {
 
         {fromGoogleRolePrompt ? (
           <div className="mt-5 space-y-5">
-            <DemographicsFields value={demographics} onChange={setDemographics} />
             <Button
               type="button"
               variant="primary"
@@ -231,8 +218,6 @@ export function RegisterPage() {
                 onChange={(e) => setConfirm(e.target.value)}
                 required
               />
-
-              <DemographicsFields value={demographics} onChange={setDemographics} />
 
               {formError ? (
                 <p className="text-center text-sm text-red-600" role="alert">

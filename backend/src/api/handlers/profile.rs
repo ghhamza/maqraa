@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 use axum::{extract::State, http::StatusCode, Json};
-use chrono::{NaiveDate, Utc};
+use chrono::{NaiveDate, Datelike};
 use serde::Deserialize;
 
 use crate::api::extractors::AuthenticatedUser;
@@ -16,7 +16,12 @@ use crate::timezone::validate_iana_timezone;
 #[derive(Deserialize)]
 pub struct CompleteProfileRequest {
     pub gender: String,
-    pub date_of_birth: String,
+    /// Preferred: year of birth only.
+    #[serde(default)]
+    pub birth_year: Option<i16>,
+    /// Legacy full date — year is extracted when `birth_year` is absent.
+    #[serde(default)]
+    pub date_of_birth: Option<String>,
     pub country: String,
     pub phone: String,
     pub spoken_languages: Vec<String>,
@@ -41,18 +46,24 @@ fn validate_phone(phone: &str) -> bool {
     (8..=16).contains(&digits)
 }
 
-fn parse_date_of_birth(raw: &str) -> Result<NaiveDate, (StatusCode, Json<ApiMessage>)> {
-    let dob = NaiveDate::parse_from_str(raw.trim(), "%Y-%m-%d")
-        .map_err(|_| profile_err("invalid_date_of_birth", "Invalid date of birth"))?;
-    let min = NaiveDate::from_ymd_opt(1900, 1, 1)
-        .ok_or_else(|| profile_err("invalid_date_of_birth", "Invalid date of birth"))?;
-    if dob < min {
-        return Err(profile_err("invalid_date_of_birth", "Invalid date of birth"));
+fn parse_birth_year(year: i16) -> Result<i16, (StatusCode, Json<ApiMessage>)> {
+    let current_year = chrono::Utc::now().year() as i16;
+    if year < 1920 || year > current_year {
+        return Err(profile_err("invalid_birth_year", "Invalid year of birth"));
     }
-    if dob > Utc::now().date_naive() {
-        return Err(profile_err("invalid_date_of_birth", "Invalid date of birth"));
+    Ok(year)
+}
+
+fn resolve_birth_year(req: &CompleteProfileRequest) -> Result<i16, (StatusCode, Json<ApiMessage>)> {
+    if let Some(y) = req.birth_year {
+        return parse_birth_year(y);
     }
-    Ok(dob)
+    if let Some(raw) = req.date_of_birth.as_deref() {
+        let dob = NaiveDate::parse_from_str(raw.trim(), "%Y-%m-%d")
+            .map_err(|_| profile_err("invalid_birth_year", "Invalid year of birth"))?;
+        return parse_birth_year(dob.year() as i16);
+    }
+    Err(profile_err("invalid_birth_year", "Year of birth is required"))
 }
 
 pub async fn complete_profile(
@@ -65,7 +76,7 @@ pub async fn complete_profile(
         return Err(profile_err("invalid_gender", "Invalid gender"));
     }
 
-    let dob = parse_date_of_birth(&req.date_of_birth)?;
+    let birth_year = resolve_birth_year(&req)?;
 
     let country = req.country.trim().to_uppercase();
     if country.len() != 2 || !country.chars().all(|c| c.is_ascii_alphabetic()) {
@@ -111,15 +122,14 @@ pub async fn complete_profile(
     };
 
     sqlx::query(
-        "UPDATE users SET gender = $1, date_of_birth = $2, country = $3, phone = $4, \
+        "UPDATE users SET gender = $1, birth_year = $2, date_of_birth = NULL, country = $3, phone = $4, \
          spoken_languages = $5, qiraat_taught = $6, profile_completion_pending = false, \
-         birth_year = EXTRACT(YEAR FROM $2::date)::SMALLINT, \
          country_code = $3, \
          timezone = CASE WHEN $8::text IS NOT NULL THEN $8 ELSE timezone END \
          WHERE id = $7",
     )
     .bind(gender)
-    .bind(dob)
+    .bind(birth_year)
     .bind(&country)
     .bind(phone)
     .bind(&req.spoken_languages)

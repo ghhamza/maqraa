@@ -191,11 +191,15 @@
     "gender": "Genre",
     "male": "Homme",
     "female": "Femme",
-    "dateOfBirth": "Date de naissance",
+    "dateOfBirth": "Année de naissance",
     "country": "Pays de résidence",
     "phone": "Téléphone",
     "languages": "Langues que vous parlez",
-    "qiraat": "Qira'at que vous enseignez",
+    "qiraat": {
+      "title": "Qira'at que vous enseignez",
+      "showMore": "Voir {{count}} de plus",
+      "showLess": "Voir moins"
+    },
     "lang": {
       "ar": "Arabe",
       "en": "Anglais",
@@ -205,7 +209,7 @@
     },
     "submit": "Enregistrer et continuer",
     "errRequired": "Ce champ est requis",
-    "errDob": "Date de naissance invalide",
+    "errDob": "Année de naissance invalide",
     "errLanguages": "Sélectionnez au moins une langue",
     "errQiraat": "Sélectionnez au moins une qira'a",
     "detailsSection": "Informations personnelles",
@@ -732,7 +736,14 @@
     "wrong_password": "Le mot de passe actuel est incorrect.",
     "invalid_chapter": "Numéro de sourate invalide",
     "invalid_recitation": "Récitateur sélectionné non disponible",
-    "invalid_demographics": "Données invalides"
+    "invalid_demographics": "Données invalides",
+    "invalid_birth_year": "Année de naissance invalide",
+    "invalid_phone": "Numéro de téléphone invalide",
+    "invalid_gender": "Genre invalide",
+    "invalid_country": "Pays invalide",
+    "qiraat_required": "Sélectionnez au moins une qira'a",
+    "invalid_qiraat": "Qira'a invalide",
+    "languages_required": "Sélectionnez au moins une langue"
   },
   "placeholder": {
     "calendar": "Calendrier"

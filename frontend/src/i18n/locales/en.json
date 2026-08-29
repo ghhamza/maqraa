@@ -191,11 +191,15 @@
     "gender": "Gender",
     "male": "Male",
     "female": "Female",
-    "dateOfBirth": "Date of birth",
+    "dateOfBirth": "Year of birth",
     "country": "Country of residence",
     "phone": "Phone",
     "languages": "Languages you speak",
-    "qiraat": "Qira'at you teach",
+    "qiraat": {
+      "title": "Qira'at you teach",
+      "showMore": "Show {{count}} more",
+      "showLess": "Show less"
+    },
     "lang": {
       "ar": "Arabic",
       "en": "English",
@@ -205,7 +209,7 @@
     },
     "submit": "Save and continue",
     "errRequired": "This field is required",
-    "errDob": "Invalid date of birth",
+    "errDob": "Invalid year of birth",
     "errLanguages": "Select at least one language",
     "errQiraat": "Select at least one qira'a",
     "detailsSection": "Personal details",
@@ -732,7 +736,14 @@
     "wrong_password": "Current password is incorrect.",
     "invalid_chapter": "Invalid surah number",
     "invalid_recitation": "Selected reciter not available",
-    "invalid_demographics": "Invalid details"
+    "invalid_demographics": "Invalid details",
+    "invalid_birth_year": "Invalid year of birth",
+    "invalid_phone": "Invalid phone number",
+    "invalid_gender": "Invalid gender",
+    "invalid_country": "Invalid country",
+    "qiraat_required": "Select at least one qira'a",
+    "invalid_qiraat": "Invalid qira'a",
+    "languages_required": "Select at least one language"
   },
   "placeholder": {
     "calendar": "Calendar"

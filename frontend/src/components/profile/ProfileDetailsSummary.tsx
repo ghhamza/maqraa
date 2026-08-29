@@ -9,7 +9,6 @@ import { getCountryName, normalizeCountryCode } from "../../data/countries";
 import { QIRAAT_OPTIONS } from "../../data/qiraat";
 import type { SpokenLanguageCode } from "../../data/languages";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
-import { useLocaleDate } from "../../hooks/useLocaleDate";
 import type { UserPublic } from "../../types";
 
 interface ProfileDetailsSummaryProps {
@@ -27,7 +26,6 @@ function DetailRow({ label, value }: { label: string; value: ReactNode }) {
 
 export function ProfileDetailsSummary({ user }: ProfileDetailsSummaryProps) {
   const { t, i18n } = useTranslation();
-  const { medium } = useLocaleDate();
   const locale = intlLocaleForAppLanguage(i18n.language);
   const notProvided = t("users.notProvided");
 
@@ -44,9 +42,10 @@ export function ProfileDetailsSummary({ user }: ProfileDetailsSummaryProps) {
         ? t("profile.female")
         : notProvided;
 
-  const dobLabel = user.date_of_birth
-    ? medium(`${user.date_of_birth.slice(0, 10)}T12:00:00`)
-    : notProvided;
+  const birthYearLabel =
+    typeof user.birth_year === "number"
+      ? String(user.birth_year)
+      : user.date_of_birth?.slice(0, 4) || notProvided;
 
   const qiraatLabels = useMemo(() => {
     const bySlug = new Map<string, string>(QIRAAT_OPTIONS.map((q) => [q.slug, q.ar]));
@@ -56,7 +55,7 @@ export function ProfileDetailsSummary({ user }: ProfileDetailsSummaryProps) {
   return (
     <dl className="divide-y divide-gray-100">
       <DetailRow label={t("profile.gender")} value={genderLabel} />
-      <DetailRow label={t("profile.dateOfBirth")} value={dobLabel} />
+      <DetailRow label={t("profile.dateOfBirth")} value={birthYearLabel} />
       <DetailRow label={t("profile.country")} value={countryLabel} />
       <DetailRow label={t("profile.phone")} value={user.phone?.trim() || notProvided} />
       <DetailRow
@@ -77,7 +76,7 @@ export function ProfileDetailsSummary({ user }: ProfileDetailsSummaryProps) {
       />
       {user.role === "teacher" ? (
         <DetailRow
-          label={t("profile.qiraat")}
+          label={t("profile.qiraat.title")}
           value={
             qiraatLabels.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
