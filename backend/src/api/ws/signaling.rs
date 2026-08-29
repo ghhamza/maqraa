@@ -518,6 +518,7 @@ async fn handle_client_message(
             }
         }
         ClientMessage::CurrentPage { page } => {
+            tracing::debug!(%user_id, page = *page, "SYNCDBG recv current-page");
             if user_id != teacher_id {
                 state
                     .rooms

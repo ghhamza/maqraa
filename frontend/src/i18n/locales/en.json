@@ -989,6 +989,11 @@
     "teacherBadge": "Teacher",
     "studentBadge": "Student",
     "sessionNotActive": "Session is not active",
+    "notStarted": {
+      "title": "Session hasn't started yet",
+      "body": "Scheduled at {{time}} — you'll join automatically when it starts",
+      "joinOngoing": "Join the ongoing session"
+    },
     "notEnrolled": "You are not enrolled in this halaqah",
     "teacherCamera": "Teacher camera",
     "micDisabledHint": "Microphone disabled — only the reciter and teacher can speak",

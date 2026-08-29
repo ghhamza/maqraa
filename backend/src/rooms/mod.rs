@@ -259,13 +259,27 @@ impl RoomManager {
     ) {
         let guard = self.sessions.read().await;
         let Some(session) = guard.get(&session_id) else {
+            if matches!(message, ServerMessage::CurrentPage { .. }) {
+                tracing::debug!("SYNCDBG broadcast current-page recipients=0 (no session)");
+            }
             return;
         };
+        let mut sent = 0usize;
         for (uid, p) in &session.participants {
             if exclude_user_id == Some(*uid) {
                 continue;
             }
-            let _ = Self::send_json(&p.tx, message);
+            if Self::send_json(&p.tx, message).is_ok() {
+                sent += 1;
+            }
+        }
+        if matches!(message, ServerMessage::CurrentPage { .. }) {
+            tracing::debug!(
+                "SYNCDBG broadcast current-page recipients={} exclude={:?} participants={}",
+                sent,
+                exclude_user_id,
+                session.participants.len()
+            );
         }
     }
 

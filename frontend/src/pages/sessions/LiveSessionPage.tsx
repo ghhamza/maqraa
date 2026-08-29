@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useBlocker, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { userFacingApiError } from "../../lib/api";
+import { syncdbg } from "../../lib/syncdbg";
 import type { PlanStatusChangedMessage } from "../../hooks/useSessionWebSocket";
 import type {
   ErrorAnnotation,
@@ -31,6 +32,7 @@ import {
   LiveSessionAuthExpired,
   LiveSessionLoadError,
   LiveSessionLoading,
+  LiveSessionNotStarted,
 } from "./components/LiveSessionEarlyStates";
 import { LiveSessionDesktopActionBar } from "./components/LiveSessionDesktopActionBar";
 import { LiveSessionTopBar } from "./components/LiveSessionTopBar";
@@ -51,6 +53,7 @@ import {
   getJuz,
   getJuzForAyah,
   getNextAyah,
+  getPageForAyah,
   getPrevAyah,
   getSurahAyahAtPageStart,
   getSurahName,
@@ -74,6 +77,7 @@ import { StudentAnnotationPopover } from "../../components/session/StudentAnnota
 import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudioButton";
 import { cn } from "@/lib/utils";
 import { useLivekitConnection } from "@/hooks/useLivekitConnection";
+import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { useMyEnrollment, useRoom } from "../../data/rooms";
 import {
   useCreateRecitation,
@@ -81,7 +85,7 @@ import {
   usePlanTransitions,
   useSessionRecitations,
 } from "../../data/recitations";
-import { usePatchSessionStatus, useSessionDetail, useLivePublicSessions } from "../../data/sessions";
+import { usePatchSessionStatus, useSessionDetail, useLivePublicSessions, useLiveSessionsPolling } from "../../data/sessions";
 import { useAnnotations } from "../../data/annotations";
 function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -138,14 +142,13 @@ function LiveSessionPageInner() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const { mediumTime } = useLocaleDate();
   const user = useAuthStore((s) => s.user);
   const token = useAuthStore((s) => s.token);
   const patchSessionRecitations = usePatchSessionRecitationsCache(id);
   const [teacherPage, setTeacherPage] = useState(1);
   const [studentBrowsePage, setStudentBrowsePage] = useState(1);
   const [autoFollow, setAutoFollow] = useState(true);
-  /** Teacher: broadcast mushaf page so students can auto-follow. */
-  const [pageBroadcast, setPageBroadcast] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mobileOverflowOpen, setMobileOverflowOpen] = useState(false);
   const [navigatorOpen, setNavigatorOpen] = useState(false);
@@ -156,6 +159,11 @@ function LiveSessionPageInner() {
   const [elapsedMs, setElapsedMs] = useState(0);
   const hadServerCurrentAyahRef = useRef(false);
   const teacherSeededFromServer = useRef(false);
+  const lastBroadcastPageRef = useRef<number | null>(null);
+  useEffect(() => {
+    teacherSeededFromServer.current = false;
+    lastBroadcastPageRef.current = null;
+  }, [id]);
   const [anotherTab, setAnotherTab] = useState(false);
   const [authExpired, setAuthExpired] = useState(false);
   const [announce, setAnnounce] = useState("");
@@ -319,8 +327,13 @@ function LiveSessionPageInner() {
    *
    * WebSocket events that mutate session state (`session_status_changed`,
    * `reciter_changed`) reconcile through this same cache key.
+   *
+   * Students on a not-yet-started live URL poll every 10s to auto-enter when
+   * the teacher flips status to `in_progress`.
    */
-  const sessionDetailQuery = useSessionDetail(id, !!id);
+  const sessionDetailQuery = useSessionDetail(id, !!id, {
+    refetchWhileNotInProgress: user?.role === "student",
+  });
 
   const sessionDetail = sessionDetailQuery.data ?? null;
   const detailErrorStatus =
@@ -329,6 +342,13 @@ function LiveSessionPageInner() {
     sessionDetailQuery.error && detailErrorStatus !== 403
       ? userFacingApiError(sessionDetailQuery.error)
       : null;
+
+  const isStudentWaitingNotStarted =
+    !!user &&
+    user.role === "student" &&
+    !!sessionDetail &&
+    sessionDetail.status !== "in_progress" &&
+    user.id !== sessionDetail.teacher_id;
 
   /**
    * Room detail. Depends on the session's `room_id`. Doesn't change during a
@@ -345,14 +365,22 @@ function LiveSessionPageInner() {
     if (!id) return;
     // Don't bounce on a stale `scheduled` cache while a refetch after start is in flight.
     if (sessionDetailQuery.isPending || sessionDetailQuery.isFetching) return;
-    if (sessionDetailQuery.data && sessionDetailQuery.data.status !== "in_progress") {
-      navigate(`/sessions/${id}`, {
-        replace: true,
-        state: { liveSessionError: t("liveSession.sessionNotActive") },
-      });
+    if (!sessionDetailQuery.data || sessionDetailQuery.data.status === "in_progress") return;
+    // Students wait on the live page; teacher (session owner) and other roles keep redirect.
+    if (
+      user?.role === "student" &&
+      user.id !== sessionDetailQuery.data.teacher_id
+    ) {
+      return;
     }
+    navigate(`/sessions/${id}`, {
+      replace: true,
+      state: { liveSessionError: t("liveSession.sessionNotActive") },
+    });
   }, [
     id,
+    user?.id,
+    user?.role,
     sessionDetailQuery.data,
     sessionDetailQuery.isPending,
     sessionDetailQuery.isFetching,
@@ -360,8 +388,14 @@ function LiveSessionPageInner() {
     t,
   ]);
 
-  const sessionReady = !!(sessionDetail && room && id && user && token);
-
+  const sessionReady = !!(
+    sessionDetail &&
+    room &&
+    id &&
+    user &&
+    token &&
+    sessionDetail.status === "in_progress"
+  );
 
   const sessionState = useSessionState({
     sessionId: id ?? "",
@@ -479,9 +513,29 @@ function LiveSessionPageInner() {
   const livePublicQuery = useLivePublicSessions(
     !!id &&
       user?.role === "student" &&
-      (livekit.accessBlock === "forbidden" || detailErrorStatus === 403),
+      (livekit.accessBlock === "forbidden" ||
+        detailErrorStatus === 403 ||
+        isStudentWaitingNotStarted),
+  );
+  const myLiveSessionsQuery = useLiveSessionsPolling(
+    user?.id ?? null,
+    isStudentWaitingNotStarted,
   );
   const livePublicMatch = livePublicQuery.data?.find((s) => s.id === id);
+  const ongoingSameRoomSessionId = useMemo(() => {
+    if (!isStudentWaitingNotStarted || !sessionDetail?.room_id) return null;
+    const roomId = sessionDetail.room_id;
+    const fromMine = myLiveSessionsQuery.data?.find((s) => s.room_id === roomId && s.id !== id);
+    if (fromMine) return fromMine.id;
+    const fromPublic = livePublicQuery.data?.find((s) => s.room_id === roomId && s.id !== id);
+    return fromPublic?.id ?? null;
+  }, [
+    isStudentWaitingNotStarted,
+    sessionDetail?.room_id,
+    myLiveSessionsQuery.data,
+    livePublicQuery.data,
+    id,
+  ]);
   const roomIdForEnrollment = sessionDetail?.room_id ?? livePublicMatch?.room_id;
   const myEnrollmentQuery = useMyEnrollment(
     roomIdForEnrollment,
@@ -560,10 +614,37 @@ function LiveSessionPageInner() {
     setActiveTool("annotate");
   }, [sessionReady, isTeacher, sessionDetail, sessionState.state.activeReciterId, sessionState.state.contentMode]);
 
+  const setCurrentPage = sessionState.setCurrentPage;
+  const setCurrentAyah = sessionState.setCurrentAyah;
+  const wsStatus = sessionState.wsStatus;
+  const hasRoomState = sessionState.hasRoomState;
+  const roomCurrentPage = sessionState.state.currentPage;
+  const prevWsStatusForPageRef = useRef(wsStatus);
+
+  useEffect(() => {
+    const prev = prevWsStatusForPageRef.current;
+    prevWsStatusForPageRef.current = wsStatus;
+    // After (re)connect, force a page broadcast so students catch up.
+    if (
+      wsStatus === "connected" &&
+      (prev === "connecting" || prev === "reconnecting")
+    ) {
+      lastBroadcastPageRef.current = null;
+    }
+  }, [wsStatus]);
+
+  const followedPage = useMemo(() => {
+    const led = roomCurrentPage;
+    if (led != null) return led;
+    const ayah = sessionState.state.currentAyah;
+    if (ayah) return getPageForAyah(ayah.surah, ayah.ayah, riwaya);
+    return 1;
+  }, [roomCurrentPage, sessionState.state.currentAyah, riwaya]);
+
   const page = isTeacher
     ? teacherPage
     : autoFollow
-      ? (sessionState.state.currentPage ?? 1)
+      ? followedPage
       : studentBrowsePage;
 
   const noopPage = useCallback(() => {}, []);
@@ -572,13 +653,26 @@ function LiveSessionPageInner() {
     (p: number) => {
       const next = Math.min(totalPages, Math.max(1, p));
       if (isTeacher) {
+        syncdbg(
+          `goPage isTeacher=${isTeacher} autoFollow=${autoFollow} target=${next} branch=broadcast`,
+        );
+        // Mark as already broadcast so the seed/reconnect effect does not send a second time.
+        lastBroadcastPageRef.current = next;
         setTeacherPage(next);
-        if (pageBroadcast) sessionState.setCurrentPage(next);
+        syncdbg(`setCurrentPage callSite=goPage page=${next}`);
+        setCurrentPage(next);
       } else if (!autoFollow) {
+        syncdbg(
+          `goPage isTeacher=${isTeacher} autoFollow=${autoFollow} target=${next} branch=studentBrowse`,
+        );
         setStudentBrowsePage(next);
+      } else {
+        syncdbg(
+          `goPage isTeacher=${isTeacher} autoFollow=${autoFollow} target=${next} branch=BAIL-student-autoFollow`,
+        );
       }
     },
-    [isTeacher, autoFollow, pageBroadcast, totalPages, sessionState.setCurrentPage],
+    [isTeacher, autoFollow, totalPages, setCurrentPage],
   );
 
   const canNavigate = isTeacher || (!isTeacher && !autoFollow);
@@ -716,29 +810,67 @@ function LiveSessionPageInner() {
   );
 
   useEffect(() => {
-    if (!sessionReady || !isTeacher) return;
-    const cp = sessionState.state.currentPage;
-    if (cp != null && !teacherSeededFromServer.current) {
-      setTeacherPage(cp);
+    const lastBroadcast = lastBroadcastPageRef.current;
+    syncdbg(
+      `teacherPage-effect run teacherPage=${teacherPage} lastBroadcastPageRef=${lastBroadcast} isTeacher=${isTeacher} hasRoomState=${hasRoomState} wsStatus=${wsStatus} seeded=${teacherSeededFromServer.current} roomCurrentPage=${roomCurrentPage ?? "null"}`,
+    );
+
+    if (!isTeacher || !hasRoomState || wsStatus !== "connected") {
+      syncdbg(
+        `teacherPage-effect decision=skipped-other reason=gate isTeacher=${isTeacher} hasRoomState=${hasRoomState} wsStatus=${wsStatus}`,
+      );
+      return;
+    }
+
+    // One-shot seed from room-state before any broadcast (avoids overwriting
+    // a restored page with the local default of 1).
+    if (!teacherSeededFromServer.current) {
+      if (roomCurrentPage != null) {
+        syncdbg(
+          `teacherPage-effect decision=skipped-other reason=seed-from-server page=${roomCurrentPage}`,
+        );
+        setTeacherPage(roomCurrentPage);
+        lastBroadcastPageRef.current = roomCurrentPage;
+        teacherSeededFromServer.current = true;
+        return;
+      }
+      syncdbg(`teacherPage-effect decision=skipped-other reason=seed-mark-only`);
       teacherSeededFromServer.current = true;
     }
-  }, [sessionReady, isTeacher, sessionState.state.currentPage]);
+
+    if (lastBroadcastPageRef.current === teacherPage) {
+      syncdbg(
+        `teacherPage-effect decision=skipped-guard teacherPage=${teacherPage} lastBroadcastPageRef=${lastBroadcastPageRef.current}`,
+      );
+      return;
+    }
+    syncdbg(`teacherPage-effect decision=sent teacherPage=${teacherPage}`);
+    lastBroadcastPageRef.current = teacherPage;
+    syncdbg(`setCurrentPage callSite=teacherPage-effect page=${teacherPage}`);
+    setCurrentPage(teacherPage);
+  }, [
+    isTeacher,
+    hasRoomState,
+    wsStatus,
+    teacherPage,
+    roomCurrentPage,
+    setCurrentPage,
+  ]);
 
   const broadcastAyahToRoom = useCallback(
     (data: { surah: number; ayah: number }) => {
-      sessionState.setCurrentAyah(data.surah, data.ayah);
+      setCurrentAyah(data.surah, data.ayah);
     },
-    [sessionState.setCurrentAyah],
+    [setCurrentAyah],
   );
-
-  const followHighlight = isTeacher || (autoFollow && !isTeacher);
 
   const interaction = useMushafInteraction({
     initialPage: page,
     riwaya,
     onPageChange: isTeacher ? goPage : autoFollow ? noopPage : goPage,
     onAyahSelect: sessionState.isTeacher ? broadcastAyahToRoom : undefined,
-    followHighlightPage: followHighlight,
+    // Students follow page via WS `current-page` / room-state — not highlight-driven jumps.
+    followHighlightPage: isTeacher,
   });
 
   const { setHighlightRange, setActiveWord } = interaction;
@@ -1267,9 +1399,12 @@ function LiveSessionPageInner() {
         direction === "next"
           ? getNextAyah(surah, ayah, riwaya)
           : getPrevAyah(surah, ayah, riwaya);
-      if (next) sessionState.setCurrentAyah(next.surah, next.ayah);
+      if (next) {
+        setCurrentAyah(next.surah, next.ayah);
+        interaction.goToAyah(next.surah, next.ayah);
+      }
     },
-    [isTeacher, currentAyahForNav, riwaya, sessionState.setCurrentAyah],
+    [isTeacher, currentAyahForNav, riwaya, setCurrentAyah, interaction.goToAyah],
   );
 
   useEffect(() => {
@@ -1310,6 +1445,16 @@ function LiveSessionPageInner() {
   }
 
   if (loading || waitingForTokenGate || waitingForAccessGate) return <LiveSessionLoading />;
+
+  if (isStudentWaitingNotStarted && sessionDetail) {
+    return (
+      <LiveSessionNotStarted
+        sessionId={id}
+        scheduledAtLabel={mediumTime(sessionDetail.scheduled_at)}
+        ongoingSessionId={ongoingSameRoomSessionId}
+      />
+    );
+  }
 
   if (accessBlockedMessageKey) {
     return <LiveSessionAccessBlocked messageKey={accessBlockedMessageKey} sessionId={id} />;
@@ -1370,17 +1515,7 @@ function LiveSessionPageInner() {
         {/* Mode row — content toggle (teacher) + auto-follow. */}
         <div className="hidden items-center justify-center gap-3 bg-[var(--mushaf-canvas)] px-4 pt-3 md:flex">
           {isTeacher && contentSurfaceReady ? (
-            <>
-              <ContentModeToggle mode={contentMode} onChange={handleContentModeChange} />
-              {!isBoardMode ? (
-                <AutoFollowBadge
-                  enabled={pageBroadcast}
-                  onToggle={() => setPageBroadcast((v) => !v)}
-                  variant="modePill"
-                  role="teacher"
-                />
-              ) : null}
-            </>
+            <ContentModeToggle mode={contentMode} onChange={handleContentModeChange} />
           ) : null}
           {!isTeacher && contentSurfaceReady && !isBoardMode ? (
             <AutoFollowBadge
@@ -1491,7 +1626,8 @@ function LiveSessionPageInner() {
                     onWordMouseLeave={!isTeacher ? handleStudentWordLeave : undefined}
                     onAyahMarkerMouseEnter={!isTeacher ? handleStudentAyahMarkerEnter : undefined}
                     onAyahMarkerMouseLeave={!isTeacher ? handleStudentAyahMarkerLeave : undefined}
-                    onAyahClick={interaction.handleAyahClick}
+                    // Do not pass onAyahClick: QCF fires it together with onWordClick, and
+                    // handleWordClick already calls handleAyahClick → would double-send current-ayah.
                     getWordAnnotationClass={getWordAnnotationClass}
                   />
                 </div>

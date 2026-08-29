@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { syncdbg } from "../lib/syncdbg";
 import { getSessionWebSocketUrl } from "../lib/wsUrl";
 import type { ErrorAnnotation } from "../types";
 
@@ -247,10 +248,43 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
     }
   }, []);
 
+  const outboundQueueRef = useRef<object[]>([]);
+
+  const flushOutboundQueue = useCallback(() => {
+    const sock = wsRef.current;
+    if (!sock || sock.readyState !== WebSocket.OPEN) return;
+    const queued = outboundQueueRef.current;
+    if (queued.length === 0) return;
+    outboundQueueRef.current = [];
+    for (const obj of queued) {
+      sock.send(JSON.stringify(obj));
+    }
+  }, []);
+
   const sendRaw = useCallback((obj: object) => {
-    const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(obj));
+    const sock = wsRef.current;
+    const type = (obj as { type?: string }).type;
+    syncdbg(`sendRaw type=${type ?? "?"} readyState=${sock?.readyState ?? "null"}`);
+    if (sock?.readyState === WebSocket.OPEN) {
+      sock.send(JSON.stringify(obj));
+      return;
+    }
+    // Pings are ephemeral — never queue.
+    if (type === "ping") return;
+    // Latest page / content-mode wins if several queued while connecting.
+    if (type === "current-page" || type === "set-content-mode") {
+      outboundQueueRef.current = outboundQueueRef.current.filter(
+        (m) => (m as { type?: string }).type !== type,
+      );
+    }
+    outboundQueueRef.current.push(obj);
+    if (outboundQueueRef.current.length > 80) {
+      outboundQueueRef.current = outboundQueueRef.current.slice(-80);
+    }
+    if (import.meta.env.DEV) {
+      console.warn(
+        `[session ws] queued ${type ?? "message"} (socket not open; readyState=${sock?.readyState ?? "null"})`,
+      );
     }
   }, []);
 
@@ -402,6 +436,7 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
       intentionalClose.current = true;
       clearReconnect();
       clearPing();
+      outboundQueueRef.current = [];
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -451,6 +486,7 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
         lastInboundAt.current = Date.now();
         reconnectAttempt.current = 0;
         setStatus("connected");
+        flushOutboundQueue();
         clearPing();
         pingTimer.current = setInterval(() => {
           const sock = wsRef.current;
@@ -467,6 +503,7 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
       ws.onmessage = (ev) => {
         const msg = parseServerMessage(String(ev.data));
         if (!msg || typeof msg.type !== "string") return;
+        syncdbg(`inbound type=${msg.type}`);
         lastInboundAt.current = Date.now();
         const o = optsRef.current;
         switch (msg.type) {
@@ -693,7 +730,7 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
       }
       if (mounted.current) setStatus("disconnected");
     };
-  }, [enabled, sessionId, token, clearPing, clearReconnect]);
+  }, [enabled, sessionId, token, clearPing, clearReconnect, flushOutboundQueue]);
 
   return {
     status,

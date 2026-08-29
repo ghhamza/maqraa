@@ -103,7 +103,14 @@ export function useLivePublicSessions(enabled = true) {
   });
 }
 
-export function useSessionDetail(sessionId: string | undefined, enabled = true) {
+export function useSessionDetail(
+  sessionId: string | undefined,
+  enabled = true,
+  options?: {
+    /** When true, refetch every 10s while cached status is not `in_progress`. */
+    refetchWhileNotInProgress?: boolean;
+  },
+) {
   return useQuery({
     queryKey: sessionKeys.detail(sessionId ?? ""),
     queryFn: async ({ signal }) => {
@@ -111,6 +118,12 @@ export function useSessionDetail(sessionId: string | undefined, enabled = true) 
       return data;
     },
     enabled: !!sessionId && enabled,
+    refetchInterval: (query) => {
+      if (!options?.refetchWhileNotInProgress) return false;
+      const status = query.state.data?.status;
+      if (!status || status === "in_progress") return false;
+      return 10_000;
+    },
   });
 }
 

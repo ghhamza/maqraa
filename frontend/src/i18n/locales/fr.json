@@ -989,6 +989,11 @@
     "teacherBadge": "Enseignant",
     "studentBadge": "Étudiant",
     "sessionNotActive": "La séance n'est pas active",
+    "notStarted": {
+      "title": "La séance n'a pas encore commencé",
+      "body": "Prévue à {{time}} — vous rejoindrez automatiquement à son démarrage",
+      "joinOngoing": "Rejoindre la séance en cours"
+    },
     "notEnrolled": "Vous n'êtes pas inscrit dans ce groupe",
     "teacherCamera": "Caméra de l'enseignant",
     "micDisabledHint": "Micro désactivé — seul le récitant et l'enseignant peuvent parler",

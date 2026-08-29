@@ -90,3 +90,44 @@ export function LiveSessionAccessBlocked({
     </div>
   );
 }
+
+/** Student opened /live before the teacher started — block until status flips to in_progress. */
+export function LiveSessionNotStarted({
+  scheduledAtLabel,
+  ongoingSessionId,
+  sessionId,
+}: {
+  scheduledAtLabel: string;
+  ongoingSessionId: string | null;
+  sessionId: string;
+}) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)] p-6">
+      <div className="w-full max-w-md rounded-xl bg-white p-8 text-center shadow-[0_4px_24px_rgba(26,26,26,0.08)]">
+        <h1 className="mb-3 text-xl font-semibold text-[var(--color-text)]">
+          {t("liveSession.notStarted.title")}
+        </h1>
+        <p className="mb-6 text-[var(--color-text-muted)]">
+          {t("liveSession.notStarted.body", { time: scheduledAtLabel })}
+        </p>
+        <div className="flex flex-col items-stretch gap-3">
+          {ongoingSessionId ? (
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => navigate(`/sessions/${ongoingSessionId}/live`, { replace: true })}
+            >
+              {t("liveSession.notStarted.joinOngoing")}
+            </Button>
+          ) : null}
+          <Button type="button" variant="outline" onClick={() => navigate(`/sessions/${sessionId}`)}>
+            {t("live.goToSession")}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

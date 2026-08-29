@@ -36,6 +36,10 @@ export function WhiteboardLayer({
   const svgRef = useRef<SVGSVGElement>(null);
   const [livePoints, setLivePoints] = useState<StrokePoint[] | null>(null);
   const drawingRef = useRef(false);
+  /** Points for the in-progress gesture — read on end without calling parent setters inside setState. */
+  const livePointsRef = useRef<StrokePoint[] | null>(null);
+  /** Guards against pointerup + pointercancel (or Strict Mode) submitting twice. */
+  const submittedRef = useRef(false);
 
   const toNorm = useCallback((e: React.PointerEvent<SVGSVGElement>): StrokePoint | null => {
     const el = svgRef.current;
@@ -61,6 +65,8 @@ export function WhiteboardLayer({
       e.stopPropagation();
       (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
       drawingRef.current = true;
+      submittedRef.current = false;
+      livePointsRef.current = [pt];
       setLivePoints([pt]);
     },
     [drawingEnabled, toNorm],
@@ -72,7 +78,9 @@ export function WhiteboardLayer({
       const pt = toNorm(e);
       if (!pt) return;
       e.preventDefault();
-      setLivePoints((prev) => (prev ? [...prev, pt] : [pt]));
+      const next = livePointsRef.current ? [...livePointsRef.current, pt] : [pt];
+      livePointsRef.current = next;
+      setLivePoints(next);
     },
     [toNorm],
   );
@@ -86,10 +94,13 @@ export function WhiteboardLayer({
       } catch {
         /* ignore */
       }
-      setLivePoints((prev) => {
-        if (prev && prev.length > 0) onStrokeComplete(prev);
-        return null;
-      });
+      const pts = livePointsRef.current;
+      livePointsRef.current = null;
+      setLivePoints(null);
+      if (!pts || pts.length === 0) return;
+      if (submittedRef.current) return;
+      submittedRef.current = true;
+      onStrokeComplete(pts);
     },
     [onStrokeComplete],
   );

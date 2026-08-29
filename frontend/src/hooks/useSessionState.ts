@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ErrorAnnotation } from "../types";
+import { syncdbg } from "../lib/syncdbg";
 import type {
   ContentMode,
   ParticipantInfo,
@@ -242,6 +243,7 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
       setState((prev) => ({ ...prev, currentAyah: null }));
     },
     onCurrentPage: (page) => {
+      syncdbg(`onCurrentPage inbound page=${page}`);
       setState((prev) => ({ ...prev, currentPage: page }));
     },
     onContentModeChanged: (mode) => {
@@ -348,6 +350,11 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
 
   const setCurrentPage = useCallback(
     (page: number) => {
+      syncdbg(`setCurrentPage outbound page=${page}`);
+      if (import.meta.env.DEV) {
+        console.debug("[session] current-page send", page);
+      }
+      setState((prev) => (prev.currentPage === page ? prev : { ...prev, currentPage: page }));
       ws.sendCurrentPage(page);
     },
     [ws],

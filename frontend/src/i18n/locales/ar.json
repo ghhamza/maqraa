@@ -989,6 +989,11 @@
     "teacherBadge": "معلّم",
     "studentBadge": "طالب",
     "sessionNotActive": "الحصة غير نشطة",
+    "notStarted": {
+      "title": "لم تبدأ الحصة بعد",
+      "body": "موعد الحصة: {{time}} — ستنضم تلقائيًا عند بدئها",
+      "joinOngoing": "انضمام إلى الحصة الجارية"
+    },
     "notEnrolled": "أنت غير مسجل في هذه الحلقة",
     "teacherCamera": "كاميرا المعلّم",
     "micDisabledHint": "الميكروفون معطّل — فقط القارئ والمعلّم يمكنهم التحدث",

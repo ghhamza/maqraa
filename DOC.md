@@ -44,6 +44,8 @@ npm run dev             # http://localhost:5173
 curl http://localhost:3000/health
 ```
 
+SYNCDBG live-session debug logs — frontend: automatic in `pnpm dev`; backend: `RUST_LOG=maqraa=debug cargo run` (silence with `RUST_LOG=maqraa=info`).
+
 ## Design System
 
 - **Direction**: Arabic = RTL (default), English/French = LTR. Layout flips dynamically.
