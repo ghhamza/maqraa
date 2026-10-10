@@ -12,7 +12,7 @@ use sqlx::{FromRow, QueryBuilder};
 use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
-use crate::api::handlers::share::share_url;
+use crate::api::profile_constants::SPOKEN_LANGUAGE_CODES;
 use crate::api::AppState;
 
 #[derive(Deserialize)]
@@ -23,16 +23,19 @@ pub struct ListPublicHalaqatQuery {
 
 #[derive(Serialize)]
 pub struct PublicHalaqatResponse {
-    pub items: Vec<PublicHalaqahItem>,
+    pub items: Vec<PublicHalaqah>,
     pub total: i64,
     pub generated_at: DateTime<Utc>,
 }
 
 #[derive(Serialize)]
-pub struct PublicHalaqahItem {
+pub struct PublicHalaqah {
     pub id: Uuid,
     pub name: String,
     pub teacher_name: String,
+    /// Teacher's spoken languages (ISO 639-1, from the profile). Temporary proxy
+    /// until halaqat get their own `teaching_languages`.
+    pub teacher_languages: Vec<String>,
     pub halaqah_type: String,
     pub riwaya: String,
     pub description: Option<String>,
@@ -51,6 +54,13 @@ pub struct PublicHalaqahItem {
 }
 
 #[derive(Serialize)]
+pub struct PublicHalaqahDetail {
+    #[serde(flatten)]
+    pub base: PublicHalaqah,
+    pub upcoming_sessions: Vec<PublicNextSession>,
+}
+
+#[derive(Serialize, FromRow)]
 pub struct PublicNextSession {
     pub scheduled_at: DateTime<Utc>,
     pub duration_minutes: i32,
@@ -61,6 +71,7 @@ struct PublicHalaqahRow {
     id: Uuid,
     name: String,
     teacher_name: String,
+    teacher_languages: Vec<String>,
     halaqah_type: String,
     riwaya: String,
     description: Option<String>,
@@ -90,47 +101,8 @@ pub struct WebsiteListingResponse {
 const LISTING_WHERE: &str = " r.is_public = true AND r.is_active = true \
      AND r.website_listed = true AND r.setup_completed_at IS NOT NULL";
 
-fn parse_halaqah_type(s: &str) -> Result<&str, StatusCode> {
-    match s {
-        "hifz" | "tilawa" | "muraja" | "tajweed" => Ok(s),
-        _ => Err(StatusCode::BAD_REQUEST),
-    }
-}
-
-fn apply_listing_filters<'a>(
-    qb: &mut QueryBuilder<'a, sqlx::Postgres>,
-    halaqah_type: Option<&'a str>,
-) {
-    qb.push(" WHERE");
-    qb.push(LISTING_WHERE);
-    if let Some(ht) = halaqah_type {
-        qb.push(" AND r.halaqah_type::text = ");
-        qb.push_bind(ht);
-    }
-}
-
-pub async fn list_public_halaqat(
-    State(state): State<AppState>,
-    Query(params): Query<ListPublicHalaqatQuery>,
-) -> Result<(HeaderMap, Json<PublicHalaqatResponse>), StatusCode> {
-    let limit = params.limit.unwrap_or(50).clamp(1, 100);
-    let halaqah_type = match params.halaqah_type.as_deref().map(str::trim) {
-        Some("") | None => None,
-        Some(raw) => Some(parse_halaqah_type(raw)?),
-    };
-
-    let mut qb_count = QueryBuilder::new(
-        "SELECT COUNT(r.id)::bigint FROM rooms r INNER JOIN users u ON u.id = r.teacher_id",
-    );
-    apply_listing_filters(&mut qb_count, halaqah_type);
-    let total: i64 = qb_count
-        .build_query_scalar()
-        .fetch_one(&state.db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let mut qb = QueryBuilder::new(
-        "SELECT r.id, r.name, u.name AS teacher_name, \
+const PUBLIC_HALAQAH_SELECT: &str = "SELECT r.id, r.name, u.name AS teacher_name, \
+         u.spoken_languages AS teacher_languages, \
          r.halaqah_type::text AS halaqah_type, r.riwaya::text AS riwaya, \
          r.description, r.max_students, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
@@ -156,8 +128,120 @@ pub async fn list_public_halaqat(
                AND (sl.max_uses IS NULL OR sl.use_count < sl.max_uses) \
              ORDER BY (sl.expires_at IS NULL AND sl.max_uses IS NULL) DESC, sl.created_at ASC \
              LIMIT 1 \
-         ) sl ON true",
+         ) sl ON true";
+
+fn parse_halaqah_type(s: &str) -> Result<&str, StatusCode> {
+    match s {
+        "hifz" | "tilawa" | "muraja" | "tajweed" => Ok(s),
+        _ => Err(StatusCode::BAD_REQUEST),
+    }
+}
+
+fn apply_listing_filters<'a>(
+    qb: &mut QueryBuilder<'a, sqlx::Postgres>,
+    halaqah_type: Option<&'a str>,
+) {
+    qb.push(" WHERE");
+    qb.push(LISTING_WHERE);
+    if let Some(ht) = halaqah_type {
+        qb.push(" AND r.halaqah_type::text = ");
+        qb.push_bind(ht);
+    }
+}
+
+fn filter_teacher_languages(raw: Vec<String>) -> Vec<String> {
+    let mut out = Vec::with_capacity(raw.len());
+    for code in raw {
+        if SPOKEN_LANGUAGE_CODES.contains(&code.as_str()) && !out.iter().any(|c| c == &code) {
+            out.push(code);
+        }
+    }
+    out
+}
+
+fn listing_cache_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=120, s-maxage=300"),
     );
+    headers
+}
+
+fn to_public(
+    row: PublicHalaqahRow,
+    now: DateTime<Utc>,
+    app_base: &str,
+    public_base: &str,
+) -> PublicHalaqah {
+    let seats_left = (row.max_students as i64 - row.enrolled_count).max(0);
+    let deadline_ok = row
+        .enrollment_deadline_at
+        .map(|d| d > now)
+        .unwrap_or(true);
+    let can_enroll = row.enrollment_open && deadline_ok && seats_left > 0;
+    let next_session = match (row.next_scheduled_at, row.next_duration_minutes) {
+        (Some(scheduled_at), Some(duration_minutes)) => Some(PublicNextSession {
+            scheduled_at,
+            duration_minutes,
+        }),
+        _ => None,
+    };
+    let share_url = row
+        .share_token
+        .as_deref()
+        .map(|token| format!("{public_base}/s/{token}"));
+    let card_image_url = row
+        .share_token
+        .as_deref()
+        .map(|token| format!("{public_base}/s/{token}/card.png?format=square&v=5"));
+    let join_url = share_url
+        .clone()
+        .unwrap_or_else(|| format!("{app_base}/register?next=%2Frooms%2F{}", row.id));
+    PublicHalaqah {
+        join_url,
+        share_url,
+        card_image_url,
+        id: row.id,
+        name: row.name,
+        teacher_name: row.teacher_name,
+        teacher_languages: filter_teacher_languages(row.teacher_languages),
+        halaqah_type: row.halaqah_type,
+        riwaya: row.riwaya,
+        description: row.description,
+        max_students: row.max_students,
+        enrolled_count: row.enrolled_count,
+        seats_left,
+        can_enroll,
+        requires_approval: row.requires_approval,
+        enrollment_deadline_at: row.enrollment_deadline_at,
+        timezone: row.timezone,
+        next_session,
+        is_live: row.is_live,
+    }
+}
+
+pub async fn list_public_halaqat(
+    State(state): State<AppState>,
+    Query(params): Query<ListPublicHalaqatQuery>,
+) -> Result<(HeaderMap, Json<PublicHalaqatResponse>), StatusCode> {
+    let limit = params.limit.unwrap_or(50).clamp(1, 100);
+    let halaqah_type = match params.halaqah_type.as_deref().map(str::trim) {
+        Some("") | None => None,
+        Some(raw) => Some(parse_halaqah_type(raw)?),
+    };
+
+    let mut qb_count = QueryBuilder::new(
+        "SELECT COUNT(r.id)::bigint FROM rooms r INNER JOIN users u ON u.id = r.teacher_id",
+    );
+    apply_listing_filters(&mut qb_count, halaqah_type);
+    let total: i64 = qb_count
+        .build_query_scalar()
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut qb = QueryBuilder::new(PUBLIC_HALAQAH_SELECT);
     apply_listing_filters(&mut qb, halaqah_type);
     qb.push(
         " ORDER BY is_live DESC, r.enrollment_open DESC, ns.scheduled_at ASC NULLS LAST, r.created_at DESC",
@@ -176,64 +260,54 @@ pub async fn list_public_halaqat(
     let public_base = state.config.public_base_url.trim_end_matches('/');
     let items = rows
         .into_iter()
-        .map(|row| {
-            let seats_left = (row.max_students as i64 - row.enrolled_count).max(0);
-            let deadline_ok = row
-                .enrollment_deadline_at
-                .map(|d| d > now)
-                .unwrap_or(true);
-            let can_enroll = row.enrollment_open && deadline_ok && seats_left > 0;
-            let next_session = match (row.next_scheduled_at, row.next_duration_minutes) {
-                (Some(scheduled_at), Some(duration_minutes)) => Some(PublicNextSession {
-                    scheduled_at,
-                    duration_minutes,
-                }),
-                _ => None,
-            };
-            let share_url = row
-                .share_token
-                .as_deref()
-                .map(|token| share_url(&state.config, token));
-            let card_image_url = row.share_token.as_deref().map(|token| {
-                format!("{public_base}/s/{token}/card.png?format=square&v=5")
-            });
-            let join_url = share_url.clone().unwrap_or_else(|| {
-                format!("{app_base}/register?next=%2Frooms%2F{}", row.id)
-            });
-            PublicHalaqahItem {
-                join_url,
-                share_url,
-                card_image_url,
-                id: row.id,
-                name: row.name,
-                teacher_name: row.teacher_name,
-                halaqah_type: row.halaqah_type,
-                riwaya: row.riwaya,
-                description: row.description,
-                max_students: row.max_students,
-                enrolled_count: row.enrolled_count,
-                seats_left,
-                can_enroll,
-                requires_approval: row.requires_approval,
-                enrollment_deadline_at: row.enrollment_deadline_at,
-                timezone: row.timezone,
-                next_session,
-                is_live: row.is_live,
-            }
-        })
+        .map(|row| to_public(row, now, app_base, public_base))
         .collect();
 
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        CACHE_CONTROL,
-        HeaderValue::from_static("public, max-age=120, s-maxage=300"),
-    );
     Ok((
-        headers,
+        listing_cache_headers(),
         Json(PublicHalaqatResponse {
             items,
             total,
             generated_at: now,
+        }),
+    ))
+}
+
+pub async fn get_public_halaqah(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<(HeaderMap, Json<PublicHalaqahDetail>), StatusCode> {
+    let mut qb = QueryBuilder::new(PUBLIC_HALAQAH_SELECT);
+    qb.push(" WHERE");
+    qb.push(LISTING_WHERE);
+    qb.push(" AND r.id = ");
+    qb.push_bind(id);
+
+    let row = qb
+        .build_query_as::<PublicHalaqahRow>()
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let upcoming_sessions = sqlx::query_as::<_, PublicNextSession>(
+        "SELECT scheduled_at, duration_minutes FROM sessions \
+         WHERE room_id = $1 AND status = 'scheduled' AND scheduled_at >= NOW() \
+         ORDER BY scheduled_at ASC LIMIT 5",
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let now = Utc::now();
+    let app_base = state.config.app_base_url.trim_end_matches('/');
+    let public_base = state.config.public_base_url.trim_end_matches('/');
+    Ok((
+        listing_cache_headers(),
+        Json(PublicHalaqahDetail {
+            base: to_public(row, now, app_base, public_base),
+            upcoming_sessions,
         }),
     ))
 }

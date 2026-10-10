@@ -130,7 +130,7 @@ export function RoomInvitesCard({ room, onInviteOpen }: RoomInvitesCardProps) {
           open={shareCardOpen}
           title={t("invite.shareCardTitle")}
           onClose={() => setShareCardOpen(false)}
-          contentClassName="max-h-[85vh] overflow-y-auto sm:max-w-lg"
+          contentClassName="max-h-[85vh] overflow-y-auto max-w-4xl sm:max-w-4xl"
         >
           <ShareCard
             roomId={room.id}
@@ -140,6 +140,7 @@ export function RoomInvitesCard({ room, onInviteOpen }: RoomInvitesCardProps) {
             shareToken={room.share_token ?? null}
             variant="full"
             hideTitle
+            className="bg-transparent p-0 shadow-none"
           />
         </Modal>
       ) : null}

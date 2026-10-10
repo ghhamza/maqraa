@@ -35,6 +35,10 @@ pub fn build_router(state: AppState) -> Router {
             "/api/public/halaqat",
             get(handlers::public_halaqat::list_public_halaqat),
         )
+        .route(
+            "/api/public/halaqat/{id}",
+            get(handlers::public_halaqat::get_public_halaqah),
+        )
         .with_state(state.clone())
         .layer(website_cors(&state.config.website_origins));
 
