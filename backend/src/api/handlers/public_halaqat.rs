@@ -12,6 +12,7 @@ use sqlx::{FromRow, QueryBuilder};
 use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
+use crate::api::handlers::share::share_url;
 use crate::api::AppState;
 
 #[derive(Deserialize)]
@@ -45,6 +46,8 @@ pub struct PublicHalaqahItem {
     pub next_session: Option<PublicNextSession>,
     pub is_live: bool,
     pub join_url: String,
+    pub share_url: Option<String>,
+    pub card_image_url: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -70,6 +73,7 @@ struct PublicHalaqahRow {
     next_scheduled_at: Option<DateTime<Utc>>,
     next_duration_minutes: Option<i32>,
     is_live: bool,
+    share_token: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -132,7 +136,8 @@ pub async fn list_public_halaqat(
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
          r.enrollment_open, r.requires_approval, r.enrollment_deadline_at, r.timezone, \
          ns.scheduled_at AS next_scheduled_at, ns.duration_minutes AS next_duration_minutes, \
-         EXISTS (SELECT 1 FROM sessions s WHERE s.room_id = r.id AND s.status = 'in_progress') AS is_live \
+         EXISTS (SELECT 1 FROM sessions s WHERE s.room_id = r.id AND s.status = 'in_progress') AS is_live, \
+         sl.token AS share_token \
          FROM rooms r \
          INNER JOIN users u ON u.id = r.teacher_id \
          LEFT JOIN LATERAL ( \
@@ -140,7 +145,18 @@ pub async fn list_public_halaqat(
              FROM sessions \
              WHERE room_id = r.id AND status = 'scheduled' AND scheduled_at >= NOW() \
              ORDER BY scheduled_at LIMIT 1 \
-         ) ns ON true",
+         ) ns ON true \
+         LEFT JOIN LATERAL ( \
+             SELECT sl.token FROM share_links sl \
+             WHERE sl.target_id = r.id \
+               AND sl.target_type = 'halaqah' \
+               AND sl.email_bound IS NULL \
+               AND sl.revoked_at IS NULL \
+               AND (sl.expires_at IS NULL OR sl.expires_at > NOW()) \
+               AND (sl.max_uses IS NULL OR sl.use_count < sl.max_uses) \
+             ORDER BY (sl.expires_at IS NULL AND sl.max_uses IS NULL) DESC, sl.created_at ASC \
+             LIMIT 1 \
+         ) sl ON true",
     );
     apply_listing_filters(&mut qb, halaqah_type);
     qb.push(
@@ -156,7 +172,8 @@ pub async fn list_public_halaqat(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let now = Utc::now();
-    let base = state.config.app_base_url.trim_end_matches('/');
+    let app_base = state.config.app_base_url.trim_end_matches('/');
+    let public_base = state.config.public_base_url.trim_end_matches('/');
     let items = rows
         .into_iter()
         .map(|row| {
@@ -173,8 +190,20 @@ pub async fn list_public_halaqat(
                 }),
                 _ => None,
             };
+            let share_url = row
+                .share_token
+                .as_deref()
+                .map(|token| share_url(&state.config, token));
+            let card_image_url = row.share_token.as_deref().map(|token| {
+                format!("{public_base}/s/{token}/card.png?format=square&v=5")
+            });
+            let join_url = share_url.clone().unwrap_or_else(|| {
+                format!("{app_base}/register?next=%2Frooms%2F{}", row.id)
+            });
             PublicHalaqahItem {
-                join_url: format!("{base}/register?next=%2Frooms%2F{}", row.id),
+                join_url,
+                share_url,
+                card_image_url,
                 id: row.id,
                 name: row.name,
                 teacher_name: row.teacher_name,

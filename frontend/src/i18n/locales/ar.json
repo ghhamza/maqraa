@@ -1421,7 +1421,9 @@
     "status": {
       "joined": "انضمّ"
     },
-    "noInvites": "لا توجد دعوات بعد"
+    "noInvites": "لا توجد دعوات بعد",
+    "shareCardButton": "بطاقة المشاركة",
+    "shareCardTitle": "بطاقة الحلقة ورمز QR"
   },
   "calendar": {
     "add": "إضافة إلى التقويم"

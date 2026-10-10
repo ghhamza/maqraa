@@ -1389,7 +1389,9 @@
     "status": {
       "joined": "A rejoint"
     },
-    "noInvites": "Aucune invitation"
+    "noInvites": "Aucune invitation",
+    "shareCardButton": "Carte de partage",
+    "shareCardTitle": "Carte de la halaqah & QR code"
   },
   "calendar": {
     "add": "Ajouter au calendrier"

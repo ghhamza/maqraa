@@ -1389,7 +1389,9 @@
     "status": {
       "joined": "Joined"
     },
-    "noInvites": "No invites yet"
+    "noInvites": "No invites yet",
+    "shareCardButton": "Share card",
+    "shareCardTitle": "Halaqah card & QR code"
   },
   "calendar": {
     "add": "Add to calendar"

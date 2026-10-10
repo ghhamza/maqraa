@@ -258,7 +258,7 @@ pub async fn ensure_halaqah_share_link(
     ))
 }
 
-fn share_url(config: &crate::config::AppConfig, token: &str) -> String {
+pub(crate) fn share_url(config: &crate::config::AppConfig, token: &str) -> String {
     format!(
         "{}/s/{}",
         config.public_base_url.trim_end_matches('/'),

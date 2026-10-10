@@ -3,10 +3,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, QrCode } from "lucide-react";
 import type { Room } from "../../types";
 import { PageCard } from "../layout/PageCard";
 import { Button } from "../ui/Button";
+import { Modal } from "../ui/Modal";
+import { ShareCard } from "../share/ShareCard";
 import {
   findActiveShareLink,
   findPrimaryShareLink,
@@ -37,6 +39,7 @@ export function RoomInvitesCard({ room, onInviteOpen }: RoomInvitesCardProps) {
   const key = `invites-card:halaqah:${room.id}`;
   const autoCreateTriggeredRef = useRef(false);
   const [copied, setCopied] = useState(false);
+  const [shareCardOpen, setShareCardOpen] = useState(false);
 
   const token = activeLink?.token ?? room.share_token ?? null;
   const shareUrl = activeLink?.share_url ?? (token ? shareTeaserUrl(token) : "");
@@ -112,10 +115,34 @@ export function RoomInvitesCard({ room, onInviteOpen }: RoomInvitesCardProps) {
             </p>
           ) : null}
         </div>
-        <Button type="button" variant="primary" onClick={onInviteOpen}>
-          {t("invite.inviteStudents")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="primary" onClick={onInviteOpen}>
+            {t("invite.inviteStudents")}
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => setShareCardOpen(true)}>
+            <QrCode className="size-4" />
+            {t("invite.shareCardButton")}
+          </Button>
+        </div>
       </div>
+      {shareCardOpen ? (
+        <Modal
+          open={shareCardOpen}
+          title={t("invite.shareCardTitle")}
+          onClose={() => setShareCardOpen(false)}
+          contentClassName="max-h-[85vh] overflow-y-auto sm:max-w-lg"
+        >
+          <ShareCard
+            roomId={room.id}
+            roomName={room.name}
+            room={room}
+            firstSession={room.first_session ?? null}
+            shareToken={room.share_token ?? null}
+            variant="full"
+            hideTitle
+          />
+        </Modal>
+      ) : null}
     </PageCard>
   );
 }
