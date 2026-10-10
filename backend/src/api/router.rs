@@ -2,21 +2,41 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 use axum::{
+    http::{header, HeaderValue, Method},
     routing::{delete, get, post, put},
     Router,
 };
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 use super::handlers;
 use super::ws;
 use super::AppState;
 
+fn website_cors(origins: &[String]) -> CorsLayer {
+    let allowed: Vec<HeaderValue> = origins
+        .iter()
+        .filter_map(|o| HeaderValue::from_str(o).ok())
+        .collect();
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list(allowed))
+        .allow_methods([Method::GET, Method::OPTIONS])
+        .vary([header::ORIGIN])
+}
+
 pub fn build_router(state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
         .allow_headers(Any);
+
+    let website = Router::new()
+        .route(
+            "/api/public/halaqat",
+            get(handlers::public_halaqat::list_public_halaqat),
+        )
+        .with_state(state.clone())
+        .layer(website_cors(&state.config.website_origins));
 
     Router::new()
         .route(
@@ -52,6 +72,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/users/stats", get(handlers::users::stats))
         .route("/api/admin/dashboard", get(handlers::admin::dashboard))
         .route("/api/admin/funnel", get(handlers::admin::funnel))
+        .route(
+            "/api/admin/rooms/{id}/website-listing",
+            put(handlers::public_halaqat::set_website_listing),
+        )
         .route(
             "/api/product-events",
             post(handlers::product_events::track_client_event),
@@ -297,5 +321,6 @@ pub fn build_router(state: AppState) -> Router {
         )
         .with_state(state)
         .layer(cors)
+        .merge(website)
         .layer(TraceLayer::new_for_http())
 }

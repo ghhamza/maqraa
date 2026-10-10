@@ -519,6 +519,11 @@
     "publicRoomHint": "تظهر للطلاب في قائمة الحلقات المتاحة",
     "enrollmentOpen": "التسجيل مفتوح",
     "enrollmentOpenHint": "السماح للطلاب بالتسجيل في الحلقة",
+    "websiteListing": {
+      "hide": "إخفاء من موقع maqraa.org",
+      "show": "إظهار على موقع maqraa.org",
+      "hiddenBadge": "مخفية من الموقع"
+    },
     "requiresApproval": "يتطلب موافقة",
     "requiresApprovalHint": "يجب أن يوافق المعلّم على كل طلب تسجيل",
     "addRoomModal": "إضافة حلقة",

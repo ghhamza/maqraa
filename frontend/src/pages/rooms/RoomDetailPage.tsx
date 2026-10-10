@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Archive, MoreHorizontal, Pencil, Radio, RotateCcw, Trash2, UserPlus } from "lucide-react";
+import { Archive, Globe, MoreHorizontal, Pencil, Radio, RotateCcw, Trash2, UserPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Enrollment, Room, SessionPublic } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
@@ -55,6 +55,7 @@ import {
   useRoom,
   useRoomEnrollments,
   useRoomRecentRecitations,
+  useSetWebsiteListing,
   useUnarchiveRoom,
   useWithdrawRoom,
 } from "../../data/rooms";
@@ -172,6 +173,7 @@ export function RoomDetailPage() {
   const loading = roomQuery.isPending;
 
   const restoreMutation = useUnarchiveRoom();
+  const websiteListingMutation = useSetWebsiteListing(id ?? "", (m) => window.alert(m));
   const joinMutation = useJoinRoom(undefined, (message) => window.alert(message));
   const withdrawMutation = useWithdrawRoom(id ?? "", () => setStudentConfirm(null), (message) =>
     window.alert(message),
@@ -312,6 +314,11 @@ export function RoomDetailPage() {
               <span className="text-xs text-[var(--color-text-muted)]">
                 {room.is_public ? t("rooms.publicRoom") : t("rooms.enrollmentStatus.not_public")}
               </span>
+              {isAdmin && room.is_public && !room.website_listed ? (
+                <span className="inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                  {t("rooms.websiteListing.hiddenBadge")}
+                </span>
+              ) : null}
             </div>
           </div>
           {showActions ? (
@@ -334,6 +341,15 @@ export function RoomDetailPage() {
                 <DropdownMenuItem onClick={() => setFormOpen(true)}>
                   {t("rooms.enrollmentOpen")}
                 </DropdownMenuItem>
+                {isAdmin && room.is_public && !isArchived ? (
+                  <DropdownMenuItem
+                    disabled={websiteListingMutation.isPending}
+                    onClick={() => websiteListingMutation.mutate(!room.website_listed)}
+                  >
+                    <Globe className="size-4" />
+                    {room.website_listed ? t("rooms.websiteListing.hide") : t("rooms.websiteListing.show")}
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuSeparator />
                 {isArchived ? (
                   <>

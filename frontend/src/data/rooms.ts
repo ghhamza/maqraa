@@ -340,6 +340,15 @@ export function useUnarchiveRoom(onSuccess?: () => void, onError?: (message: str
   });
 }
 
+export function useSetWebsiteListing(roomId: string, onError?: (message: string) => void) {
+  return useApiMutation({
+    mutationFn: (websiteListed: boolean) =>
+      api.request({ method: "put", url: `admin/rooms/${roomId}/website-listing`, data: { website_listed: websiteListed } }),
+    invalidates: [roomKeys.detail(roomId), roomKeys.lists()],
+    onError: (message) => onError?.(message),
+  });
+}
+
 /** Hard-delete an archived halaqah. Active rooms must be archived first (API returns 409). */
 export function usePurgeRoom(onSuccess?: () => void, onError?: (message: string) => void) {
   const queryClient = useQueryClient();

@@ -51,6 +51,8 @@ pub struct AppConfig {
     pub onboarding_emails_enabled: bool,
     /// Google Identity Services client ID for Sign in with Google (optional).
     pub google_client_id: Option<String>,
+    /// Origins allowed to call `GET /api/public/halaqat` (marketing site).
+    pub website_origins: Vec<String>,
 }
 
 impl AppConfig {
@@ -128,8 +130,20 @@ impl AppConfig {
                 .ok()
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty()),
+            website_origins: parse_website_origins(
+                &std::env::var("WEBSITE_ORIGINS").unwrap_or_else(|_| {
+                    "https://maqraa.org,https://www.maqraa.org".into()
+                }),
+            ),
         })
     }
+}
+
+fn parse_website_origins(raw: &str) -> Vec<String> {
+    raw.split(',')
+        .map(|s| s.trim().trim_end_matches('/').to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
 }
 
 #[cfg(test)]

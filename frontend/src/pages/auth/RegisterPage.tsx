@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import { useTranslation } from "react-i18next";
 import { api } from "../../lib/api";
 import { finishAuthNavigation, resolveShareTokenForRegister, stashShareNext } from "../../lib/safeNext";
+import { useRedirectAuthenticatedToNext } from "../../hooks/useRedirectAuthenticatedToNext";
 import { useAuthStore } from "../../stores/authStore";
 import type { AuthResponse } from "../../types";
 import { RoleChoiceCards } from "../../components/auth/RoleChoiceCards";
@@ -47,6 +48,7 @@ export function RegisterPage() {
   useEffect(() => {
     stashShareNext(searchParams.get("next"));
   }, [searchParams]);
+  useRedirectAuthenticatedToNext();
 
   const shareToken = useMemo(
     () => resolveShareTokenForRegister(searchParams.get("next")),

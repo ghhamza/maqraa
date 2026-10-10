@@ -9,6 +9,7 @@ pub mod error_annotations_db;
 pub mod livekit;
 pub mod product_events;
 pub mod profile;
+pub mod public_halaqat;
 pub mod recitations;
 pub mod rooms;
 pub mod schedules;

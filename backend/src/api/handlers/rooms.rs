@@ -409,7 +409,7 @@ pub async fn list_rooms(
                  e_my.status AS my_status, \
                  r.description, r.enrollment_deadline_at, r.setup_completed_at, \
              COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count, \
-                 r.timezone \
+                 r.timezone, r.website_listed \
                  FROM rooms r \
                  INNER JOIN users u ON u.id = r.teacher_id \
                  LEFT JOIN enrollments e_my ON e_my.room_id = r.id AND e_my.student_id = ",
@@ -428,7 +428,7 @@ pub async fn list_rooms(
              CAST(NULL AS TEXT) AS my_status, \
              r.description, r.enrollment_deadline_at, r.setup_completed_at, \
              COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count, \
-             r.timezone \
+             r.timezone, r.website_listed \
              FROM rooms r \
              INNER JOIN users u ON u.id = r.teacher_id \
              WHERE 1=1",
@@ -472,7 +472,7 @@ pub async fn get_room(
              (SELECT e.status FROM enrollments e WHERE e.room_id = r.id AND e.student_id = $2 LIMIT 1) AS my_status, \
              r.description, r.enrollment_deadline_at, r.setup_completed_at, \
              COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count, \
-             r.timezone \
+             r.timezone, r.website_listed \
              FROM rooms r \
              INNER JOIN users u ON u.id = r.teacher_id \
              WHERE r.id = $1",
@@ -492,7 +492,7 @@ pub async fn get_room(
              CAST(NULL AS TEXT) AS my_status, \
              r.description, r.enrollment_deadline_at, r.setup_completed_at, \
              COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count, \
-             r.timezone \
+             r.timezone, r.website_listed \
              FROM rooms r \
              INNER JOIN users u ON u.id = r.teacher_id \
              WHERE r.id = $1",
@@ -646,7 +646,7 @@ pub async fn create_room(
          CAST(NULL AS TEXT) AS my_status, \
          r.description, r.enrollment_deadline_at, r.setup_completed_at, \
              COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count, \
-         r.timezone \
+         r.timezone, r.website_listed \
          FROM rooms r \
          INNER JOIN users u ON u.id = r.teacher_id \
          WHERE r.id = $1",
@@ -687,7 +687,7 @@ pub async fn update_room(
          CAST(NULL AS TEXT) AS my_status, \
          r.description, r.enrollment_deadline_at, r.setup_completed_at, \
              COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count, \
-         r.timezone \
+         r.timezone, r.website_listed \
          FROM rooms r \
          INNER JOIN users u ON u.id = r.teacher_id \
          WHERE r.id = $1",
@@ -839,7 +839,7 @@ pub async fn update_room(
          CAST(NULL AS TEXT) AS my_status, \
          r.description, r.enrollment_deadline_at, r.setup_completed_at, \
              COALESCE((SELECT COUNT(*)::bigint FROM sessions s WHERE s.room_id = r.id AND s.status = 'completed'), 0) AS completed_sessions_count, \
-         r.timezone \
+         r.timezone, r.website_listed \
          FROM rooms r \
          INNER JOIN users u ON u.id = r.teacher_id \
          WHERE r.id = $1",

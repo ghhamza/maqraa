@@ -487,6 +487,11 @@
     "publicRoomHint": "Visible par les étudiants dans le répertoire",
     "enrollmentOpen": "Inscription ouverte",
     "enrollmentOpenHint": "Permettre aux étudiants de s'inscrire",
+    "websiteListing": {
+      "hide": "Masquer de maqraa.org",
+      "show": "Afficher sur maqraa.org",
+      "hiddenBadge": "Masquée du site"
+    },
     "requiresApproval": "Approbation requise",
     "requiresApprovalHint": "L'enseignant doit approuver chaque demande",
     "addRoomModal": "Ajouter une halaqah",

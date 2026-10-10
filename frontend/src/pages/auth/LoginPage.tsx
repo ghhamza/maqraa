@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import axios from "axios";
 import { api } from "../../lib/api";
 import { finishAuthNavigation, stashShareNext } from "../../lib/safeNext";
+import { useRedirectAuthenticatedToNext } from "../../hooks/useRedirectAuthenticatedToNext";
 import { useAuthStore } from "../../stores/authStore";
 import type { AuthResponse } from "../../types";
 import { Button } from "../../components/ui/Button";
@@ -30,6 +31,7 @@ export function LoginPage() {
   useEffect(() => {
     stashShareNext(searchParams.get("next"));
   }, [searchParams]);
+  useRedirectAuthenticatedToNext();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

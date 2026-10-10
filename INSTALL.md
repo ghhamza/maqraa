@@ -233,6 +233,8 @@ APP_LIVEKIT_URL=wss://<MEDIA_DOMAIN>
 APP_LIVEKIT_HTTP_URL=https://<MEDIA_DOMAIN>
 APP_LIVEKIT_API_KEY=$LKKEY
 APP_LIVEKIT_API_SECRET=$LKSECRET
+# Origins allowed to read GET /api/public/halaqat (marketing site), comma-separated
+WEBSITE_ORIGINS=https://maqraa.org,https://www.maqraa.org
 RUST_LOG=info
 EOF
 

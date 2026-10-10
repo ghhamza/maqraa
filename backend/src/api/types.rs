@@ -134,6 +134,8 @@ pub struct RoomPublic {
     pub completed_sessions_count: i64,
     /// IANA timezone for the halaqah (wall-clock for schedules / display).
     pub timezone: String,
+    /// When false, the halaqah is hidden from the public marketing listing.
+    pub website_listed: bool,
     /// Next (or latest) scheduled session — populated on GET detail.
     #[sqlx(skip)]
     pub first_session: Option<RoomFirstSession>,

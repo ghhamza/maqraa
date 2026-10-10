@@ -487,6 +487,11 @@
     "publicRoomHint": "Visible to students in the halaqah directory",
     "enrollmentOpen": "Enrollment open",
     "enrollmentOpenHint": "Allow students to enroll in this halaqah",
+    "websiteListing": {
+      "hide": "Hide from maqraa.org",
+      "show": "Show on maqraa.org",
+      "hiddenBadge": "Hidden from website"
+    },
     "requiresApproval": "Requires approval",
     "requiresApprovalHint": "Teacher must approve each enrollment request",
     "addRoomModal": "Add halaqah",

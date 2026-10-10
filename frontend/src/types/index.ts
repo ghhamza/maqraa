@@ -125,6 +125,8 @@ export interface Room {
   share_token?: string | null;
   /** IANA timezone for wall-clock schedules and display. */
   timezone: string;
+  /** Admin-only flag: shown on the public maqraa.org website (when also public + active). */
+  website_listed: boolean;
 }
 
 export interface RoomFirstSession {
