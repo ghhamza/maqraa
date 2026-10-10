@@ -57,14 +57,9 @@ pub async fn share_landing(
         "{base}/s/{}/card.png?format=og&v=5",
         urlencoding_path_segment(token_trimmed)
     );
-    let register_url = format!(
-        "{base}/register?next={}",
-        urlencoding_path_segment(&format!("/share/{token_trimmed}"))
-    );
-    let login_url = format!(
-        "{base}/login?next={}",
-        urlencoding_path_segment(&format!("/share/{token_trimmed}"))
-    );
+    let next = urlencoding_path_segment(&format!("/share/{token_trimmed}"));
+    let register_url = format!("{base}/register?next={next}&lang={}", locale.lang);
+    let login_url = format!("{base}/login?next={next}&lang={}", locale.lang);
 
     match resolve_share(&state, &token, true).await {
         Ok(payload) => {

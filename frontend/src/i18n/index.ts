@@ -42,10 +42,14 @@ void i18n
       escapeValue: false,
     },
     detection: {
-      order: ["localStorage", "navigator"],
+      order: ["querystring", "localStorage", "navigator"],
+      lookupQuerystring: "lang",
       lookupLocalStorage: "miqraa_lang",
       caches: ["localStorage"],
-      convertDetectedLanguage: (lng) => normalizeLang(lng),
+      convertDetectedLanguage: (lng) => {
+        const base = (lng.split("-")[0] ?? "").toLowerCase();
+        return (SUPPORTED as readonly string[]).includes(base) ? base : "";
+      },
     },
   })
   .then(() => {
